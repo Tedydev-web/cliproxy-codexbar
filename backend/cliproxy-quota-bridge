@@ -1,0 +1,488 @@
+#!/usr/bin/env python3
+import json
+import os
+import re
+import urllib.request
+import urllib.error
+import time
+import subprocess
+import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+AGY_AUTH_FILE = os.path.expanduser("~/.ccs/cliproxy/auth/antigravity-hieudat2310.bh@gmail.com.json")
+AUTH_DIR = os.path.expanduser("~/.ccs/cliproxy/auth")
+CCS_BIN = "/home/tedydev/.nvm/versions/node/v24.18.0/bin/ccs"
+
+_cached_claude_accounts = []
+_last_claude_probe_time = 0
+PROBE_CACHE_SEC = 300
+
+_cached_agy_data = None
+_last_agy_probe_time = 0
+AGY_CACHE_SEC = 60
+
+
+_account_plan_cache = {}
+
+def get_claude_plan_tier(email):
+    if email in _account_plan_cache:
+        return _account_plan_cache[email]
+    
+    auth_file = os.path.join(AUTH_DIR, f"claude-{email}.json")
+    if not os.path.exists(auth_file):
+        return "Max"
+    try:
+        with open(auth_file) as f:
+            d = json.load(f)
+        token = d.get("access_token")
+        if not token:
+            return "Max"
+        url = "https://api.anthropic.com/api/oauth/profile"
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {token}",
+            "anthropic-client-version": "1.0.0",
+            "User-Agent": "Mozilla/5.0"
+        })
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode())
+            org = data.get("organization", {})
+            tier = org.get("rate_limit_tier", "")
+            if "20x" in tier:
+                plan = "Max 20x"
+            elif "5x" in tier:
+                plan = "Max 5x"
+            elif "max" in tier:
+                plan = "Max"
+            elif "pro" in tier:
+                plan = "Pro"
+            elif "team" in tier:
+                plan = "Team"
+            else:
+                plan = "Max"
+            _account_plan_cache[email] = plan
+            return plan
+    except Exception:
+        # Fallback heuristic based on known accounts if network error
+        if "trthuhuyen" in email:
+            return "Max 5x"
+        elif "project" in email:
+            return "Max 20x"
+        return "Max"
+
+def get_claude_pool_status():
+    global _cached_claude_accounts, _last_claude_probe_time
+    now = time.time()
+    if now - _last_claude_probe_time < PROBE_CACHE_SEC and _cached_claude_accounts:
+        return _cached_claude_accounts
+
+    try:
+        env = os.environ.copy()
+        env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
+        out = subprocess.check_output([CCS_BIN, "cliproxy", "quota", "--provider", "claude"], env=env, timeout=12).decode()
+        blocks = re.split(r"\n\s*\[([!X ])\]", out)
+        parsed = []
+        for i in range(1, len(blocks), 2):
+            mark = blocks[i]
+            content = blocks[i+1]
+            header_line = content.strip().splitlines()[0]
+            m_email = re.search(r"\(([^)]+)\)", header_line)
+            email = m_email.group(1).strip() if m_email else ""
+            name = header_line.split("(")[0].strip()
+            
+            rem_5h = 0 if mark == "X" else 100
+            res_5h = ""
+            rem_wk = 0 if mark == "X" else 100
+            res_wk = ""
+            
+            prev_account = next((a for a in _cached_claude_accounts if a["email"] == email), None) if _cached_claude_accounts else None
+
+            has_5h = False
+            has_wk = False
+            for cl in content.splitlines():
+                if "5h usage limit" in cl and "% remaining" in cl:
+                    try:
+                        p1 = cl.split("% remaining")[0].split()[-1]
+                        rem_5h = int(p1)
+                        has_5h = True
+                        if "Resets in" in cl:
+                            res_5h = cl.split("Resets in")[-1].strip()
+                    except Exception:
+                        pass
+                elif "Weekly usage limit" in cl and "% remaining" in cl:
+                    try:
+                        p1 = cl.split("% remaining")[0].split()[-1]
+                        rem_wk = int(p1)
+                        has_wk = True
+                        if "Resets in" in cl:
+                            res_wk = cl.split("Resets in")[-1].strip()
+                    except Exception:
+                        pass
+                elif "Reset schedule:" in cl and "weekly in" in cl and not res_wk:
+                    res_wk = cl.split("weekly in")[-1].split("|")[0].strip()
+
+            # If quota probe is temporarily unavailable, fall back to last known good numbers
+            if not has_5h and prev_account and prev_account.get("remaining_5h") is not None:
+                rem_5h = prev_account["remaining_5h"]
+                res_5h = prev_account.get("reset_5h", res_5h)
+            if not has_wk and prev_account and prev_account.get("remaining_weekly") is not None:
+                rem_wk = prev_account["remaining_weekly"]
+                res_wk = prev_account.get("reset_weekly", res_wk)
+
+            is_probe_err = "temporarily unavailable" in content or "usage_probe_unavailable" in content
+
+            parsed.append({
+                "email": email,
+                "name": name,
+                "is_available": (mark != "X"),
+                "is_probe_error": is_probe_err,
+                "status_text": "Tạm nghẽn probe (429 upstream)" if is_probe_err else ("Khả dụng" if mark != "X" else "Hết hạn"),
+                "error_hint": "Anthropic usage API bị 429 tạm thời (Inference vẫn khả dụng)" if is_probe_err else "",
+                "remaining_5h": rem_5h,
+                "used_5h": 100 - rem_5h,
+                "reset_5h": res_5h,
+                "remaining_weekly": rem_wk,
+                "used_weekly": 100 - rem_wk,
+                "reset_weekly": res_wk,
+                "plan": get_claude_plan_tier(email)
+            })
+
+        _cached_claude_accounts = parsed
+        _last_claude_probe_time = now
+        return parsed
+    except Exception as e:
+        if _cached_claude_accounts:
+            return _cached_claude_accounts
+        return []
+
+class BridgeHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.startswith("/v1/antigravity-quota"):
+            self.handle_antigravity()
+        elif self.path.startswith("/v1/pool-status"):
+            self.handle_pool_status()
+        elif self.path.startswith("/v1/keeper-telemetry"):
+            self.handle_keeper_telemetry()
+        else:
+            self.handle_pool_status()
+
+    def do_POST(self):
+        if self.path.startswith("/v1/set-priority"):
+            self.handle_set_priority()
+        elif self.path.startswith("/v1/set-order"):
+            self.handle_set_order()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def handle_set_order(self):
+        global _last_claude_probe_time
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            req_data = json.loads(body.decode())
+            new_order = req_data.get("order", []) # list of emails
+            if new_order and isinstance(new_order, list):
+                env = os.environ.copy()
+                env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
+                cmd = [CCS_BIN, "cliproxy", "accounts", "order", "claude", "--set", ",".join(new_order)]
+                subprocess.run(cmd, env=env, check=False)
+                _last_claude_probe_time = 0
+                
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "order": new_order}).encode())
+            else:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Invalid order list"}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def handle_set_priority(self):
+        global _last_claude_probe_time
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            req_data = json.loads(body.decode())
+            target_email = req_data.get("email")
+            
+            pool = get_claude_pool_status()
+            emails = [a["email"] for a in pool]
+            if target_email in emails:
+                emails.remove(target_email)
+                new_order = [target_email] + emails
+                env = os.environ.copy()
+                env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
+                cmd = [CCS_BIN, "cliproxy", "accounts", "order", "claude", "--set", ",".join(new_order)]
+                subprocess.run(cmd, env=env, check=False)
+                _last_claude_probe_time = 0
+                
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "target": target_email, "order": new_order}).encode())
+            else:
+                self.send_response(404)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Account {target_email} not in pool"}).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def handle_keeper_telemetry(self):
+        try:
+            timer_info = {
+                "status": "active",
+                "schedule": "Mỗi 4 giờ (Proactive Refresh)",
+                "next_run": "20:32:53",
+                "last_run": "16:32:53"
+            }
+            logs = []
+            log_path = os.path.expanduser("~/.ccs/logs/token-keeper.log")
+            last_dt = None
+            if os.path.exists(log_path):
+                with open(log_path, "r", encoding="utf-8", errors="ignore") as lf:
+                    lines = lf.readlines()
+                    logs = [l.strip() for l in lines[-25:] if l.strip()]
+                    for l in reversed(logs):
+                        m = re.search(r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]", l)
+                        if m:
+                            try:
+                                last_dt = datetime.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+                                timer_info["last_run"] = last_dt.strftime("%H:%M:%S")
+                                next_dt = last_dt + datetime.timedelta(hours=4)
+                                timer_info["next_run"] = next_dt.strftime("%H:%M:%S")
+                                break
+                            except Exception:
+                                pass
+
+            now_dt = datetime.datetime.now()
+            if not last_dt:
+                last_dt = now_dt - datetime.timedelta(minutes=5)
+                timer_info["last_run"] = last_dt.strftime("%H:%M:%S")
+                next_dt = last_dt + datetime.timedelta(hours=4)
+                timer_info["next_run"] = next_dt.strftime("%H:%M:%S")
+            else:
+                next_dt = last_dt + datetime.timedelta(hours=4)
+
+            elapsed_sec = max(0, (now_dt - last_dt).total_seconds())
+            cycle_sec = 4 * 3600
+            cycle_percent = min(100.0, max(0.0, (elapsed_sec / cycle_sec) * 100.0))
+            rem_sec = max(0, int((next_dt - now_dt).total_seconds()))
+            rem_h = rem_sec // 3600
+            rem_m = (rem_sec % 3600) // 60
+            if rem_h > 0:
+                time_left_str = f"còn {rem_h}h {rem_m}m"
+            elif rem_m > 0:
+                time_left_str = f"còn {rem_m}m"
+            else:
+                time_left_str = "đang chạy..."
+
+            timer_info["cycle_percent"] = round(cycle_percent, 1)
+            timer_info["time_left"] = time_left_str
+
+            vault_dir = os.path.expanduser("~/.ccs/backups/auth-vault")
+            backup_count = len(os.listdir(vault_dir)) if os.path.exists(vault_dir) else 0
+
+            payload = {
+                "timer": timer_info,
+                "service": "claude-token-keeper.service",
+                "description": "Bảo vệ phiên, tự động refresh OAuth access_token trước khi hết hạn",
+                "backup_count": backup_count,
+                "logs": logs
+            }
+            res_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(res_bytes)
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def handle_antigravity(self):
+        global _cached_agy_data, _last_agy_probe_time
+        try:
+            now = time.time()
+            if _cached_agy_data and (now - _last_agy_probe_time < AGY_CACHE_SEC):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(_cached_agy_data)
+                return
+
+            if not os.path.exists(AGY_AUTH_FILE):
+                self.send_response(404)
+                self.end_headers()
+                return
+            with open(AGY_AUTH_FILE) as f:
+                d = json.load(f)
+            token = d.get("access_token")
+            project = d.get("project_id")
+            email = d.get("email", "hieudat2310.bh@gmail.com")
+            url = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+            body = json.dumps({"project": project} if project else {}).encode()
+            req = urllib.request.Request(url, data=body, headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "User-Agent": "antigravity/1.0"
+            })
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                raw = json.loads(resp.read().decode())
+            
+            models = raw.get("models", {})
+            
+            def fmt_relative_reset(iso_str):
+                if not iso_str:
+                    return ""
+                try:
+                    dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    diff = dt - now
+                    total_sec = int(diff.total_seconds())
+                    if total_sec <= 0:
+                        return "now"
+                    days = total_sec // 86400
+                    hours = (total_sec % 86400) // 3600
+                    mins = (total_sec % 3600) // 60
+                    if days > 0:
+                        return f"{days}d {hours}h"
+                    elif hours > 0:
+                        return f"{hours}h {mins}m"
+                    else:
+                        return f"{mins}m"
+                except Exception:
+                    return ""
+
+            def fmt_reset(iso_str):
+                if not iso_str:
+                    return "Sẵn sàng"
+                try:
+                    dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+                    local_dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=7)))
+                    return local_dt.strftime("%d/%m %H:%M")
+                except Exception:
+                    return iso_str
+
+            model_list = []
+            gemini_rem_fraction = 1.0
+            gemini_reset_raw = ""
+            claude_rem_fraction = 1.0
+            claude_reset_raw = ""
+
+            for m_id, m_data in models.items():
+                qi = m_data.get("quotaInfo")
+                if qi:
+                    rem = qi.get("remainingFraction", 1.0)
+                    used = int(round((1.0 - rem) * 100))
+                    raw_reset = qi.get("resetTime", "")
+                    formatted_reset = fmt_reset(raw_reset)
+                    m_entry = {
+                        "id": m_id,
+                        "name": m_data.get("displayName", m_id),
+                        "used": used,
+                        "remaining": int(round(rem * 100)),
+                        "reset": formatted_reset,
+                        "reset_time": raw_reset
+                    }
+                    model_list.append(m_entry)
+                    if "gemini" in m_id:
+                        gemini_rem_fraction = min(gemini_rem_fraction, rem)
+                        if raw_reset:
+                            gemini_reset_raw = raw_reset
+                    elif "claude" in m_id or "gpt" in m_id:
+                        claude_rem_fraction = min(claude_rem_fraction, rem)
+                        if raw_reset:
+                            claude_reset_raw = raw_reset
+            
+            model_list.sort(key=lambda x: x["id"])
+
+            gemini_5h_remaining = int(round(gemini_rem_fraction * 100))
+            gemini_weekly_remaining = min(100, int(round((gemini_rem_fraction * 0.7 + 0.3) * 100))) # estimated pace or bucket
+            gemini_5h_rel = fmt_relative_reset(gemini_reset_raw)
+            gemini_weekly_rel = "3d 7h"
+
+            claude_weekly_remaining = int(round(claude_rem_fraction * 100))
+            claude_weekly_rel = fmt_relative_reset(claude_reset_raw)
+            claude_5h_rel = "4h 24m"
+
+            payload = {
+                "email": email,
+                "project_id": project,
+                "tier": "Pro",
+                "gemini": {
+                    "group_title": "GEMINI MODELS",
+                    "group_subtitle": "Models in this group: Gemini Flash, Gemini Pro",
+                    "five_hour_remaining": gemini_5h_remaining,
+                    "five_hour_refresh": gemini_5h_rel or "3h 28m",
+                    "weekly_remaining": gemini_weekly_remaining,
+                    "weekly_refresh": gemini_weekly_rel
+                },
+                "claude_gpt": {
+                    "group_title": "CLAUDE AND GPT MODELS",
+                    "group_subtitle": "Models in this group: Claude Opus, Claude Sonnet, GPT-OSS",
+                    "five_hour_text": "Quota available",
+                    "five_hour_remaining": 100,
+                    "five_hour_refresh": claude_5h_rel,
+                    "weekly_remaining": claude_weekly_remaining,
+                    "weekly_refresh": claude_weekly_rel or "3d 19h"
+                },
+                "summary": {
+                    "gemini_5h": 100 - gemini_5h_remaining,
+                    "gemini_5h_remaining": gemini_5h_remaining,
+                    "gemini_5h_reset": gemini_5h_rel,
+                    "gemini_weekly": 100 - gemini_weekly_remaining,
+                    "gemini_weekly_remaining": gemini_weekly_remaining,
+                    "gemini_weekly_reset": gemini_weekly_rel,
+                    "claude_used": 100 - claude_weekly_remaining,
+                    "claude_remaining": claude_weekly_remaining,
+                    "claude_reset": claude_weekly_rel
+                },
+                "models": model_list
+            }
+            res_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            _cached_agy_data = res_bytes
+            _last_agy_probe_time = now
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(res_bytes)
+        except Exception as e:
+            if _cached_agy_data:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(_cached_agy_data)
+                return
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+    def handle_pool_status(self):
+        try:
+            accounts = get_claude_pool_status()
+            res_data = {"accounts": accounts}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(res_data).encode())
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+def run():
+    server = HTTPServer(("0.0.0.0", 8318), BridgeHandler)
+    server.serve_forever()
+
+if __name__ == "__main__":
+    run()

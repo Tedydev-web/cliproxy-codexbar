@@ -1,0 +1,15 @@
+[Unit]
+Description=CLIProxy to CodexBar Quota Adapter Bridge
+After=network.target cliproxy.service
+Wants=cliproxy.service
+
+[Service]
+Type=simple
+ExecStart=/home/tedydev/.local/bin/cliproxy-quota-bridge
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
