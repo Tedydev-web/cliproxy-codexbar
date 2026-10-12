@@ -1128,7 +1128,7 @@ struct TokenKeeperDetailView: View {
                     GridRow {
                         Text("Vault Sao lưu:")
                             .foregroundStyle(.secondary)
-                        Text("\(self.state.keeperBackupCount) bản sao lưu an toàn (~/.ccs/backups/auth-vault)")
+                        Text("\(self.state.keeperBackupCount) bản sao lưu an toàn (~/.cliproxy/backups/auth-vault)")
                     }
                 }
             }

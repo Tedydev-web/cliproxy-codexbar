@@ -5,25 +5,29 @@ import re
 import urllib.request
 import urllib.error
 import time
-import subprocess
 import datetime
-from concurrent.futures import ThreadPoolExecutor
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-AGY_AUTH_FILE = os.path.expanduser("~/.ccs/cliproxy/auth/antigravity-hieudat2310.bh@gmail.com.json")
-AUTH_DIR = os.path.expanduser("~/.ccs/cliproxy/auth")
-ACCOUNTS_FILE = os.path.expanduser("~/.ccs/cliproxy/accounts.json")
-CCS_BIN = "/home/tedydev/.nvm/versions/node/v24.18.0/bin/ccs"
+# Paths: Use dedicated ~/.cliproxy/ (with fallback to ~/.ccs/ if ever needed)
+CLIPROXY_HOME = os.path.expanduser("~/.cliproxy") if os.path.exists(os.path.expanduser("~/.cliproxy")) else os.path.expanduser("~/.ccs/cliproxy")
+AUTH_DIR = os.path.join(CLIPROXY_HOME, "auth")
+ACCOUNTS_FILE = os.path.join(CLIPROXY_HOME, "accounts.json")
+AGY_AUTH_FILE = os.path.join(AUTH_DIR, "antigravity-hieudat2310.bh@gmail.com.json")
+LOG_FILE = os.path.join(CLIPROXY_HOME, "logs", "token-keeper.log")
+VAULT_DIR = os.path.join(CLIPROXY_HOME, "backups", "auth-vault")
+MANAGEMENT_SECRET = "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY"
 
 _cached_claude_accounts = []
 _last_claude_probe_time = 0
 PROBE_CACHE_SEC = 60
+EXHAUSTED_CACHE_SEC = 600  # 10 minutes smart cache for weekly-exhausted accounts
 
 _cached_agy_data = None
 _last_agy_probe_time = 0
 AGY_CACHE_SEC = 60
 
 _account_plan_cache = {}
+_account_probe_timestamps = {}
 
 def fmt_relative_reset(iso_str):
     if not iso_str:
@@ -65,7 +69,7 @@ def get_claude_plan_tier(email):
     if not os.path.exists(auth_file):
         return "Max"
     try:
-        with open(auth_file) as f:
+        with open(auth_file, encoding="utf-8") as f:
             d = json.load(f)
         token = d.get("access_token")
         if not token:
@@ -73,8 +77,8 @@ def get_claude_plan_tier(email):
         url = "https://api.anthropic.com/api/oauth/profile"
         req = urllib.request.Request(url, headers={
             "Authorization": f"Bearer {token}",
-            "anthropic-client-version": "1.0.0",
-            "User-Agent": "Mozilla/5.0"
+            "User-Agent": "claude-cli/2.1.296 (external, cli)",
+            "Accept": "application/json"
         })
         with urllib.request.urlopen(req, timeout=4) as resp:
             data = json.loads(resp.read().decode())
@@ -104,7 +108,14 @@ def get_claude_plan_tier(email):
 def _probe_single_claude(item):
     email, token_file, nickname = item
     prev = next((a for a in _cached_claude_accounts if a.get("email") == email), None)
+    now = time.time()
     
+    # Smart Cache: If account is known to be weekly-exhausted and reset is hours away, skip probe to protect session
+    if prev and prev.get("remaining_weekly") == 0 and not prev.get("is_probe_error"):
+        last_t = _account_probe_timestamps.get(email, 0)
+        if now - last_t < EXHAUSTED_CACHE_SEC:
+            return prev
+
     auth_path = os.path.join(AUTH_DIR, token_file)
     if not os.path.exists(auth_path):
         return {
@@ -120,15 +131,17 @@ def _probe_single_claude(item):
         }
     
     try:
-        with open(auth_path) as f:
+        with open(auth_path, encoding="utf-8") as f:
             auth_d = json.load(f)
         token = auth_d.get("access_token")
         if not token:
             raise ValueError("No access token")
         
+        # Exact official Claude Code 2.1.296 headers
         req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage", headers={
             "Authorization": f"Bearer {token}",
-            "User-Agent": "claude-cli/2.1.280 (external, cli)"
+            "User-Agent": "claude-cli/2.1.296 (external, cli)",
+            "Accept": "application/json"
         })
         with urllib.request.urlopen(req, timeout=4) as resp:
             data = json.loads(resp.read().decode())
@@ -148,6 +161,7 @@ def _probe_single_claude(item):
         r_wk = fmt_relative_reset(sd.get("resets_at"))
         
         is_avail = (rem_5h > 0 and rem_wk > 0)
+        _account_probe_timestamps[email] = now
         
         return {
             "email": email,
@@ -196,11 +210,10 @@ def get_claude_pool_status():
     if now - _last_claude_probe_time < PROBE_CACHE_SEC and _cached_claude_accounts:
         return _cached_claude_accounts
 
-    # 1. Preferred method: Direct Anthropic OAuth Usage API (Mirroring management.html)
     try:
         tasks = []
         if os.path.exists(ACCOUNTS_FILE):
-            with open(ACCOUNTS_FILE) as f:
+            with open(ACCOUNTS_FILE, encoding="utf-8") as f:
                 acc_data = json.load(f)
             claude_info = acc_data.get("providers", {}).get("claude", {})
             ordered_ids = claude_info.get("drainOrder", {}).get("orderedIds", [])
@@ -211,103 +224,86 @@ def get_claude_pool_status():
                 nick = acc.get("nickname", em)
                 tasks.append((em, tf, nick))
         
-        if not tasks:
-            # Fallback scan in AUTH_DIR if accounts.json is missing
+        if not tasks and os.path.exists(AUTH_DIR):
             for fn in sorted(os.listdir(AUTH_DIR)):
                 if fn.startswith("claude-") and fn.endswith(".json"):
                     em = fn[len("claude-"):-len(".json")]
                     tasks.append((em, fn, em))
 
         if tasks:
-            with ThreadPoolExecutor(max_workers=min(len(tasks), 6)) as executor:
-                results = list(executor.map(_probe_single_claude, tasks))
+            results = []
+            for idx, task in enumerate(tasks):
+                res = _probe_single_claude(task)
+                results.append(res)
+                # Anti-burst human cadence stagger: 0.35s delay between sequential accounts
+                if idx < len(tasks) - 1:
+                    time.sleep(0.35)
             
             _cached_claude_accounts = results
             _last_claude_probe_time = now
             return results
-    except Exception as e:
-        pass
-
-    # 2. Secondary fallback safety net: CLI ccs cliproxy quota parser
-    try:
-        if os.path.exists(CCS_BIN):
-            env = os.environ.copy()
-            env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
-            out = subprocess.check_output([CCS_BIN, "cliproxy", "quota", "--provider", "claude"], env=env, timeout=12).decode()
-            blocks = re.split(r"\n\s*\[([!X ]|OK)\]", out)
-            parsed = []
-            for i in range(1, len(blocks), 2):
-                mark = blocks[i]
-                content = blocks[i+1]
-                header_line = content.strip().splitlines()[0]
-                m_email = re.search(r"\(([^)]+)\)", header_line)
-                email = m_email.group(1).strip() if m_email else ""
-                name = header_line.split("(")[0].strip()
-                
-                rem_5h = 0 if mark == "X" else 100
-                res_5h = ""
-                rem_wk = 0 if mark == "X" else 100
-                res_wk = ""
-                
-                prev_account = next((a for a in _cached_claude_accounts if a["email"] == email), None) if _cached_claude_accounts else None
-                has_5h = False
-                has_wk = False
-                for cl in content.splitlines():
-                    if "5h usage limit" in cl and "% remaining" in cl:
-                        try:
-                            p1 = cl.split("% remaining")[0].split()[-1]
-                            rem_5h = int(p1)
-                            has_5h = True
-                            if "Resets in" in cl:
-                                res_5h = cl.split("Resets in")[-1].strip()
-                        except Exception:
-                            pass
-                    elif "Weekly usage limit" in cl and "% remaining" in cl:
-                        try:
-                            p1 = cl.split("% remaining")[0].split()[-1]
-                            rem_wk = int(p1)
-                            has_wk = True
-                            if "Resets in" in cl:
-                                res_wk = cl.split("Resets in")[-1].strip()
-                        except Exception:
-                            pass
-                    elif "Reset schedule:" in cl and "weekly in" in cl and not res_wk:
-                        res_wk = cl.split("weekly in")[-1].split("|")[0].strip()
-
-                if not has_5h and prev_account and prev_account.get("remaining_5h") is not None:
-                    rem_5h = prev_account["remaining_5h"]
-                    res_5h = prev_account.get("reset_5h", res_5h)
-                if not has_wk and prev_account and prev_account.get("remaining_weekly") is not None:
-                    rem_wk = prev_account["remaining_weekly"]
-                    res_wk = prev_account.get("reset_weekly", res_wk)
-
-                is_probe_err = "temporarily unavailable" in content or "usage_probe_unavailable" in content
-
-                parsed.append({
-                    "email": email,
-                    "name": name,
-                    "is_available": (mark != "X" and mark != "!"),
-                    "is_probe_error": is_probe_err,
-                    "status_text": "Tạm nghẽn probe (429 upstream)" if is_probe_err else ("Khả dụng" if mark != "X" else "Hết hạn"),
-                    "error_hint": "Anthropic usage API bị 429 tạm thời (Inference vẫn khả dụng)" if is_probe_err else "",
-                    "remaining_5h": rem_5h,
-                    "used_5h": 100 - rem_5h,
-                    "reset_5h": res_5h,
-                    "remaining_weekly": rem_wk,
-                    "used_weekly": 100 - rem_wk,
-                    "reset_weekly": res_wk,
-                    "plan": get_claude_plan_tier(email)
-                })
-
-            _cached_claude_accounts = parsed
-            _last_claude_probe_time = now
-            return parsed
     except Exception:
         pass
 
     if _cached_claude_accounts:
         return _cached_claude_accounts
     return []
+
+def set_claude_accounts_order(ordered_emails):
+    """Native implementation of account order and priority management (Zero CCS dependency)."""
+    global _last_claude_probe_time
+    if not ordered_emails or not isinstance(ordered_emails, list):
+        return False
+
+    # 1. Update accounts.json drainOrder
+    try:
+        if os.path.exists(ACCOUNTS_FILE):
+            with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                acc_data = json.load(f)
+            if "providers" in acc_data and "claude" in acc_data["providers"]:
+                if "drainOrder" not in acc_data["providers"]["claude"]:
+                    acc_data["providers"]["claude"]["drainOrder"] = {"mode": "manual"}
+                acc_data["providers"]["claude"]["drainOrder"]["orderedIds"] = ordered_emails
+                acc_data["providers"]["claude"]["drainOrder"]["mode"] = "manual"
+                with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(acc_data, f, indent=2)
+    except Exception:
+        pass
+
+    # 2. Update priority in auth files via CLIProxy official Management API (with atomic disk fallback)
+    total = len(ordered_emails)
+    for idx, em in enumerate(ordered_emails):
+        prio = max(1, total - idx + 1)
+        fn = f"claude-{em}.json"
+        
+        # Official CLIProxy PATCH /v0/management/auth-files/fields
+        try:
+            req = urllib.request.Request(
+                "http://127.0.0.1:8317/v0/management/auth-files/fields",
+                data=json.dumps({"name": fn, "priority": prio}).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {MANAGEMENT_SECRET}",
+                    "Content-Type": "application/json"
+                },
+                method="PATCH"
+            )
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                pass
+        except Exception:
+            # Fallback file write if proxy is temporarily offline
+            auth_path = os.path.join(AUTH_DIR, fn)
+            if os.path.exists(auth_path):
+                try:
+                    with open(auth_path, "r", encoding="utf-8") as fp:
+                        ad = json.load(fp)
+                    ad["priority"] = prio
+                    with open(auth_path, "w", encoding="utf-8") as fp:
+                        json.dump(ad, fp, indent=2)
+                except Exception:
+                    pass
+
+    _last_claude_probe_time = 0
+    return True
 
 class BridgeHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -330,40 +326,32 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def handle_set_order(self):
-        global _last_claude_probe_time
         try:
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
-            req_data = json.loads(body.decode())
-            new_order = req_data.get("order", []) # list of emails
-            if new_order and isinstance(new_order, list):
-                env = os.environ.copy()
-                env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
-                cmd = [CCS_BIN, "cliproxy", "accounts", "order", "claude", "--set", ",".join(new_order)]
-                subprocess.run(cmd, env=env, check=False)
-                _last_claude_probe_time = 0
-                
+            req_data = json.loads(body.decode("utf-8"))
+            new_order = req_data.get("order", [])
+            if set_claude_accounts_order(new_order):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"ok": True, "order": new_order}).encode())
+                self.wfile.write(json.dumps({"ok": True, "order": new_order}).encode("utf-8"))
             else:
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "Invalid order list"}).encode())
+                self.wfile.write(json.dumps({"error": "Invalid order list"}).encode("utf-8"))
         except Exception as e:
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
 
     def handle_set_priority(self):
-        global _last_claude_probe_time
         try:
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length)
-            req_data = json.loads(body.decode())
+            req_data = json.loads(body.decode("utf-8"))
             target_email = req_data.get("email")
             
             pool = get_claude_pool_status()
@@ -371,40 +359,35 @@ class BridgeHandler(BaseHTTPRequestHandler):
             if target_email in emails:
                 emails.remove(target_email)
                 new_order = [target_email] + emails
-                env = os.environ.copy()
-                env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
-                cmd = [CCS_BIN, "cliproxy", "accounts", "order", "claude", "--set", ",".join(new_order)]
-                subprocess.run(cmd, env=env, check=False)
-                _last_claude_probe_time = 0
+                set_claude_accounts_order(new_order)
                 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"ok": True, "target": target_email, "order": new_order}).encode())
+                self.wfile.write(json.dumps({"ok": True, "target": target_email, "order": new_order}).encode("utf-8"))
             else:
                 self.send_response(404)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": f"Account {target_email} not in pool"}).encode())
+                self.wfile.write(json.dumps({"error": f"Account {target_email} not in pool"}).encode("utf-8"))
         except Exception as e:
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
 
     def handle_keeper_telemetry(self):
         try:
             timer_info = {
                 "status": "active",
                 "schedule": "Mỗi 4 giờ (Proactive Refresh)",
-                "next_run": "20:32:53",
-                "last_run": "16:32:53"
+                "next_run": "22:00:00",
+                "last_run": "18:00:00"
             }
             logs = []
-            log_path = os.path.expanduser("~/.ccs/logs/token-keeper.log")
             last_dt = None
-            if os.path.exists(log_path):
-                with open(log_path, "r", encoding="utf-8", errors="ignore") as lf:
+            if os.path.exists(LOG_FILE):
+                with open(LOG_FILE, "r", encoding="utf-8", errors="ignore") as lf:
                     lines = lf.readlines()
                     logs = [l.strip() for l in lines[-25:] if l.strip()]
                     for l in reversed(logs):
@@ -444,8 +427,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             timer_info["cycle_percent"] = round(cycle_percent, 1)
             timer_info["time_left"] = time_left_str
 
-            vault_dir = os.path.expanduser("~/.ccs/backups/auth-vault")
-            backup_count = len(os.listdir(vault_dir)) if os.path.exists(vault_dir) else 0
+            backup_count = len(os.listdir(VAULT_DIR)) if os.path.exists(VAULT_DIR) else 0
 
             payload = {
                 "timer": timer_info,
@@ -462,7 +444,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_response(500)
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
 
     def handle_antigravity(self):
         global _cached_agy_data, _last_agy_probe_time
@@ -479,13 +461,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self.send_response(404)
                 self.end_headers()
                 return
-            with open(AGY_AUTH_FILE) as f:
+            with open(AGY_AUTH_FILE, encoding="utf-8") as f:
                 d = json.load(f)
             token = d.get("access_token")
             project = d.get("project_id")
             email = d.get("email", "hieudat2310.bh@gmail.com")
             url_summary = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
-            body = json.dumps({"project": project} if project else {}).encode()
+            body = json.dumps({"project": project} if project else {}).encode("utf-8")
             req_headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
@@ -506,7 +488,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             try:
                 req_sum = urllib.request.Request(url_summary, data=body, headers=req_headers)
                 with urllib.request.urlopen(req_sum, timeout=5) as resp:
-                    summary_data = json.loads(resp.read().decode())
+                    summary_data = json.loads(resp.read().decode("utf-8"))
                 
                 for grp in summary_data.get("groups", []):
                     grp_name = grp.get("displayName", "").lower()
@@ -530,7 +512,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                             claude_weekly_remaining = rem_pct
                             claude_weekly_rel = rel_time
                 has_summary = True
-            except Exception as e:
+            except Exception:
                 pass
 
             # 2. Fetch available models for detailed model list
@@ -539,7 +521,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 url_models = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
                 req_models = urllib.request.Request(url_models, data=body, headers=req_headers)
                 with urllib.request.urlopen(req_models, timeout=5) as resp_m:
-                    raw_models = json.loads(resp_m.read().decode())
+                    raw_models = json.loads(resp_m.read().decode("utf-8"))
                 models = raw_models.get("models", {})
                 for m_id, m_data in models.items():
                     qi = m_data.get("quotaInfo")
@@ -620,7 +602,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return
             self.send_response(500)
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
 
     def handle_pool_status(self):
         try:
@@ -629,11 +611,12 @@ class BridgeHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps(res_data).encode())
+            self.wfile.write(json.dumps(res_data).encode("utf-8"))
         except Exception as e:
             self.send_response(500)
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+            self.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
 
 def run():
     server = HTTPServer(("0.0.0.0", 8318), BridgeHandler)
