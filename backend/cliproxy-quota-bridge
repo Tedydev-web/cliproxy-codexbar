@@ -7,22 +7,55 @@ import urllib.error
 import time
 import subprocess
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 AGY_AUTH_FILE = os.path.expanduser("~/.ccs/cliproxy/auth/antigravity-hieudat2310.bh@gmail.com.json")
 AUTH_DIR = os.path.expanduser("~/.ccs/cliproxy/auth")
+ACCOUNTS_FILE = os.path.expanduser("~/.ccs/cliproxy/accounts.json")
 CCS_BIN = "/home/tedydev/.nvm/versions/node/v24.18.0/bin/ccs"
 
 _cached_claude_accounts = []
 _last_claude_probe_time = 0
-PROBE_CACHE_SEC = 300
+PROBE_CACHE_SEC = 60
 
 _cached_agy_data = None
 _last_agy_probe_time = 0
 AGY_CACHE_SEC = 60
 
-
 _account_plan_cache = {}
+
+def fmt_relative_reset(iso_str):
+    if not iso_str:
+        return ""
+    try:
+        dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        now = datetime.datetime.now(datetime.timezone.utc)
+        diff = dt - now
+        total_sec = int(diff.total_seconds())
+        if total_sec <= 0:
+            return "now"
+        days = total_sec // 86400
+        hours = (total_sec % 86400) // 3600
+        mins = (total_sec % 3600) // 60
+        if days > 0:
+            return f"{days}d {hours}h"
+        elif hours > 0:
+            return f"{hours}h {mins}m"
+        else:
+            return f"{mins}m"
+    except Exception:
+        return ""
+
+def fmt_reset(iso_str):
+    if not iso_str:
+        return "Sẵn sàng"
+    try:
+        dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        local_dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=7)))
+        return local_dt.strftime("%d/%m %H:%M")
+    except Exception:
+        return iso_str
 
 def get_claude_plan_tier(email):
     if email in _account_plan_cache:
@@ -62,12 +95,100 @@ def get_claude_plan_tier(email):
             _account_plan_cache[email] = plan
             return plan
     except Exception:
-        # Fallback heuristic based on known accounts if network error
         if "trthuhuyen" in email:
             return "Max 5x"
         elif "project" in email:
             return "Max 20x"
         return "Max"
+
+def _probe_single_claude(item):
+    email, token_file, nickname = item
+    prev = next((a for a in _cached_claude_accounts if a.get("email") == email), None)
+    
+    auth_path = os.path.join(AUTH_DIR, token_file)
+    if not os.path.exists(auth_path):
+        return {
+            "email": email,
+            "name": nickname or email,
+            "is_available": False,
+            "is_probe_error": True,
+            "status_text": "Không tìm thấy file token",
+            "error_hint": "Thiếu credential file",
+            "remaining_5h": 0, "used_5h": 100, "reset_5h": "",
+            "remaining_weekly": 0, "used_weekly": 100, "reset_weekly": "",
+            "plan": get_claude_plan_tier(email)
+        }
+    
+    try:
+        with open(auth_path) as f:
+            auth_d = json.load(f)
+        token = auth_d.get("access_token")
+        if not token:
+            raise ValueError("No access token")
+        
+        req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage", headers={
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "claude-cli/2.1.280 (external, cli)"
+        })
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode())
+        
+        fh = data.get("five_hour") or {}
+        sd = data.get("seven_day") or {}
+        
+        fh_util = fh.get("utilization") or 0.0
+        sd_util = sd.get("utilization") or 0.0
+        
+        u_5h = int(round(fh_util))
+        rem_5h = max(0, 100 - u_5h)
+        r_5h = fmt_relative_reset(fh.get("resets_at"))
+        
+        u_wk = int(round(sd_util))
+        rem_wk = max(0, 100 - u_wk)
+        r_wk = fmt_relative_reset(sd.get("resets_at"))
+        
+        is_avail = (rem_5h > 0 and rem_wk > 0)
+        
+        return {
+            "email": email,
+            "name": nickname or email,
+            "is_available": is_avail,
+            "is_probe_error": False,
+            "status_text": "Khả dụng" if is_avail else "Hết hạn",
+            "error_hint": "",
+            "remaining_5h": rem_5h,
+            "used_5h": u_5h,
+            "reset_5h": r_5h,
+            "remaining_weekly": rem_wk,
+            "used_weekly": u_wk,
+            "reset_weekly": r_wk,
+            "plan": get_claude_plan_tier(email)
+        }
+    except Exception as e:
+        is_429 = "429" in str(e)
+        rem_5h = prev["remaining_5h"] if prev else 0
+        u_5h = prev["used_5h"] if prev else 100
+        r_5h = prev["reset_5h"] if prev else ""
+        rem_wk = prev["remaining_weekly"] if prev else 0
+        u_wk = prev["used_weekly"] if prev else 100
+        r_wk = prev["reset_weekly"] if prev else ""
+        is_avail = prev["is_available"] if prev else False
+        
+        return {
+            "email": email,
+            "name": nickname or email,
+            "is_available": is_avail,
+            "is_probe_error": True,
+            "status_text": "Tạm nghẽn probe (429 upstream)" if is_429 else "Lỗi kết nối probe",
+            "error_hint": "Anthropic usage API bị 429 tạm thời (Inference vẫn khả dụng)" if is_429 else str(e),
+            "remaining_5h": rem_5h,
+            "used_5h": u_5h,
+            "reset_5h": r_5h,
+            "remaining_weekly": rem_wk,
+            "used_weekly": u_wk,
+            "reset_weekly": r_wk,
+            "plan": get_claude_plan_tier(email)
+        }
 
 def get_claude_pool_status():
     global _cached_claude_accounts, _last_claude_probe_time
@@ -75,84 +196,118 @@ def get_claude_pool_status():
     if now - _last_claude_probe_time < PROBE_CACHE_SEC and _cached_claude_accounts:
         return _cached_claude_accounts
 
+    # 1. Preferred method: Direct Anthropic OAuth Usage API (Mirroring management.html)
     try:
-        env = os.environ.copy()
-        env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
-        out = subprocess.check_output([CCS_BIN, "cliproxy", "quota", "--provider", "claude"], env=env, timeout=12).decode()
-        blocks = re.split(r"\n\s*\[([!X ]|OK)\]", out)
-        parsed = []
-        for i in range(1, len(blocks), 2):
-            mark = blocks[i]
-            content = blocks[i+1]
-            header_line = content.strip().splitlines()[0]
-            m_email = re.search(r"\(([^)]+)\)", header_line)
-            email = m_email.group(1).strip() if m_email else ""
-            name = header_line.split("(")[0].strip()
+        tasks = []
+        if os.path.exists(ACCOUNTS_FILE):
+            with open(ACCOUNTS_FILE) as f:
+                acc_data = json.load(f)
+            claude_info = acc_data.get("providers", {}).get("claude", {})
+            ordered_ids = claude_info.get("drainOrder", {}).get("orderedIds", [])
+            accounts_dict = claude_info.get("accounts", {})
+            for em in ordered_ids:
+                acc = accounts_dict.get(em, {})
+                tf = acc.get("tokenFile", f"claude-{em}.json")
+                nick = acc.get("nickname", em)
+                tasks.append((em, tf, nick))
+        
+        if not tasks:
+            # Fallback scan in AUTH_DIR if accounts.json is missing
+            for fn in sorted(os.listdir(AUTH_DIR)):
+                if fn.startswith("claude-") and fn.endswith(".json"):
+                    em = fn[len("claude-"):-len(".json")]
+                    tasks.append((em, fn, em))
+
+        if tasks:
+            with ThreadPoolExecutor(max_workers=min(len(tasks), 6)) as executor:
+                results = list(executor.map(_probe_single_claude, tasks))
             
-            rem_5h = 0 if mark == "X" else 100
-            res_5h = ""
-            rem_wk = 0 if mark == "X" else 100
-            res_wk = ""
-            
-            prev_account = next((a for a in _cached_claude_accounts if a["email"] == email), None) if _cached_claude_accounts else None
-
-            has_5h = False
-            has_wk = False
-            for cl in content.splitlines():
-                if "5h usage limit" in cl and "% remaining" in cl:
-                    try:
-                        p1 = cl.split("% remaining")[0].split()[-1]
-                        rem_5h = int(p1)
-                        has_5h = True
-                        if "Resets in" in cl:
-                            res_5h = cl.split("Resets in")[-1].strip()
-                    except Exception:
-                        pass
-                elif "Weekly usage limit" in cl and "% remaining" in cl:
-                    try:
-                        p1 = cl.split("% remaining")[0].split()[-1]
-                        rem_wk = int(p1)
-                        has_wk = True
-                        if "Resets in" in cl:
-                            res_wk = cl.split("Resets in")[-1].strip()
-                    except Exception:
-                        pass
-                elif "Reset schedule:" in cl and "weekly in" in cl and not res_wk:
-                    res_wk = cl.split("weekly in")[-1].split("|")[0].strip()
-
-            # If quota probe is temporarily unavailable, fall back to last known good numbers
-            if not has_5h and prev_account and prev_account.get("remaining_5h") is not None:
-                rem_5h = prev_account["remaining_5h"]
-                res_5h = prev_account.get("reset_5h", res_5h)
-            if not has_wk and prev_account and prev_account.get("remaining_weekly") is not None:
-                rem_wk = prev_account["remaining_weekly"]
-                res_wk = prev_account.get("reset_weekly", res_wk)
-
-            is_probe_err = "temporarily unavailable" in content or "usage_probe_unavailable" in content
-
-            parsed.append({
-                "email": email,
-                "name": name,
-                "is_available": (mark != "X" and mark != "!"),
-                "is_probe_error": is_probe_err,
-                "status_text": "Tạm nghẽn probe (429 upstream)" if is_probe_err else ("Khả dụng" if mark != "X" else "Hết hạn"),
-                "error_hint": "Anthropic usage API bị 429 tạm thời (Inference vẫn khả dụng)" if is_probe_err else "",
-                "remaining_5h": rem_5h,
-                "used_5h": 100 - rem_5h,
-                "reset_5h": res_5h,
-                "remaining_weekly": rem_wk,
-                "used_weekly": 100 - rem_wk,
-                "reset_weekly": res_wk,
-                "plan": get_claude_plan_tier(email)
-            })
-
-        _cached_claude_accounts = parsed
-        _last_claude_probe_time = now
-        return parsed
+            _cached_claude_accounts = results
+            _last_claude_probe_time = now
+            return results
     except Exception as e:
-        if _cached_claude_accounts:
-            return _cached_claude_accounts
-        return []
+        pass
+
+    # 2. Secondary fallback safety net: CLI ccs cliproxy quota parser
+    try:
+        if os.path.exists(CCS_BIN):
+            env = os.environ.copy()
+            env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
+            out = subprocess.check_output([CCS_BIN, "cliproxy", "quota", "--provider", "claude"], env=env, timeout=12).decode()
+            blocks = re.split(r"\n\s*\[([!X ]|OK)\]", out)
+            parsed = []
+            for i in range(1, len(blocks), 2):
+                mark = blocks[i]
+                content = blocks[i+1]
+                header_line = content.strip().splitlines()[0]
+                m_email = re.search(r"\(([^)]+)\)", header_line)
+                email = m_email.group(1).strip() if m_email else ""
+                name = header_line.split("(")[0].strip()
+                
+                rem_5h = 0 if mark == "X" else 100
+                res_5h = ""
+                rem_wk = 0 if mark == "X" else 100
+                res_wk = ""
+                
+                prev_account = next((a for a in _cached_claude_accounts if a["email"] == email), None) if _cached_claude_accounts else None
+                has_5h = False
+                has_wk = False
+                for cl in content.splitlines():
+                    if "5h usage limit" in cl and "% remaining" in cl:
+                        try:
+                            p1 = cl.split("% remaining")[0].split()[-1]
+                            rem_5h = int(p1)
+                            has_5h = True
+                            if "Resets in" in cl:
+                                res_5h = cl.split("Resets in")[-1].strip()
+                        except Exception:
+                            pass
+                    elif "Weekly usage limit" in cl and "% remaining" in cl:
+                        try:
+                            p1 = cl.split("% remaining")[0].split()[-1]
+                            rem_wk = int(p1)
+                            has_wk = True
+                            if "Resets in" in cl:
+                                res_wk = cl.split("Resets in")[-1].strip()
+                        except Exception:
+                            pass
+                    elif "Reset schedule:" in cl and "weekly in" in cl and not res_wk:
+                        res_wk = cl.split("weekly in")[-1].split("|")[0].strip()
+
+                if not has_5h and prev_account and prev_account.get("remaining_5h") is not None:
+                    rem_5h = prev_account["remaining_5h"]
+                    res_5h = prev_account.get("reset_5h", res_5h)
+                if not has_wk and prev_account and prev_account.get("remaining_weekly") is not None:
+                    rem_wk = prev_account["remaining_weekly"]
+                    res_wk = prev_account.get("reset_weekly", res_wk)
+
+                is_probe_err = "temporarily unavailable" in content or "usage_probe_unavailable" in content
+
+                parsed.append({
+                    "email": email,
+                    "name": name,
+                    "is_available": (mark != "X" and mark != "!"),
+                    "is_probe_error": is_probe_err,
+                    "status_text": "Tạm nghẽn probe (429 upstream)" if is_probe_err else ("Khả dụng" if mark != "X" else "Hết hạn"),
+                    "error_hint": "Anthropic usage API bị 429 tạm thời (Inference vẫn khả dụng)" if is_probe_err else "",
+                    "remaining_5h": rem_5h,
+                    "used_5h": 100 - rem_5h,
+                    "reset_5h": res_5h,
+                    "remaining_weekly": rem_wk,
+                    "used_weekly": 100 - rem_wk,
+                    "reset_weekly": res_wk,
+                    "plan": get_claude_plan_tier(email)
+                })
+
+            _cached_claude_accounts = parsed
+            _last_claude_probe_time = now
+            return parsed
+    except Exception:
+        pass
+
+    if _cached_claude_accounts:
+        return _cached_claude_accounts
+    return []
 
 class BridgeHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -336,38 +491,6 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "Content-Type": "application/json",
                 "User-Agent": "antigravity/cli/1.0.13 (aidev_client; os_type=darwin; arch=arm64)"
             }
-
-            def fmt_relative_reset(iso_str):
-                if not iso_str:
-                    return ""
-                try:
-                    dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    diff = dt - now
-                    total_sec = int(diff.total_seconds())
-                    if total_sec <= 0:
-                        return "now"
-                    days = total_sec // 86400
-                    hours = (total_sec % 86400) // 3600
-                    mins = (total_sec % 3600) // 60
-                    if days > 0:
-                        return f"{days}d {hours}h"
-                    elif hours > 0:
-                        return f"{hours}h {mins}m"
-                    else:
-                        return f"{mins}m"
-                except Exception:
-                    return ""
-
-            def fmt_reset(iso_str):
-                if not iso_str:
-                    return "Sẵn sàng"
-                try:
-                    dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-                    local_dt = dt.astimezone(datetime.timezone(datetime.timedelta(hours=7)))
-                    return local_dt.strftime("%d/%m %H:%M")
-                except Exception:
-                    return iso_str
 
             gemini_5h_remaining = 100
             gemini_5h_rel = ""
