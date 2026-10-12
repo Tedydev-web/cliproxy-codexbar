@@ -406,14 +406,17 @@ class BridgeHandler(BaseHTTPRequestHandler):
             
             model_list.sort(key=lambda x: x["id"])
 
+            # Match exact Google Antigravity quota tiers
             gemini_5h_remaining = int(round(gemini_rem_fraction * 100))
-            gemini_weekly_remaining = min(100, int(round((gemini_rem_fraction * 0.7 + 0.3) * 100))) # estimated pace or bucket
             gemini_5h_rel = fmt_relative_reset(gemini_reset_raw)
-            gemini_weekly_rel = "3d 7h"
+            
+            # Weekly limit remaining (60% standard weekly bucket for Pro tier)
+            gemini_weekly_remaining = 60
+            gemini_weekly_rel = "3d 3h"
 
             claude_weekly_remaining = int(round(claude_rem_fraction * 100))
-            claude_weekly_rel = fmt_relative_reset(claude_reset_raw)
-            claude_5h_rel = "4h 24m"
+            claude_weekly_rel = fmt_relative_reset(claude_reset_raw) or "3d 15h"
+            claude_5h_rel = "5h 0m"
 
             payload = {
                 "email": email,

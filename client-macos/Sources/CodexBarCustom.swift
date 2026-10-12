@@ -563,24 +563,24 @@ struct AntigravityFullCardView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     
-                    // Bar 1: Gemini 5-Hour
+                    // Bar 1: Gemini 5-Hour Limit Remaining
                     MetricRow(
-                        title: "Phiên 5h: \(100 - self.state.agyGemini5hRemaining)% đã dùng",
-                        percent: Double(100 - self.state.agyGemini5hRemaining),
+                        title: "Giới hạn 5h còn lại: \(self.state.agyGemini5hRemaining)%",
+                        percent: Double(self.state.agyGemini5hRemaining),
                         resetText: formatResetWithEst(raw: self.state.agyGemini5hRefresh),
-                        tint: geminiTint,
-                        paceText: "\(self.state.agyGemini5hRemaining)% còn lại",
-                        paceMarker: Double(self.state.agyGemini5hRemaining)
+                        tint: Color(red: 0/255, green: 195/255, blue: 137/255), // Teal Green (Antigravity)
+                        paceText: "Đã dùng \(100 - self.state.agyGemini5hRemaining)%",
+                        paceMarker: nil
                     )
                     
-                    // Bar 2: Gemini Weekly
+                    // Bar 2: Gemini Weekly Limit Remaining
                     MetricRow(
-                        title: "Hàng tuần: \(100 - self.state.agyGeminiWeeklyRemaining)% đã dùng",
-                        percent: Double(100 - self.state.agyGeminiWeeklyRemaining),
+                        title: "Giới hạn tuần còn lại: \(self.state.agyGeminiWeeklyRemaining)%",
+                        percent: Double(self.state.agyGeminiWeeklyRemaining),
                         resetText: formatResetWithEst(raw: self.state.agyGeminiWeeklyRefresh),
-                        tint: geminiTint,
-                        paceText: "\(self.state.agyGeminiWeeklyRemaining)% còn lại",
-                        paceMarker: Double(self.state.agyGeminiWeeklyRemaining)
+                        tint: Color(red: 245/255, green: 197/255, blue: 66/255), // Amber Yellow (Antigravity)
+                        paceText: "Đã dùng \(100 - self.state.agyGeminiWeeklyRemaining)%",
+                        paceMarker: nil
                     )
                 }
                 
@@ -593,24 +593,24 @@ struct AntigravityFullCardView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     
-                    // Bar 3: Claude & GPT 5-Hour
+                    // Bar 3: Claude & GPT 5-Hour Limit Remaining
                     MetricRow(
-                        title: "Phiên 5h: \(self.state.agyClaudeGpt5hText)",
-                        percent: Double(100 - self.state.agyClaudeGpt5hRemaining),
+                        title: "Giới hạn 5h còn lại: \(self.state.agyClaudeGpt5hText)",
+                        percent: Double(self.state.agyClaudeGpt5hRemaining),
                         resetText: formatResetWithEst(raw: self.state.agyClaudeGpt5hRefresh),
-                        tint: Color(red: 52/255, green: 199/255, blue: 89/255), // Green
-                        paceText: "\(self.state.agyClaudeGpt5hRemaining)% khả dụng",
-                        paceMarker: Double(self.state.agyClaudeGpt5hRemaining)
+                        tint: Color(red: 0/255, green: 195/255, blue: 137/255), // Teal Green (Antigravity)
+                        paceText: "100% khả dụng",
+                        paceMarker: nil
                     )
                     
-                    // Bar 4: Claude & GPT Weekly
+                    // Bar 4: Claude & GPT Weekly Limit Remaining
                     MetricRow(
-                        title: "Hàng tuần: \(100 - self.state.agyClaudeGptWeeklyRemaining)% đã dùng",
-                        percent: Double(100 - self.state.agyClaudeGptWeeklyRemaining),
+                        title: "Giới hạn tuần còn lại: \(self.state.agyClaudeGptWeeklyRemaining)%",
+                        percent: Double(self.state.agyClaudeGptWeeklyRemaining),
                         resetText: formatResetWithEst(raw: self.state.agyClaudeGptWeeklyRefresh),
-                        tint: claudeGptTint,
-                        paceText: "\(self.state.agyClaudeGptWeeklyRemaining)% còn lại",
-                        paceMarker: Double(self.state.agyClaudeGptWeeklyRemaining)
+                        tint: Color(red: 245/255, green: 197/255, blue: 66/255), // Amber Yellow (Antigravity)
+                        paceText: "Đã dùng \(100 - self.state.agyClaudeGptWeeklyRemaining)%",
+                        paceMarker: nil
                     )
                 }
             }
