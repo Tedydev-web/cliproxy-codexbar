@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+// MARK: - Menu Hosting View
+final class MenuHostingView<Content: View>: NSHostingView<Content> {
+}
+
 // MARK: - CodexBar Reset Time & Timestamp Formatter
 func formatResetWithEst(raw: String) -> String {
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -187,7 +191,7 @@ struct CompactAccountRowView: View {
                             HStack(spacing: 2.5) {
                                 Image(systemName: "star.fill")
                                     .font(.system(size: 7.5))
-                                Text("Active")
+                                Text("Đang dùng")
                                     .font(.system(size: 8.5, weight: .bold))
                             }
                             .padding(.horizontal, 4)
@@ -354,7 +358,7 @@ struct ClaudeFullCardView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text("Plan \(self.state.claudePlan)")
+                    Text("Gói \(self.state.claudePlan)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -386,7 +390,7 @@ struct ClaudeFullCardView: View {
             // 3. Pool Account List (Minimal Card-based with Instant Reordering)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Thứ tự ưu tiên Pool (Drain Order)")
+                    Text("Thứ tự ưu tiên Pool (Điều phối tự động)")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
@@ -465,9 +469,9 @@ struct ClaudeFullCardView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
-        .padding(.top, 11)
-        .padding(.bottom, 9)
-        .frame(width: 365, alignment: .leading)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+        .frame(width: 365, alignment: .topLeading)
     }
 }
 
@@ -534,7 +538,7 @@ struct AntigravityFullCardView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("Plan \(self.state.agyTier)")
+                    Text("Gói \(self.state.agyTier)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -632,9 +636,9 @@ struct AntigravityFullCardView: View {
 
         }
         .padding(.horizontal, 14)
-        .padding(.top, 11)
-        .padding(.bottom, 9)
-        .frame(width: 365, alignment: .leading)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+        .frame(width: 365, alignment: .topLeading)
     }
 }
 
@@ -840,17 +844,25 @@ class QuotaState: ObservableObject {
     }
 
     func updateAgoText() {
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm:ss"
+        let timeStr = timeFormatter.string(from: self.lastQuotaFetchDate)
+        
         let delta = Date().timeIntervalSince(self.lastQuotaFetchDate)
-        let elapsed = Int(delta)
-        if elapsed < 60 {
-            self.lastQuotaFetchAgoText = "Updated just now"
+        let elapsed = max(0, Int(delta))
+        let relativeStr: String
+        if elapsed < 15 {
+            relativeStr = "Vừa xong"
+        } else if elapsed < 60 {
+            relativeStr = "\(elapsed)s trước"
         } else if elapsed < 3600 {
-            self.lastQuotaFetchAgoText = "Updated \(elapsed / 60)m ago"
+            relativeStr = "\(elapsed / 60)m trước"
         } else if elapsed < 86400 {
-            self.lastQuotaFetchAgoText = "Updated \(elapsed / 3600)h ago"
+            relativeStr = "\(elapsed / 3600)h trước"
         } else {
-            self.lastQuotaFetchAgoText = "Updated 1d ago"
+            relativeStr = "1d trước"
         }
+        self.lastQuotaFetchAgoText = "Cập nhật lúc \(timeStr) · \(relativeStr)"
     }
 
     func switchPriority(to email: String) {
@@ -931,6 +943,7 @@ class QuotaState: ObservableObject {
                         self.agyClaudeReset = self.agyClaudeGptWeeklyRefresh
                         self.agyGptUsed = self.agyClaudeUsed
                     }
+                    self.updateAgoText()
                     self.onUpdate?()
                 }
             }.resume()
@@ -1196,8 +1209,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let agyMenu = NSMenu()
         let agyMenuItem = NSMenuItem()
-        let agyHosting = NSHostingView(rootView: AntigravityFullCardView(state: state))
-        agyHosting.frame = NSRect(x: 0, y: 0, width: 365, height: 410)
+        let agyHosting = MenuHostingView(rootView: AntigravityFullCardView(state: state))
+        let agyHeight = agyHosting.fittingSize.height
+        let finalAgyH = (agyHeight > 100 && agyHeight < 700) ? agyHeight : 395
+        agyHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalAgyH)
         agyMenuItem.view = agyHosting
         agyMenu.addItem(agyMenuItem)
         agyMenu.addItem(NSMenuItem.separator())
@@ -1233,8 +1248,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let claudeMenu = NSMenu()
         let claudeMenuItem = NSMenuItem()
-        let claudeHosting = NSHostingView(rootView: ClaudeFullCardView(state: state))
-        claudeHosting.frame = NSRect(x: 0, y: 0, width: 365, height: 435)
+        let claudeHosting = MenuHostingView(rootView: ClaudeFullCardView(state: state))
+        let claudeHeight = claudeHosting.fittingSize.height
+        let finalClaudeH = (claudeHeight > 100 && claudeHeight < 700) ? claudeHeight : 380
+        claudeHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalClaudeH)
         claudeMenuItem.view = claudeHosting
         claudeMenu.addItem(claudeMenuItem)
         claudeMenu.addItem(NSMenuItem.separator())
@@ -1290,7 +1307,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func confirmSwitch(to email: String) {
         if state.claudeEmail == email { return }
         let alert = NSAlert()
-        alert.messageText = "Xác nhận chuyển đổi tài khoản Active"
+        alert.messageText = "Xác nhận chuyển đổi tài khoản đang dùng"
         alert.informativeText = "Bạn có chắc chắn muốn chuyển tài khoản ưu tiên số 1 sang:\n\n\(email)\n\nThao tác này sẽ thiết lập tài khoản này lên đầu chuỗi điều phối (selector drain order) của CLIProxy."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Chuyển tài khoản")
