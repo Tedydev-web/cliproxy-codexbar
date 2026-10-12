@@ -15,8 +15,12 @@ echo "=== CLIProxy CodexBar Multi-Machine Sync Tool ==="
 # 1. Đồng bộ Backend trên máy hiện tại (Ubuntu Host)
 echo "--------------------------------------------------"
 echo "[1/2] Đồng bộ Backend trên máy chủ cục bộ..."
-mkdir -p ~/.local/bin
-cp "${SCRIPT_DIR}/backend/cliproxy-quota-bridge" ~/.local/bin/cliproxy-quota-bridge
+mkdir -p ~/.local/lib/cliproxy-bridge ~/.local/bin
+cp -r "${SCRIPT_DIR}/backend/bridge/"* ~/.local/lib/cliproxy-bridge/
+cat << 'EOF' > ~/.local/bin/cliproxy-quota-bridge
+#!/usr/bin/env bash
+exec python3 ~/.local/lib/cliproxy-bridge/main.py "$@"
+EOF
 chmod +x ~/.local/bin/cliproxy-quota-bridge
 systemctl --user restart cliproxy-quota-bridge
 echo "✅ Backend đã được cập nhật và khởi động lại thành công!"
