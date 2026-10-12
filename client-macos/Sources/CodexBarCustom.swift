@@ -7,11 +7,19 @@ final class MenuHostingView<Content: View>: NSHostingView<Content> {
 
 // MARK: - CodexBar Reset Time & Timestamp Formatter
 func formatResetWithEst(raw: String) -> String {
-    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty, trimmed != "-" else { return "" }
+    var cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !cleaned.isEmpty, cleaned != "-" else { return "" }
+    
+    // Clean redundant prefixes if already present
+    cleaned = cleaned.replacingOccurrences(of: "Đặt lại sau ", with: "")
+    cleaned = cleaned.replacingOccurrences(of: "Đặt lại ", with: "")
+    cleaned = cleaned.replacingOccurrences(of: "Đặt lại: ", with: "")
+    cleaned = cleaned.replacingOccurrences(of: "Resets in ", with: "")
+    cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !cleaned.isEmpty, cleaned != "-" else { return "" }
     
     var totalSeconds: Double = 0
-    let parts = trimmed.components(separatedBy: " ")
+    let parts = cleaned.components(separatedBy: " ")
     for part in parts {
         let p = part.trimmingCharacters(in: .whitespacesAndNewlines)
         if p.hasSuffix("d"), let num = Double(p.dropLast()) {
@@ -26,7 +34,7 @@ func formatResetWithEst(raw: String) -> String {
     }
     
     if totalSeconds <= 0 {
-        return "Đặt lại: " + trimmed
+        return "Đặt lại: " + cleaned
     }
     
     let target = Date().addingTimeInterval(totalSeconds)
@@ -36,13 +44,13 @@ func formatResetWithEst(raw: String) -> String {
     let timeStr = timeFormatter.string(from: target)
     
     if totalSeconds < 86400 && calendar.isDateInToday(target) {
-        return "Đặt lại sau " + trimmed + " · " + timeStr
+        return "Đặt lại sau " + cleaned + " · " + timeStr
     } else if calendar.isDateInTomorrow(target) {
-        return "Đặt lại sau " + trimmed + " · Mai " + timeStr
+        return "Đặt lại sau " + cleaned + " · Mai " + timeStr
     } else {
         let dayFormatter = DateFormatter()
         dayFormatter.dateFormat = "dd/MM HH:mm"
-        return "Đặt lại sau " + trimmed + " · " + dayFormatter.string(from: target)
+        return "Đặt lại sau " + cleaned + " · " + dayFormatter.string(from: target)
     }
 }
 
@@ -753,11 +761,11 @@ struct SettingsView: View {
 class QuotaState: ObservableObject {
     @Published var claudeEmail = "trthuhuyen2712@gmail.com"
     @Published var claudePlan = "Max 5x"
-    @Published var claude5h = 52
-    @Published var claude7d = 20
-    @Published var claude5hReset = "Đặt lại 2h"
-    @Published var claude7dReset = "Đặt lại 6d 17h"
-    @Published var claudePaceReserve = 48
+    @Published var claude5h = 11
+    @Published var claude7d = 26
+    @Published var claude5hReset = "3h"
+    @Published var claude7dReset = "6d 13h"
+    @Published var claudePaceReserve = 89
     @Published var switchingMessage = ""
     @Published var claudeAccounts: [PoolAccountItem] = []
     
@@ -995,8 +1003,8 @@ class QuotaState: ObservableObject {
                             self.claude5hReset = "Tạm nghẽn 429"
                             self.claude7dReset = "Tạm nghẽn 429"
                         } else {
-                            self.claude5hReset = current.reset5h.isEmpty ? "Đầy đủ" : "Đặt lại \(current.reset5h)"
-                            self.claude7dReset = current.resetWeekly.isEmpty ? "" : "Đặt lại \(current.resetWeekly)"
+                            self.claude5hReset = current.reset5h.isEmpty ? "Đầy đủ" : current.reset5h
+                            self.claude7dReset = current.resetWeekly
                         }
                         self.claudePaceReserve = current.remaining5h
                     } else if let firstActive = parsedList.first(where: { $0.isAvailable }) {
@@ -1008,8 +1016,8 @@ class QuotaState: ObservableObject {
                             self.claude5hReset = "Tạm nghẽn 429"
                             self.claude7dReset = "Tạm nghẽn 429"
                         } else {
-                            self.claude5hReset = firstActive.reset5h.isEmpty ? "Đầy đủ" : "Đặt lại \(firstActive.reset5h)"
-                            self.claude7dReset = firstActive.resetWeekly.isEmpty ? "" : "Đặt lại \(firstActive.resetWeekly)"
+                            self.claude5hReset = firstActive.reset5h.isEmpty ? "Đầy đủ" : firstActive.reset5h
+                            self.claude7dReset = firstActive.resetWeekly
                         }
                         self.claudePaceReserve = firstActive.remaining5h
                     }
@@ -1190,8 +1198,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     func menuWillOpen(_ menu: NSMenu) {
         state.updateAgoText()
+        self.adjustMenuHostingHeights()
         if state.refreshOnOpen {
             state.fetchData()
+        }
+    }
+    
+    var claudeHostingView: NSView?
+    var agyHostingView: NSView?
+    
+    func adjustMenuHostingHeights() {
+        if let ch = claudeHostingView {
+            let h = ch.fittingSize.height
+            if h > 100 {
+                ch.frame = NSRect(x: 0, y: 0, width: 365, height: h)
+            }
+        }
+        if let ah = agyHostingView {
+            let h = ah.fittingSize.height
+            if h > 100 {
+                ah.frame = NSRect(x: 0, y: 0, width: 365, height: h)
+            }
         }
     }
     
@@ -1210,8 +1237,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let agyMenu = NSMenu()
         let agyMenuItem = NSMenuItem()
         let agyHosting = MenuHostingView(rootView: AntigravityFullCardView(state: state))
+        self.agyHostingView = agyHosting
         let agyHeight = agyHosting.fittingSize.height
-        let finalAgyH = (agyHeight > 100 && agyHeight < 700) ? agyHeight : 395
+        let finalAgyH = (agyHeight > 100 && agyHeight < 900) ? agyHeight : 430
         agyHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalAgyH)
         agyMenuItem.view = agyHosting
         agyMenu.addItem(agyMenuItem)
@@ -1249,8 +1277,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let claudeMenu = NSMenu()
         let claudeMenuItem = NSMenuItem()
         let claudeHosting = MenuHostingView(rootView: ClaudeFullCardView(state: state))
+        self.claudeHostingView = claudeHosting
         let claudeHeight = claudeHosting.fittingSize.height
-        let finalClaudeH = (claudeHeight > 100 && claudeHeight < 700) ? claudeHeight : 380
+        let finalClaudeH = (claudeHeight > 100 && claudeHeight < 900) ? claudeHeight : 490
         claudeHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalClaudeH)
         claudeMenuItem.view = claudeHosting
         claudeMenu.addItem(claudeMenuItem)
@@ -1284,6 +1313,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if let agyBtn = self.agyItem.button {
                 agyBtn.title = " 5h \(self.state.agyGemini5hRemaining)% · W \(self.state.agyGeminiWeeklyRemaining)%"
             }
+            self.adjustMenuHostingHeights()
         }
         
         state.fetchData()

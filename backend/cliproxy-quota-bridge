@@ -79,7 +79,7 @@ def get_claude_pool_status():
         env = os.environ.copy()
         env["PATH"] = "/home/tedydev/.nvm/versions/node/v24.18.0/bin:" + env.get("PATH", "")
         out = subprocess.check_output([CCS_BIN, "cliproxy", "quota", "--provider", "claude"], env=env, timeout=12).decode()
-        blocks = re.split(r"\n\s*\[([!X ])\]", out)
+        blocks = re.split(r"\n\s*\[([!X ]|OK)\]", out)
         parsed = []
         for i in range(1, len(blocks), 2):
             mark = blocks[i]
@@ -133,7 +133,7 @@ def get_claude_pool_status():
             parsed.append({
                 "email": email,
                 "name": name,
-                "is_available": (mark != "X"),
+                "is_available": (mark != "X" and mark != "!"),
                 "is_probe_error": is_probe_err,
                 "status_text": "Tạm nghẽn probe (429 upstream)" if is_probe_err else ("Khả dụng" if mark != "X" else "Hết hạn"),
                 "error_hint": "Anthropic usage API bị 429 tạm thời (Inference vẫn khả dụng)" if is_probe_err else "",
