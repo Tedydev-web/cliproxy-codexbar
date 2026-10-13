@@ -512,18 +512,13 @@ async function showServerDetailModal(data) {
 async function main() {
   const data = await fetchTelemetryData();
 
-  if (config.runsInApp) {
-    await showServerDetailModal(data);
-  }
-
   const widget = new ListWidget();
   widget.backgroundColor = TOKENS.bg;
 
-  // Lên lịch làm mới sớm nhất: 1 phút (hoặc khi vuốt tới trang chứa widget)
+  // Lên lịch làm mới sớm nhất: 1 phút
   widget.refreshAfterDate = new Date(Date.now() + 60 * 1000);
 
   const family = config.widgetFamily || "medium";
-
   if (family === "small") {
     buildSmallWidget(widget, data);
   } else {
@@ -532,6 +527,7 @@ async function main() {
 
   Script.setWidget(widget);
 
+  // Nếu người dùng chủ động mở script trong app Scriptable: Chạy chế độ Live HUD Realtime!
   if (config.runsInApp) {
     if (family === "small") {
       await widget.presentSmall();

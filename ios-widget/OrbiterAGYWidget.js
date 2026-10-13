@@ -431,8 +431,6 @@ async function main() {
   grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
   w.backgroundGradient = grad;
 
-  w.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name());
-
   const family = config.widgetFamily || "medium";
   if (family === "small") {
     buildSmallWidget(w, data);

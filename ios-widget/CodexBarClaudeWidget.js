@@ -731,62 +731,61 @@ async function main() {
       req.method = "POST";
       req.headers = { "Content-Type": "application/json" };
       req.body = JSON.stringify({ email: targetEmail });
-      req.timeoutInterval = 4;
+      req.timeoutInterval = 3;
       await req.loadJSON();
 
+      // Bắn thông báo xác nhận tinh tế
       const notif = new Notification();
       notif.title = "⚡ CodexBar - Claude";
       notif.body = `Đã chuyển ${targetEmail.split("@")[0]} lên ưu tiên số #1 (Drain First).`;
       notif.schedule();
     } catch (_) {}
+
+    // Kéo dữ liệu mới và cập nhật widget ngay lập tức
+    const updatedData = await fetchPoolData();
+    const w = new ListWidget();
+    const grad = new LinearGradient();
+    grad.locations = [0.0, 1.0];
+    grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
+    w.backgroundGradient = grad;
+    const family = config.widgetFamily || "large";
+    if (family === "small") buildSmallWidget(w, updatedData);
+    else if (family === "medium") buildMediumWidget(w, updatedData);
+    else buildLargeWidget(w, updatedData);
+    w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
+    Script.setWidget(w);
+
+    // Tự động quay về Home Screen ngay lập tức (không giữ chân trong Scriptable)
+    Safari.open("shortcuts://");
+    Script.complete();
+    return;
   }
 
   const data = await fetchPoolData();
 
-  if (config.runsInWidget) {
-    const w = new ListWidget();
-    const grad = new LinearGradient();
-    grad.locations = [0.0, 1.0];
-    grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
-    w.backgroundGradient = grad;
+  const w = new ListWidget();
+  const grad = new LinearGradient();
+  grad.locations = [0.0, 1.0];
+  grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
+  w.backgroundGradient = grad;
 
-    w.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name());
-
-    const family = config.widgetFamily || "medium";
-    if (family === "small") {
-      buildSmallWidget(w, data);
-    } else if (family === "large") {
-      buildLargeWidget(w, data);
-    } else {
-      buildMediumWidget(w, data);
-    }
-
-    w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
-    Script.setWidget(w);
+  // TUYỆT ĐỐI KHÔNG GÁN w.url tổng để tránh bị văng app Scriptable khi chạm vào vùng trống
+  const family = config.widgetFamily || (config.runsInWidget ? "large" : "large");
+  if (family === "small") {
+    buildSmallWidget(w, data);
+  } else if (family === "medium") {
+    buildMediumWidget(w, data);
   } else {
-    // Nếu vừa bấm chuyển từ widget thì không cần bung popup chọn lại nữa
-    if (!args.queryParameters || args.queryParameters.action !== "switch") {
-      await showInteractiveSwitcher(data);
-    }
-    const updatedData = await fetchPoolData();
+    buildLargeWidget(w, data);
+  }
 
-    const w = new ListWidget();
-    const grad = new LinearGradient();
-    grad.locations = [0.0, 1.0];
-    grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
-    w.backgroundGradient = grad;
+  w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
+  Script.setWidget(w);
 
-    const family = config.widgetFamily || "large";
-    if (family === "small") {
-      buildSmallWidget(w, updatedData);
-      await w.presentSmall();
-    } else if (family === "medium") {
-      buildMediumWidget(w, updatedData);
-      await w.presentMedium();
-    } else {
-      buildLargeWidget(w, updatedData);
-      await w.presentLarge();
-    }
+  if (!config.runsInWidget) {
+    if (family === "small") await w.presentSmall();
+    else if (family === "medium") await w.presentMedium();
+    else await w.presentLarge();
   }
 }
 
