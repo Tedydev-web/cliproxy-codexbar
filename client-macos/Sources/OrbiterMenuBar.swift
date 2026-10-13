@@ -2686,6 +2686,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let g5h = isUsed ? (100 - state.agyGemini5hRemaining) : state.agyGemini5hRemaining
             let gWk = isUsed ? (100 - state.agyGeminiWeeklyRemaining) : state.agyGeminiWeeklyRemaining
             btn.title = " 5h \(g5h)% · W \(gWk)%"
+            btn.toolTip = "Antigravity Quota (5h: \(g5h)% · W: \(gWk)%)"
         }
         let agyMenu = NSMenu()
         let agyMenuItem = NSMenuItem()
@@ -2729,6 +2730,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let c5h = isUsed ? state.claude5h : max(0, 100 - state.claude5h)
             let c7d = isUsed ? state.claude7d : max(0, 100 - state.claude7d)
             btn.title = " 5h \(c5h)% · W \(c7d)%"
+            btn.toolTip = "Claude Quota (5h: \(c5h)% · W: \(c7d)%)"
         }
         let claudeMenu = NSMenu()
         let claudeMenuItem = NSMenuItem()
@@ -2814,6 +2816,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let c5h = isUsed ? self.state.claude5h : max(0, 100 - self.state.claude5h)
                 let c7d = isUsed ? self.state.claude7d : max(0, 100 - self.state.claude7d)
                 btn.title = " 5h \(c5h)% · W \(c7d)%"
+                btn.toolTip = "Claude Quota (5h: \(c5h)% · W: \(c7d)%)"
             }
             if let agyBtn = self.agyItem.button {
                 if agyBtn.image == nil {
@@ -2824,6 +2827,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let g5h = isUsed ? (100 - self.state.agyGemini5hRemaining) : self.state.agyGemini5hRemaining
                 let gWk = isUsed ? (100 - self.state.agyGeminiWeeklyRemaining) : self.state.agyGeminiWeeklyRemaining
                 agyBtn.title = " 5h \(g5h)% · W \(gWk)%"
+                agyBtn.toolTip = "Antigravity Quota (5h: \(g5h)% · W: \(gWk)%)"
             }
             if let uBtn = self.ubuntuItem.button {
                 if uBtn.image == nil {
@@ -2835,6 +2839,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 let diskFreeInt = Int(self.state.sysMetrics.diskFreePercent)
                 uBtn.title = " C \(Int(self.state.sysMetrics.cpuPercent))% · M \(Int(self.state.sysMetrics.ramPercent))% · D \(diskFreeInt)%"
+                uBtn.toolTip = "Ubuntu Server Hub"
             }
             self.adjustMenuHostingHeights()
         }
