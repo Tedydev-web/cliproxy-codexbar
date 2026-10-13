@@ -404,9 +404,14 @@ struct ClaudeFullCardView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
                     HStack(alignment: .center, spacing: 6) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color(red: 249/255, green: 115/255, blue: 22/255))
+                        if let nsImg = loadTemplateIcon(name: "claude") {
+                            Image(nsImage: nsImg)
+                                .renderingMode(.template)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 14, height: 14)
+                                .foregroundStyle(Color(red: 218/255, green: 119/255, blue: 86/255))
+                        }
                         Text("Claude")
                             .font(.headline)
                             .fontWeight(.semibold)
@@ -603,9 +608,14 @@ struct AntigravityFullCardView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
                     HStack(alignment: .center, spacing: 6) {
-                        Image(systemName: "atom")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color(red: 0/255, green: 195/255, blue: 137/255))
+                        if let nsImg = loadTemplateIcon(name: "antigravity") {
+                            Image(nsImage: nsImg)
+                                .renderingMode(.template)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 14, height: 14)
+                                .foregroundStyle(Color(red: 0/255, green: 195/255, blue: 137/255))
+                        }
                         Text("Antigravity")
                             .font(.headline)
                             .fontWeight(.semibold)

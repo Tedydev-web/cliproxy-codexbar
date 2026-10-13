@@ -40,6 +40,13 @@ const TOKENS = {
   greenPace: new Color("#22C55E")     // Vạch nhịp độ an toàn
 };
 
+// Official Claude Sparkle Brand Logo Icon (Base64 PNG Template)
+const CLAUDE_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAJxsHGAAAD3klEQVRYCe2XW2iPYRzH95+Z04hGQuSUY84XWivEWDnkAheKckHRLpDCxS52JadyulDChuSGlaQcyiE0zFkjIYxtFCbMYcbr8333PNuz17t5/3+a0n71eX/H5/c8e97/+7zvkpJa5H/eAc/zZsEUiP3zv5NFLAYrq8IWRDIL7kJmWP6vxpjkCFgpxUgJTkDshik4FMxF9ZOjFlJ3zqntjT3X8ZNYiG7jCBN75OZkk+8FfYLxhH2apcJ9sFLsNiOYbhPoBYHcfGLV8BmGuLk/smk2FVyZZBsSHOokRjnxmcS/Oblcm4usGdwBiuE1LHUH4h8FK+dtjsBEE/yKbq04ehxUmbhUDYy0YyJrBnXXaEcOYLc3kwzA/uLkskxct0Vy3fjdsJ/5kfrL2siLCBbSY299H9+6w3WQmWyzkysysTUmthudAmeNb1VhcI64fTothPe2I/oDLIAu8AasTMfYbpwc9AabMPohulPcCwgbQKOBcMk0tqoAI9c66DNw0Pi70D+MLaXf1Niw3gnHaJgMK+ETWCm3BlpP0T3Hd80VYRNTEINfDtew2kZjNNBuXYCocovCVtAOMmE57IGr8BEqoOlziQL/kW1sVeS1W6tAh9zv5CYFep2455A75hVOF3euBm9tkpNJnobP8BYqHf0OW1RAOaTDFoj6+qmh9h7oWNApfwFKYrGYh66T4IJSyeyEodAR9GR0MLRFxyP6o3QkaGJxmcmr0E1KgwU1VcnuqbaNg3bzUBNjqslpJ1/BR9BOfIM3htfofBZZhk5cWFhPyIfvIHEf8dpI7VU/6Dw4C+7TiVsnOsv6JbQaBur9pgnsu+kt9jqohMYWtYOcHm99KWTAajgGGit5DmPiXhCDFkEZWNHH2mB4YALbjHbfcSbkH5gNnlwSWuQw0E8gujBAt+cEWHmJMUcd0IUmuA+9xNjL0DqZJafgom953kl0WvSZQyppMBzs1qpvAfhnBlrnkEQ7lAab5CAas963ai9zUPuNfwWtoyIxYfAE0IF2H7JtF+yJoLhuz2jF0XYXu2JrgU9BotusF3GeHKQEetpecWsGt3IH4fcC3TZJjs1h60OuGvxjBD0NrBSoDmc2aMefQA87NmFNEz0RSA5bBth9/MjnvfCxqSJ7TVxqRkm1hf7PIx3axOyabIVJJfA/3o0k8zzo553zW1MrCM8Dsu5dQnbNNb5cxs6u03wN4LkuBuXTSwDauBxMNeYH8/3iN5vlRz1HwLN7Pa/DMSTqNUt7k88OCZYWudHfVOreWnIYtTI/lP4sK6rY5hx+mpoHmEH2kA2xLPbzbO4llmaYwd+AqWYtWtPxbPfAAAAAElFTkSuQmCC";
+function getClaudeIcon() {
+  const data = Data.fromBase64String(CLAUDE_LOGO_B64);
+  return Image.fromData(data);
+}
+
 // ==========================================
 // TIME FORMATTERS (1:1 VỚI SWIFT ORBITERMENUBAR)
 // ==========================================
@@ -213,8 +220,8 @@ function buildMediumWidget(w, data) {
   titleStack.centerAlignContent();
   titleStack.spacing = 5;
 
-  const icon = titleStack.addImage(SFSymbol.named("bolt.fill").image);
-  icon.imageSize = new Size(13, 13);
+  const icon = titleStack.addImage(getClaudeIcon());
+  icon.imageSize = new Size(15, 15);
   icon.tintColor = TOKENS.orangeFill;
 
   const title = titleStack.addText("Claude");
@@ -323,8 +330,8 @@ function buildSmallWidget(w, data) {
   titleStack.centerAlignContent();
   titleStack.spacing = 4;
 
-  const icon = titleStack.addImage(SFSymbol.named("bolt.fill").image);
-  icon.imageSize = new Size(11, 11);
+  const icon = titleStack.addImage(getClaudeIcon());
+  icon.imageSize = new Size(13, 13);
   icon.tintColor = TOKENS.orangeFill;
 
   const t = titleStack.addText("Claude");
