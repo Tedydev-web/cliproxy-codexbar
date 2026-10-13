@@ -3,10 +3,10 @@
 // icon-color: teal; icon-glyph: brain;
 /**
  * Orbiter iOS Widget - Antigravity (AGY) Gemini Models Quota
- * 100% Matching Pattern & Style of AntigravityFullCardView (GEMINI MODELS) in Orbiter Menubar
+ * 100% Matching Pattern & Style of AntigravityFullCardView in Orbiter Menubar macOS
  * Supports Medium (2x4) & Small (2x2) Widget Families
  * Full-width Segmented Progress Bars (Teal Green cho 5h & Amber Yellow cho Tuần)
- * Tối ưu Pin & Hiệu năng: 5 phút refresh & On-demand caching
+ * Đồng bộ chuẩn xác Header: Cập nhật lúc HH:mm:ss · Xs trước, formatResetWithEst, v.v.
  */
 
 const CONFIG = {
@@ -14,7 +14,7 @@ const CONFIG = {
   PORT: "8318",
   TIMEOUT: 4,
   REFRESH_MIN: 2, // Chu kỳ refresh đề xuất cho iOS (2 phút)
-  CACHE_KEY: "orbiter_agy_gemini_v10"
+  CACHE_KEY: "orbiter_agy_gemini_v11"
 };
 
 const URLS = {
@@ -39,6 +39,67 @@ const TOKENS = {
   trackGray: new Color("#272D34"),     // Rãnh segmented bar
   greenPace: new Color("#22C55E")      // Vạch nhịp độ an toàn
 };
+
+// ==========================================
+// TIME FORMATTERS (1:1 VỚI SWIFT ORBITERMENUBAR)
+// ==========================================
+function formatAgoText(timestamp) {
+  if (!timestamp) return "Vừa xong";
+  const now = Date.now();
+  const deltaSec = Math.max(0, Math.floor((now - timestamp) / 1000));
+  const timeStr = new Date(timestamp).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  let relStr = "Vừa xong";
+  if (deltaSec < 15) {
+    relStr = "Vừa xong";
+  } else if (deltaSec < 60) {
+    relStr = `${deltaSec}s trước`;
+  } else if (deltaSec < 3600) {
+    relStr = `${Math.floor(deltaSec / 60)}m trước`;
+  } else if (deltaSec < 86400) {
+    relStr = `${Math.floor(deltaSec / 3600)}h trước`;
+  } else {
+    relStr = "1d trước";
+  }
+  return `Cập nhật lúc ${timeStr} · ${relStr}`;
+}
+
+function formatResetWithEst(raw) {
+  if (!raw || raw === "-") return "";
+  let cleaned = raw.replace(/Đặt lại sau /g, "").replace(/Đặt lại: /g, "").replace(/Resets in /g, "").trim();
+  if (!cleaned) return "";
+
+  let totalSec = 0;
+  const parts = cleaned.split(" ");
+  for (const p of parts) {
+    const s = p.trim();
+    if (s.endsWith("d")) totalSec += parseFloat(s.slice(0, -1)) * 86400;
+    else if (s.endsWith("h")) totalSec += parseFloat(s.slice(0, -1)) * 3600;
+    else if (s.endsWith("m")) totalSec += parseFloat(s.slice(0, -1)) * 60;
+    else if (s.endsWith("s")) totalSec += parseFloat(s.slice(0, -1));
+  }
+
+  if (totalSec <= 0) return `Đặt lại: ${cleaned}`;
+
+  const target = new Date(Date.now() + totalSec * 1000);
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const timeStr = `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
+
+  const isToday = target.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = target.toDateString() === tomorrow.toDateString();
+
+  if (totalSec < 86400 && isToday) {
+    return `Đặt lại sau ${cleaned} · ${timeStr}`;
+  } else if (isTomorrow) {
+    return `Đặt lại sau ${cleaned} · Mai ${timeStr}`;
+  } else {
+    const dayStr = `${pad(target.getDate())}/${pad(target.getMonth() + 1)} ${pad(target.getHours())}:${pad(target.getMinutes())}`;
+    return `Đặt lại sau ${cleaned} · ${dayStr}`;
+  }
+}
 
 // ==========================================
 // DATA & CACHING
@@ -72,7 +133,7 @@ async function fetchAgyData() {
 // ==========================================
 // DRAWING: FULL-WIDTH SEGMENTED BAR (3 ĐOẠN)
 // ==========================================
-function drawSegmentedBar(width, height, percent, fillColor, showPace) {
+function drawSegmentedBar(width, height, percent, fillColor) {
   const dc = new DrawContext();
   dc.size = new Size(width, height);
   dc.opaque = false;
@@ -110,22 +171,11 @@ function drawSegmentedBar(width, height, percent, fillColor, showPace) {
     remain -= segW;
   }
 
-  // 3. Hairline Pace Indicator (Optional)
-  if (showPace) {
-    const markerW = 2.5;
-    const markerX = width - segW + (segW * 0.7);
-    const mp = new Path();
-    mp.addRoundedRect(new Rect(markerX, 0, markerW, height), 1, 1);
-    dc.addPath(mp);
-    dc.setFillColor(TOKENS.greenPace);
-    dc.fillPath();
-  }
-
   return dc.getImage();
 }
 
 // ==========================================
-// MEDIUM WIDGET (FULL WIDTH 330PT, 1:1 ORBITER)
+// MEDIUM WIDGET: 100% ĐỒNG BỘ VỚI ORBITER MACOS
 // ==========================================
 function buildMediumWidget(w, data) {
   w.setPadding(14, 14, 14, 14);
@@ -143,13 +193,13 @@ function buildMediumWidget(w, data) {
 
   const g5Rem = agy.gemini?.five_hour_remaining ?? 96;
   const g5Used = 100 - g5Rem;
-  const g5Reset = agy.gemini?.five_hour_refresh || "4h 44m";
+  const g5ResetFormatted = formatResetWithEst(agy.gemini?.five_hour_refresh || "4h 44m");
 
   const gWkRem = agy.gemini?.weekly_remaining ?? 32;
   const gWkUsed = 100 - gWkRem;
-  const gWkReset = agy.gemini?.weekly_refresh || "2d 2h";
+  const gWkResetFormatted = formatResetWithEst(agy.gemini?.weekly_refresh || "2d 2h");
 
-  // Header Line 1: Antigravity & Email
+  // --- HEADER: 100% NHƯ ORBITER MACOS (DÒNG 1: TÊN + EMAIL; DÒNG 2: AGO TEXT + GÓI) ---
   const row1 = w.addStack();
   row1.layoutHorizontally();
   row1.centerAlignContent();
@@ -167,13 +217,15 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(2);
 
-  // Header Line 2: Section Title & Tier
   const row2 = w.addStack();
   row2.layoutHorizontally();
+  row2.centerAlignContent();
 
-  const sectionTitle = row2.addText("GEMINI MODELS (Flash, Pro)");
-  sectionTitle.font = Font.semiboldSystemFont(10.5);
-  sectionTitle.textColor = TOKENS.textMuted;
+  // Dòng cập nhật chuẩn macOS: "Cập nhật lúc HH:mm:ss · Xs trước"
+  const agoText = formatAgoText(data.time);
+  const syncTxt = row2.addText(agoText);
+  syncTxt.font = Font.systemFont(10.5);
+  syncTxt.textColor = TOKENS.textSecondary;
 
   row2.addSpacer();
 
@@ -190,7 +242,7 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(8);
 
-  // METRIC 1: GIỚI HẠN 5H CÒN LẠI (TEAL GREEN)
+  // --- METRIC 1: GIỚI HẠN 5H CÒN LẠI (TEAL GREEN) ---
   const g5Head = w.addStack();
   g5Head.layoutHorizontally();
   g5Head.centerAlignContent();
@@ -201,14 +253,14 @@ function buildMediumWidget(w, data) {
 
   g5Head.addSpacer();
 
-  const g5Rst = g5Head.addText(`Đặt lại sau ${g5Reset}`);
-  g5Rst.font = Font.systemFont(11);
+  const g5Rst = g5Head.addText(g5ResetFormatted);
+  g5Rst.font = Font.systemFont(10.5);
   g5Rst.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
   // Thanh tiến trình 5h (Teal Green, 330pt)
-  const bar5 = drawSegmentedBar(330, 5.5, g5Rem, TOKENS.geminiTeal, false);
+  const bar5 = drawSegmentedBar(330, 5.5, g5Rem, TOKENS.geminiTeal);
   const v5 = w.addImage(bar5);
   v5.imageSize = new Size(330, 5.5);
 
@@ -220,7 +272,7 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(8);
 
-  // METRIC 2: GIỚI HẠN TUẦN CÒN LẠI (AMBER YELLOW)
+  // --- METRIC 2: GIỚI HẠN TUẦN CÒN LẠI (AMBER YELLOW) ---
   const gWkHead = w.addStack();
   gWkHead.layoutHorizontally();
   gWkHead.centerAlignContent();
@@ -231,14 +283,14 @@ function buildMediumWidget(w, data) {
 
   gWkHead.addSpacer();
 
-  const gWkRst = gWkHead.addText(`Đặt lại sau ${gWkReset}`);
-  gWkRst.font = Font.systemFont(11);
+  const gWkRst = gWkHead.addText(gWkResetFormatted);
+  gWkRst.font = Font.systemFont(10.5);
   gWkRst.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
   // Thanh tiến trình Tuần (Amber Yellow, 330pt)
-  const barWk = drawSegmentedBar(330, 5.5, gWkRem, TOKENS.geminiAmber, false);
+  const barWk = drawSegmentedBar(330, 5.5, gWkRem, TOKENS.geminiAmber);
   const vWk = w.addImage(barWk);
   vWk.imageSize = new Size(330, 5.5);
 
@@ -283,7 +335,7 @@ function buildSmallWidget(w, data) {
   r5.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const b5 = drawSegmentedBar(132, 4.5, g5Rem, TOKENS.geminiTeal, false);
+  const b5 = drawSegmentedBar(132, 4.5, g5Rem, TOKENS.geminiTeal);
   const v5 = w.addImage(b5);
   v5.imageSize = new Size(132, 4.5);
 
@@ -301,7 +353,7 @@ function buildSmallWidget(w, data) {
   rw.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const bw = drawSegmentedBar(132, 4.5, gWkRem, TOKENS.geminiAmber, false);
+  const bw = drawSegmentedBar(132, 4.5, gWkRem, TOKENS.geminiAmber);
   const vw = w.addImage(bw);
   vw.imageSize = new Size(132, 4.5);
 }

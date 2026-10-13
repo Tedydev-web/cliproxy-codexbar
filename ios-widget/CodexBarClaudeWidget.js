@@ -3,11 +3,11 @@
 // icon-color: orange; icon-glyph: bolt;
 /**
  * CodexBar iOS Widget - Claude Pool Quota
- * 100% Matching Pattern & Style of CodexBar macOS & Orbiter Menubar
+ * 100% Matching Pattern & Style of ClaudeFullCardView in Orbiter Menubar & CodexBar macOS
  * Supports Medium (2x4) & Small (2x2) Widget Families
  * Full-width Segmented Progress Bars (Không bị hụt lề phải)
  * Interactive Account Switcher (Khi mở app hoặc cấu hình Run Script)
- * Tối ưu Pin & Hiệu năng: On-Demand Refresh khi mở, Caching thông minh
+ * Đồng bộ chuẩn xác Header: Cập nhật lúc HH:mm:ss · Xs trước, formatResetWithEst, v.v.
  */
 
 const CONFIG = {
@@ -15,7 +15,7 @@ const CONFIG = {
   PORT: "8318",
   TIMEOUT: 4,
   REFRESH_MIN: 2, // Chu kỳ refresh đề xuất cho iOS (2 phút)
-  CACHE_KEY: "codexbar_claude_v9"
+  CACHE_KEY: "codexbar_claude_v11"
 };
 
 const URLS = {
@@ -41,6 +41,67 @@ const TOKENS = {
 };
 
 // ==========================================
+// TIME FORMATTERS (1:1 VỚI SWIFT ORBITERMENUBAR)
+// ==========================================
+function formatAgoText(timestamp) {
+  if (!timestamp) return "Vừa xong";
+  const now = Date.now();
+  const deltaSec = Math.max(0, Math.floor((now - timestamp) / 1000));
+  const timeStr = new Date(timestamp).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  let relStr = "Vừa xong";
+  if (deltaSec < 15) {
+    relStr = "Vừa xong";
+  } else if (deltaSec < 60) {
+    relStr = `${deltaSec}s trước`;
+  } else if (deltaSec < 3600) {
+    relStr = `${Math.floor(deltaSec / 60)}m trước`;
+  } else if (deltaSec < 86400) {
+    relStr = `${Math.floor(deltaSec / 3600)}h trước`;
+  } else {
+    relStr = "1d trước";
+  }
+  return `Cập nhật lúc ${timeStr} · ${relStr}`;
+}
+
+function formatResetWithEst(raw) {
+  if (!raw || raw === "-") return "";
+  let cleaned = raw.replace(/Đặt lại sau /g, "").replace(/Đặt lại: /g, "").replace(/Resets in /g, "").trim();
+  if (!cleaned) return "";
+
+  let totalSec = 0;
+  const parts = cleaned.split(" ");
+  for (const p of parts) {
+    const s = p.trim();
+    if (s.endsWith("d")) totalSec += parseFloat(s.slice(0, -1)) * 86400;
+    else if (s.endsWith("h")) totalSec += parseFloat(s.slice(0, -1)) * 3600;
+    else if (s.endsWith("m")) totalSec += parseFloat(s.slice(0, -1)) * 60;
+    else if (s.endsWith("s")) totalSec += parseFloat(s.slice(0, -1));
+  }
+
+  if (totalSec <= 0) return `Đặt lại: ${cleaned}`;
+
+  const target = new Date(Date.now() + totalSec * 1000);
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const timeStr = `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
+
+  const isToday = target.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = target.toDateString() === tomorrow.toDateString();
+
+  if (totalSec < 86400 && isToday) {
+    return `Đặt lại sau ${cleaned} · ${timeStr}`;
+  } else if (isTomorrow) {
+    return `Đặt lại sau ${cleaned} · Mai ${timeStr}`;
+  } else {
+    const dayStr = `${pad(target.getDate())}/${pad(target.getMonth() + 1)} ${pad(target.getHours())}:${pad(target.getMinutes())}`;
+    return `Đặt lại sau ${cleaned} · ${dayStr}`;
+  }
+}
+
+// ==========================================
 // DATA & CACHING (ON-DEMAND + OFFLINE CACHE)
 // ==========================================
 async function fetchPoolData() {
@@ -51,7 +112,6 @@ async function fetchPoolData() {
     try { cache = JSON.parse(fm.readString(path)); } catch (_) {}
   }
 
-  // Network request với timeout ngắn 4s để tiết kiệm pin tối đa
   try {
     const r = new Request(URLS.POOL);
     r.timeoutInterval = CONFIG.TIMEOUT;
@@ -63,7 +123,6 @@ async function fetchPoolData() {
     }
   } catch (_) {}
 
-  // Fallback sang cache nếu không có mạng / chưa bật Tailscale
   if (cache) {
     cache.online = false;
     return cache;
@@ -125,10 +184,9 @@ function drawSegmentedBar(width, height, usedPct) {
 }
 
 // ==========================================
-// MEDIUM WIDGET (FULL WIDTH 330PT, KHÔNG HỤT LỀ)
+// MEDIUM WIDGET: 100% ĐỒNG BỘ VỚI CLAUDE MACOS
 // ==========================================
 function buildMediumWidget(w, data) {
-  // Padding cân đối 14pt mỗi bên -> Tổng width khả dụng = ~330pt trên iPhone tiêu chuẩn
   w.setPadding(14, 14, 14, 14);
 
   const acc = data.pool?.accounts?.[0] || {
@@ -142,7 +200,10 @@ function buildMediumWidget(w, data) {
     reset_weekly: "6d 15h"
   };
 
-  // Header Line 1: Claude & Email
+  const reset5hFormatted = formatResetWithEst(acc.reset_5h);
+  const resetWkFormatted = formatResetWithEst(acc.reset_weekly);
+
+  // --- HEADER: 100% NHƯ ORBITER MACOS ---
   const row1 = w.addStack();
   row1.layoutHorizontally();
   row1.centerAlignContent();
@@ -160,14 +221,15 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(2);
 
-  // Header Line 2: Sync text & Plan
   const row2 = w.addStack();
   row2.layoutHorizontally();
+  row2.centerAlignContent();
 
-  const timeStr = data.time ? new Date(data.time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "Vừa xong";
-  const syncTxt = row2.addText(`Cập nhật lúc ${timeStr}`);
-  syncTxt.font = Font.systemFont(10);
-  syncTxt.textColor = TOKENS.textMuted;
+  // Dòng cập nhật chuẩn macOS: "Cập nhật lúc HH:mm:ss · Xs trước"
+  const agoText = formatAgoText(data.time);
+  const syncTxt = row2.addText(agoText);
+  syncTxt.font = Font.systemFont(10.5);
+  syncTxt.textColor = TOKENS.textSecondary;
 
   row2.addSpacer();
 
@@ -184,7 +246,7 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(8);
 
-  // METRIC 1: PHIÊN 5H
+  // --- METRIC 1: PHIÊN 5H ---
   const p5Head = w.addStack();
   p5Head.layoutHorizontally();
   p5Head.centerAlignContent();
@@ -195,8 +257,8 @@ function buildMediumWidget(w, data) {
 
   p5Head.addSpacer();
 
-  const p5Reset = p5Head.addText(`Đặt lại sau ${acc.reset_5h}`);
-  p5Reset.font = Font.systemFont(11);
+  const p5Reset = p5Head.addText(reset5hFormatted);
+  p5Reset.font = Font.systemFont(10.5);
   p5Reset.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
@@ -214,7 +276,7 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(8);
 
-  // METRIC 2: HÀNG TUẦN
+  // --- METRIC 2: HÀNG TUẦN ---
   const pWkHead = w.addStack();
   pWkHead.layoutHorizontally();
   pWkHead.centerAlignContent();
@@ -225,8 +287,8 @@ function buildMediumWidget(w, data) {
 
   pWkHead.addSpacer();
 
-  const pWkReset = pWkHead.addText(`Đặt lại sau ${acc.reset_weekly}`);
-  pWkReset.font = Font.systemFont(11);
+  const pWkReset = pWkHead.addText(resetWkFormatted);
+  pWkReset.font = Font.systemFont(10.5);
   pWkReset.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
@@ -238,20 +300,11 @@ function buildMediumWidget(w, data) {
 }
 
 // ==========================================
-// SMALL WIDGET (2X2) - ĐỒNG BỘ ĐẦY ĐỦ 1:1
+// SMALL WIDGET (2X2)
 // ==========================================
 function buildSmallWidget(w, data) {
   w.setPadding(12, 12, 12, 12);
-  const acc = data.pool?.accounts?.[0] || {
-    name: "playground",
-    plan: "Max 20x",
-    used_5h: 14,
-    remaining_5h: 86,
-    reset_5h: "1h 8m",
-    used_weekly: 17,
-    remaining_weekly: 83,
-    reset_weekly: "6d 15h"
-  };
+  const acc = data.pool?.accounts?.[0] || {};
 
   const h = w.addStack();
   h.layoutHorizontally();
@@ -269,7 +322,7 @@ function buildSmallWidget(w, data) {
   // 5h Quota
   const u5Head = w.addStack();
   u5Head.layoutHorizontally();
-  const u5 = u5Head.addText(`5h: ${acc.used_5h}% đã dùng`);
+  const u5 = u5Head.addText(`5h: ${acc.used_5h || 0}% đã dùng`);
   u5.font = Font.boldSystemFont(11);
   u5.textColor = TOKENS.textPrimary;
   u5Head.addSpacer();
@@ -278,8 +331,7 @@ function buildSmallWidget(w, data) {
   r5.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  // Full-width bar cho Small Widget (132pt)
-  const b5 = drawSegmentedBar(132, 4.5, acc.used_5h);
+  const b5 = drawSegmentedBar(132, 4.5, acc.used_5h || 0);
   const v5 = w.addImage(b5);
   v5.imageSize = new Size(132, 4.5);
 
@@ -288,7 +340,7 @@ function buildSmallWidget(w, data) {
   // Weekly Quota
   const uwHead = w.addStack();
   uwHead.layoutHorizontally();
-  const uw = uwHead.addText(`Tuần: ${acc.used_weekly}% đã dùng`);
+  const uw = uwHead.addText(`Tuần: ${acc.used_weekly || 0}% đã dùng`);
   uw.font = Font.boldSystemFont(11);
   uw.textColor = TOKENS.textPrimary;
   uwHead.addSpacer();
@@ -297,7 +349,7 @@ function buildSmallWidget(w, data) {
   rw.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const bw = drawSegmentedBar(132, 4.5, acc.used_weekly);
+  const bw = drawSegmentedBar(132, 4.5, acc.used_weekly || 0);
   const vw = w.addImage(bw);
   vw.imageSize = new Size(132, 4.5);
 }
@@ -354,7 +406,6 @@ async function main() {
     grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
     w.backgroundGradient = grad;
 
-    // Khi chạm vào Widget trên màn hình chính: Mở Scriptable để switch tài khoản ngay
     w.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name());
 
     const family = config.widgetFamily || "medium";
@@ -364,13 +415,9 @@ async function main() {
       buildMediumWidget(w, data);
     }
 
-    // Cơ chế iOS Battery: Đặt lịch 5 phút để iOS cập nhật lại khi người dùng xem trang widget
     w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
     Script.setWidget(w);
   } else {
-    // Khi người dùng bấm vào Widget hoặc chạy trong app Scriptable:
-    // 1. Mở modal chọn ngay 3 tài khoản Claude để switch
-    // 2. Hiển thị Preview Widget sau khi switch
     await showInteractiveSwitcher(data);
     const updatedData = await fetchPoolData();
 
