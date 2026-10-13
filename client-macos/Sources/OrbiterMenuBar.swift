@@ -2462,8 +2462,10 @@ struct UbuntuServerQuickMenuView: View {
             
             // 2. Hardware Resource Metrics (Exact CodexBar MetricRow pattern with progress bar)
             VStack(alignment: .leading, spacing: 10) {
+                let cpuVal = self.state.sysMetrics.cpuPercent
+                let cpuStr = cpuVal < 10.0 ? String(format: "%.1f", cpuVal) : "\(Int(cpuVal))"
                 MetricRow(
-                    title: "CPU: \(Int(self.state.sysMetrics.cpuPercent))% · \(self.state.sysMetrics.cpuCount) Cores",
+                    title: "CPU: \(cpuStr)% · \(self.state.sysMetrics.cpuCount) Cores",
                     percent: self.state.sysMetrics.cpuPercent,
                     resetText: "Load: \(self.state.sysMetrics.loadAvg.map { String(format: "%.2f", $0) }.joined(separator: " "))",
                     tint: self.state.sysMetrics.cpuPercent > 80 ? Color.red : Color(red: 52/255, green: 199/255, blue: 89/255)

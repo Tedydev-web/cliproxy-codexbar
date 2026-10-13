@@ -97,22 +97,25 @@ class SystemProvider:
         """Continuous background metrics collector that calculates CPU jiffies delta accurately without blocking API calls."""
         b0, t0 = self._read_cpu_jiffies_raw()
         self.prev_busy_jiffies, self.prev_total_jiffies = b0, t0
+        smooth_cpu = 0.0
+        alpha = 0.35  # Smooth out transient spikes while keeping real-time responsiveness
         
         while True:
             try:
-                # 0.1s (100ms) high-frequency sampling for ultra-fast, smooth btop-grade telemetry
-                time.sleep(0.1)
+                # 0.5s sampling window: optimal balance between instantaneous reactivity and stable CPU load
+                time.sleep(0.5)
                 
-                # 1. CPU Jiffies Delta calculation (htop / btop formula)
+                # 1. CPU Jiffies Delta calculation (Linux kernel /proc/stat)
                 b1, t1 = self._read_cpu_jiffies_raw()
                 busy_delta = b1 - self.prev_busy_jiffies
                 total_delta = t1 - self.prev_total_jiffies
                 self.prev_busy_jiffies, self.prev_total_jiffies = b1, t1
                 
                 if total_delta > 0:
-                    cpu = max(0.0, min(100.0, (busy_delta / total_delta) * 100.0))
+                    raw_cpu = max(0.0, min(100.0, (busy_delta / total_delta) * 100.0))
+                    smooth_cpu = alpha * raw_cpu + (1.0 - alpha) * smooth_cpu
                 else:
-                    cpu = 0.0
+                    smooth_cpu = 0.0
                 
                 # 2. Memory matching btop /proc/meminfo
                 ram_total_gb, ram_used_gb, ram_percent = self._read_kernel_meminfo()
@@ -130,7 +133,7 @@ class SystemProvider:
                 
                 with self.lock:
                     self.latest_metrics = {
-                        "cpu_percent": round(cpu, 1),
+                        "cpu_percent": round(smooth_cpu, 1),
                         "cpu_count": psutil.cpu_count(),
                         "load_avg": [round(x, 2) for x in load],
                         "ram_total_gb": round(ram_total_gb, 1),
