@@ -941,7 +941,7 @@ class QuotaState: ObservableObject {
     @Published var bridgeHost: String = UserDefaults.standard.string(forKey: "quota_bridge_host") ?? "http://100.127.1.234:8318"
     @Published var refreshOnOpen: Bool = UserDefaults.standard.bool(forKey: "quota_refresh_on_open")
     @Published var refreshInterval: Int = UserDefaults.standard.integer(forKey: "quota_refresh_interval") == 0 ? 60 : UserDefaults.standard.integer(forKey: "quota_refresh_interval")
-    @Published var showGatewaySpendOnMenubar: Bool = UserDefaults.standard.object(forKey: "show_gateway_spend_on_menubar") == nil ? true : UserDefaults.standard.bool(forKey: "show_gateway_spend_on_menubar")
+    @Published var showGatewaySpendOnMenubar: Bool = UserDefaults.standard.object(forKey: "show_gateway_spend_on_menubar") == nil ? false : UserDefaults.standard.bool(forKey: "show_gateway_spend_on_menubar")
     
     var baseUrl: String {
         let host = bridgeHost.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1881,39 +1881,28 @@ struct SystemManagerView: View {
                                     .padding(20)
                             } else {
                                 ForEach(filteredPorts) { p in
-                                    HStack(alignment: .center, spacing: 10) {
+                                    HStack(alignment: .center, spacing: 12) {
                                         // Port Badge
                                         Text(":\(p.port)")
-                                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                            .font(.system(size: 13.5, weight: .bold, design: .monospaced))
                                             .foregroundStyle(Color.accentColor)
-                                            .frame(width: 65, alignment: .leading)
+                                            .frame(width: 68, alignment: .leading)
                                         
                                         VStack(alignment: .leading, spacing: 2) {
                                             HStack(spacing: 6) {
                                                 Text(p.process)
-                                                    .font(.system(size: 12, weight: .semibold))
-                                                if let pid = p.pid {
-                                                    Text("PID: \(pid)")
-                                                        .font(.system(size: 10, design: .monospaced))
-                                                        .foregroundStyle(.secondary)
-                                                }
+                                                    .font(.system(size: 12.5, weight: .semibold))
                                                 Text("(\(p.host))")
                                                     .font(.system(size: 10))
                                                     .foregroundStyle(.tertiary)
                                             }
                                             
-                                            if !p.cwd.isEmpty {
-                                                Text(p.cwd)
-                                                    .font(.system(size: 9.5, design: .monospaced))
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
-                                                    .truncationMode(.middle)
-                                            } else {
-                                                Text(p.command)
-                                                    .font(.system(size: 9.5, design: .monospaced))
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
-                                            }
+                                            // Clear path/workspace display
+                                            Text(!p.project.isEmpty ? p.project : (!p.cwd.isEmpty ? p.cwd : p.command))
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
                                         }
                                         
                                         Spacer()
@@ -2270,8 +2259,8 @@ struct SystemManagerView: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(18)
-        .frame(width: 660, height: 530)
+        .padding(20)
+        .frame(minWidth: 680, idealWidth: 700, minHeight: 560, idealHeight: 580)
     }
 }
 
@@ -2363,36 +2352,24 @@ struct UbuntuServerQuickMenuView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 4)
                 } else {
-                    ForEach(Array(self.activeDevPorts.prefix(5))) { p in
-                        HStack(alignment: .center, spacing: 6) {
+                    ForEach(Array(self.activeDevPorts.prefix(6))) { p in
+                        HStack(alignment: .center, spacing: 8) {
                             Text(":\(p.port)")
-                                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Color.accentColor)
                                 .frame(width: 58, alignment: .leading)
                             
-                            VStack(alignment: .leading, spacing: 1) {
-                                HStack(spacing: 4) {
-                                    Text(p.process)
-                                        .font(.system(size: 11, weight: .medium))
-                                    if let pid = p.pid {
-                                        Text("(\(pid))")
-                                            .font(.system(size: 9, design: .monospaced))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                                if !p.project.isEmpty {
-                                    Text(p.project)
-                                        .font(.system(size: 9, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                } else if !p.cwd.isEmpty {
-                                    Text(p.cwd)
-                                        .font(.system(size: 9, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
+                            VStack(alignment: .leading, spacing: 1.5) {
+                                Text(p.process)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                
+                                Text(!p.project.isEmpty ? p.project : (!p.cwd.isEmpty ? p.cwd : "-"))
+                                    .font(.system(size: 9.5, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
                             }
                             
                             Spacer()
@@ -2400,17 +2377,19 @@ struct UbuntuServerQuickMenuView: View {
                             Button(action: {
                                 self.state.killPort(port: p.port, pid: p.pid)
                             }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Color.red.opacity(0.85))
+                                HStack(spacing: 2) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 11.5))
+                                        .foregroundStyle(Color.red.opacity(0.85))
+                                }
                             }
                             .buttonStyle(.plain)
                             .help("Dừng tiến trình trên cổng :\(p.port)")
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3.5)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
                         .background(Color.white.opacity(0.04))
-                        .cornerRadius(4)
+                        .cornerRadius(5)
                     }
                 }
             }
@@ -2516,19 +2495,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func adjustMenuHostingHeights() {
         if let ch = claudeHostingView {
             let h = ch.fittingSize.height
-            if h > 100 {
+            if h > 50 {
                 ch.frame = NSRect(x: 0, y: 0, width: 365, height: h)
             }
         }
         if let ah = agyHostingView {
             let h = ah.fittingSize.height
-            if h > 100 {
+            if h > 50 {
                 ah.frame = NSRect(x: 0, y: 0, width: 365, height: h)
             }
         }
         if let uh = ubuntuHostingView {
             let h = uh.fittingSize.height
-            if h > 100 {
+            if h > 50 {
                 uh.frame = NSRect(x: 0, y: 0, width: 365, height: h)
             }
         }
@@ -2791,11 +2770,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         let hosting = NSHostingView(rootView: SystemManagerView(state: state))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 660, height: 530),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 580),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
+        window.minSize = NSSize(width: 660, height: 540)
         window.center()
         window.title = "Ubuntu Server Hub & Ports Manager"
         window.contentView = hosting
