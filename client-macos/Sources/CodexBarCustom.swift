@@ -936,6 +936,7 @@ class QuotaState: ObservableObject {
     @Published var gwSpendPercent: Double = 0.02
     @Published var gwIsActiveNow: Bool = false
     @Published var gwLastActiveHuman: String = "Chưa hoạt động"
+    @Published var gwLastActiveTime: String = ""
     @Published var gwQuickCommands: [GatewayCommandItem] = []
     
     // Default refresh: 60s (1 phút)
@@ -1178,6 +1179,7 @@ class QuotaState: ObservableObject {
                         }
                         self.gwIsActiveNow = gw["is_active_now"] as? Bool ?? false
                         self.gwLastActiveHuman = gw["last_active_human"] as? String ?? self.gwLastActiveHuman
+                        self.gwLastActiveTime = gw["last_active_time"] as? String ?? self.gwLastActiveTime
                         
                         if let cmds = gw["quick_commands"] as? [[String: Any]] {
                             var parsedCmds: [GatewayCommandItem] = []
@@ -1373,9 +1375,17 @@ struct GatewayDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             // Header
             HStack(spacing: 12) {
-                Image(systemName: "bolt.horizontal.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
+                if let dsImg = loadTemplateIcon(name: "deepseek") {
+                    Image(nsImage: dsImg)
+                        .resizable()
+                        .renderingMode(.template)
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 30, height: 30)
+                } else {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(Color.primary)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(self.state.gwProviderName)
@@ -1428,9 +1438,9 @@ struct GatewayDetailView: View {
                             .foregroundStyle(.secondary)
                         Text(self.state.gwSpendFormatted)
                             .font(.system(size: 20, weight: .bold, design: .monospaced))
-                            .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
+                            .foregroundStyle(Color.primary)
                     }
-                    .frame(minWidth: 120, alignment: .leading)
+                    .frame(minWidth: 110, alignment: .leading)
                     
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Hạn mức tối đa:")
@@ -1440,15 +1450,17 @@ struct GatewayDetailView: View {
                             .font(.system(size: 20, weight: .bold, design: .monospaced))
                             .foregroundStyle(.primary)
                     }
-                    .frame(minWidth: 120, alignment: .leading)
+                    .frame(minWidth: 110, alignment: .leading)
                     
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Hoạt động gần nhất:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(self.state.gwLastActiveHuman)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(self.state.gwIsActiveNow ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.primary)
+                        HStack(spacing: 4) {
+                            Text(self.state.gwLastActiveHuman)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(self.state.gwIsActiveNow ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.primary)
+                        }
                     }
                     Spacer()
                 }

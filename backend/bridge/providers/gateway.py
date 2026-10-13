@@ -131,16 +131,21 @@ class GatewayProvider:
                                 now_utc = datetime.datetime.utcnow()
                                 diff_sec = max(0, int((now_utc - dt).total_seconds()))
 
+                                # Local time for display (UTC+7)
+                                dt_local = dt + datetime.timedelta(hours=7)
+                                result["last_active_time"] = dt_local.strftime("%H:%M:%S")
+                                result["budget_reset_at"] = info.get("budget_reset_at")
+
                                 if diff_sec < 180: # active within last 3 mins
                                     result["is_active_now"] = True
                                     result["last_active_human"] = "Đang sử dụng (vừa xong)"
                                 elif diff_sec < 3600:
                                     mins = diff_sec // 60
                                     result["is_active_now"] = (mins <= 5)
-                                    result["last_active_human"] = f"{mins} phút trước"
+                                    result["last_active_human"] = f"{mins} phút trước ({result['last_active_time']})"
                                 elif diff_sec < 86400:
                                     hours = diff_sec // 3600
-                                    result["last_active_human"] = f"{hours} giờ trước"
+                                    result["last_active_human"] = f"{hours} giờ trước ({result['last_active_time']})"
                                 else:
                                     days = diff_sec // 86400
                                     result["last_active_human"] = f"{days} ngày trước"
