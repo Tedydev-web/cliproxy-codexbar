@@ -17,6 +17,44 @@ class AntigravityProvider:
         self._cache_data = None
         self._last_probe_time = 0
 
+    def ensure_fresh_token(self, auth_data):
+        """Check if Google OAuth token is near expiration (<15m) and auto-refresh via CLIProxy."""
+        from core.config import MGMT_HOST, MGMT_PORT, MGMT_SECRET
+        exp = auth_data.get("expired")
+        needs_refresh = False
+        if not exp:
+            needs_refresh = True
+        else:
+            try:
+                exp_dt = datetime.datetime.fromisoformat(exp)
+                diff = (exp_dt - datetime.datetime.now(exp_dt.tzinfo or datetime.timezone.utc)).total_seconds()
+                if diff < 900:  # Less than 15 minutes left
+                    needs_refresh = True
+            except Exception:
+                needs_refresh = True
+
+        if needs_refresh:
+            try:
+                fn = os.path.basename(AGY_AUTH_FILE)
+                url = f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/refresh"
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps({"name": fn}).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {MGMT_SECRET}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    resp_d = json.loads(resp.read().decode("utf-8"))
+                    if resp_d.get("ok"):
+                        meta = resp_d.get("auth", {}).get("metadata", {})
+                        if meta.get("access_token"):
+                            auth_data["access_token"] = meta.get("access_token")
+            except Exception:
+                pass
+        return auth_data.get("access_token")
+
     def get_quota(self):
         now = time.time()
         if self._cache_data and (now - self._last_probe_time < AGY_CACHE_SEC):
@@ -29,7 +67,7 @@ class AntigravityProvider:
             with open(AGY_AUTH_FILE, "r", encoding="utf-8") as f:
                 d = json.load(f)
 
-            token = d.get("access_token")
+            token = self.ensure_fresh_token(d)
             project = d.get("project_id")
             email = d.get("email", "hieudat2310.bh@gmail.com")
 

@@ -637,11 +637,57 @@ struct AntigravityFullCardView: View {
                     onMoveDown: nil,
                     onSwitch: {}
                 )
-                
-
             }
             
-
+            Divider()
+            
+            // 4. Token Keeper Proactive Section
+            Button(action: {
+                AppDelegate.shared?.openKeeperWindow()
+            }) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "shield.lefthalf.filled")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                            Text("Token Keeper Proactive")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.primary)
+                        }
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Text(self.state.keeperStatus)
+                                .font(.footnote)
+                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    
+                    UsageProgressBar(
+                        percent: self.state.keeperCyclePercent,
+                        tint: Color(red: 52/255, green: 199/255, blue: 89/255),
+                        warningMarkerPercents: [50.0],
+                        accentPaceMarker: nil
+                    )
+                    
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Lần làm mới trước: \(self.state.lastRefresh)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("Kế tiếp: \(self.state.nextRefresh) · \(Int(self.state.keeperCyclePercent))% chu kỳ")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)

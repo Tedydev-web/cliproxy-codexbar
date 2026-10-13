@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Claude Token Keeper & Vault (Production-Grade v2)
+Token Keeper & Vault (Production-Grade v3 - Unified Suite)
+Maintains active OAuth sessions for Claude & Antigravity (Google CloudCode)
 - Autonomous atomic refresh via CLIProxy native Management API
-- 3-stage Exponential Backoff & Smart Retry on transient network/proxy drops
-- Sequential Staggering (2.0s) between accounts to protect IP & avoid concurrent OAuth triggers
+- Google OAuth auto-refresh: Proactive renewal if remaining lifetime < 20 minutes
+- 3-stage Exponential Backoff & Smart Retry on transient network drops
+- Sequential Staggering (2.0s) between accounts to protect endpoints
 - Self-Healing Integrity Guard: Automatic rollback from Vault on corrupted auth JSON
 """
 
@@ -48,6 +50,20 @@ def validate_auth_file(filepath):
     except Exception:
         return False
 
+def get_token_expiration_seconds_left(filepath):
+    """Return seconds remaining until expiration, or 0 if unknown/expired."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        exp = data.get("expired")
+        if not exp:
+            return 0
+        exp_dt = datetime.datetime.fromisoformat(exp)
+        now_dt = datetime.datetime.now(exp_dt.tzinfo or datetime.timezone.utc)
+        return int((exp_dt - now_dt).total_seconds())
+    except Exception:
+        return 0
+
 def backup_tokens():
     """Create timestamped snapshots in Vault and keep 10 latest revisions per file."""
     os.makedirs(BACKUP_VAULT, exist_ok=True)
@@ -66,7 +82,7 @@ def backup_tokens():
         except Exception as e:
             log(f"Lỗi khi sao lưu {basename}: {e}")
         
-    # Retention pruning: retain 10 latest snapshots
+    # Retention pruning: retain 10 latest snapshots per file
     for tf in token_files:
         basename = os.path.basename(tf)
         file_backups = sorted(glob.glob(os.path.join(BACKUP_VAULT, f"{basename}.*.bak")))
@@ -115,8 +131,10 @@ def refresh_single_account(filename, max_retries=3):
                         restore_latest_from_vault(filename)
                         return False
                     
-                    exp = data.get("auth", {}).get("metadata", {}).get("expired", "N/A")
-                    log(f"✅ Làm mới token thành công cho {filename} | Hạn mới: {exp}")
+                    meta = data.get("auth", {}).get("metadata", {})
+                    exp = meta.get("expired", "N/A")
+                    prov = data.get("auth", {}).get("provider", "oauth")
+                    log(f"✅ Làm mới token thành công cho [{prov.upper()}] {filename} | Hạn mới: {exp}")
                     return True
                 else:
                     log(f"⚠️ Cảnh báo từ CLIProxy khi làm mới {filename} (Lần thử {attempt+1}/{max_retries}): {data}")
@@ -130,35 +148,39 @@ def refresh_single_account(filename, max_retries=3):
             time.sleep(delay)
 
     log(f"❌ THẤT BẠI: Không thể làm mới token cho {filename} sau {max_retries} lần thử.")
-    # Check if existing file is intact; if broken, rollback from vault
     fpath = os.path.join(AUTH_DIR, filename)
     if not validate_auth_file(fpath):
         restore_latest_from_vault(filename)
     return False
 
 def refresh_tokens():
-    """Trigger atomic token refresh with anti-burst sequential staggering."""
-    claude_files = sorted(glob.glob(os.path.join(AUTH_DIR, "claude-*.json")))
-    if not claude_files:
-        log("Không tìm thấy file token claude-*.json nào để làm mới.")
+    """Trigger atomic token refresh with anti-burst sequential staggering for both Claude & Antigravity."""
+    all_files = sorted(glob.glob(os.path.join(AUTH_DIR, "*.json")))
+    target_files = [
+        f for f in all_files 
+        if os.path.basename(f).startswith("claude-") or os.path.basename(f).startswith("antigravity-")
+    ]
+    
+    if not target_files:
+        log("Không tìm thấy file token nào (Claude hoặc Antigravity) để làm mới.")
         return
 
     success_count = 0
-    total = len(claude_files)
+    total = len(target_files)
     
-    for idx, cf in enumerate(claude_files):
-        fn = os.path.basename(cf)
+    for idx, fpath in enumerate(target_files):
+        fn = os.path.basename(fpath)
         if refresh_single_account(fn):
             success_count += 1
             
-        # Stagger delay: 2 seconds pause between accounts to protect Anthropic OAuth endpoint
+        # Stagger delay: 2.0s pause between accounts
         if idx < total - 1:
             time.sleep(2.0)
 
     log(f"Hoàn tất chu trình Proactive Refresh: {success_count}/{total} tài khoản đã được gia hạn.")
 
 def main():
-    log("=== Bắt đầu chu trình Claude Token Keeper & Vault (v2 Production) ===")
+    log("=== Bắt đầu chu trình Token Keeper & Vault (Production Suite) ===")
     backup_tokens()
     refresh_tokens()
     log("=== Hoàn tất chu trình Token Keeper ===")
