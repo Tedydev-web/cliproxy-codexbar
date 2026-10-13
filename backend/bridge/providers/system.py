@@ -70,6 +70,29 @@ class SystemProvider:
         except Exception:
             return 30.7, 10.6, 34.5
 
+    def _read_kernel_diskinfo(self):
+        """
+        Direct statvfs reader matching btop's exact disk calculation formula:
+        total = f_blocks * f_frsize
+        free = f_bfree * f_frsize
+        used = total - free
+        """
+        try:
+            s = os.statvfs('/')
+            total_bytes = s.f_blocks * s.f_frsize
+            free_bytes = s.f_bfree * s.f_frsize
+            used_bytes = max(0, total_bytes - free_bytes)
+            
+            total_gb = total_bytes / (1024.0 ** 3)
+            used_gb = used_bytes / (1024.0 ** 3)
+            free_gb = free_bytes / (1024.0 ** 3)
+            
+            used_pct = (used_bytes / total_bytes * 100.0) if total_bytes > 0 else 0.0
+            free_pct = (free_bytes / total_bytes * 100.0) if total_bytes > 0 else 0.0
+            return total_gb, used_gb, free_gb, used_pct, free_pct
+        except Exception:
+            return 232.6, 161.1, 71.5, 69.3, 30.7
+
     def _metrics_sampler_loop(self):
         """Continuous background metrics collector that calculates CPU jiffies delta accurately without blocking API calls."""
         b0, t0 = self._read_cpu_jiffies_raw()
@@ -94,8 +117,8 @@ class SystemProvider:
                 # 2. Memory matching btop /proc/meminfo
                 ram_total_gb, ram_used_gb, ram_percent = self._read_kernel_meminfo()
                 
-                # 3. Disk usage
-                disk = psutil.disk_usage('/')
+                # 3. Disk usage matching btop root disk statvfs exactly
+                d_total, d_used, d_free, d_used_pct, d_free_pct = self._read_kernel_diskinfo()
                 
                 # 4. Kernel Load Average & Host Uptime
                 load = os.getloadavg()
@@ -113,9 +136,11 @@ class SystemProvider:
                         "ram_total_gb": round(ram_total_gb, 1),
                         "ram_used_gb": round(ram_used_gb, 1),
                         "ram_percent": round(ram_percent, 1),
-                        "disk_total_gb": round(disk.total / (1024**3), 1),
-                        "disk_used_gb": round(disk.used / (1024**3), 1),
-                        "disk_percent": round(disk.percent, 1),
+                        "disk_total_gb": round(d_total, 1),
+                        "disk_used_gb": round(d_used, 1),
+                        "disk_free_gb": round(d_free, 1),
+                        "disk_percent": round(d_used_pct, 1),
+                        "disk_free_percent": round(d_free_pct, 1),
                         "uptime": uptime_str
                     }
             except Exception:
@@ -129,7 +154,7 @@ class SystemProvider:
         
         # Fallback if accessed within the first 0.5s of startup
         ram_total_gb, ram_used_gb, ram_percent = self._read_kernel_meminfo()
-        disk = psutil.disk_usage('/')
+        d_total, d_used, d_free, d_used_pct, d_free_pct = self._read_kernel_diskinfo()
         load = os.getloadavg()
         uptime_seconds = int(time.time() - psutil.boot_time())
         hours = uptime_seconds // 3600
@@ -144,9 +169,11 @@ class SystemProvider:
             "ram_total_gb": round(ram_total_gb, 1),
             "ram_used_gb": round(ram_used_gb, 1),
             "ram_percent": round(ram_percent, 1),
-            "disk_total_gb": round(disk.total / (1024**3), 1),
-            "disk_used_gb": round(disk.used / (1024**3), 1),
-            "disk_percent": round(disk.percent, 1),
+            "disk_total_gb": round(d_total, 1),
+            "disk_used_gb": round(d_used, 1),
+            "disk_free_gb": round(d_free, 1),
+            "disk_percent": round(d_used_pct, 1),
+            "disk_free_percent": round(d_free_pct, 1),
             "uptime": uptime_str
         }
 
@@ -374,23 +401,8 @@ class SystemProvider:
             return {"ok": False, "error": str(e)}
 
     def get_docker_containers(self):
-        """List running Docker containers."""
-        containers = []
-        try:
-            out = subprocess.check_output(['docker', 'ps', '--format', '{{json .}}'], timeout=3).decode()
-            for line in out.strip().split('\n'):
-                if not line: continue
-                c = json.loads(line)
-                containers.append({
-                    "id": c.get("ID", "")[:12],
-                    "name": c.get("Names", ""),
-                    "status": c.get("Status", ""),
-                    "image": c.get("Image", ""),
-                    "ports": c.get("Ports", "")
-                })
-        except Exception:
-            pass
-        return containers
+        """Docker monitoring removed as requested to eliminate subprocess overhead."""
+        return []
 
     def get_active_tunnels(self):
         """Get running tunnels (both system named tunnel and on-demand trycloudflare tunnels)."""

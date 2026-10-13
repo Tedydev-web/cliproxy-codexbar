@@ -339,7 +339,9 @@ struct HostMetricInfo {
     var ramPercent: Double = 0.0
     var diskTotalGb: Double = 0.0
     var diskUsedGb: Double = 0.0
+    var diskFreeGb: Double = 0.0
     var diskPercent: Double = 0.0
+    var diskFreePercent: Double = 0.0
     var uptime: String = "-"
 }
 
@@ -1395,7 +1397,9 @@ class QuotaState: ObservableObject {
                     h.ramPercent = m["ram_percent"] as? Double ?? 0.0
                     h.diskTotalGb = m["disk_total_gb"] as? Double ?? 0.0
                     h.diskUsedGb = m["disk_used_gb"] as? Double ?? 0.0
+                    h.diskFreeGb = m["disk_free_gb"] as? Double ?? 0.0
                     h.diskPercent = m["disk_percent"] as? Double ?? 0.0
+                    h.diskFreePercent = m["disk_free_percent"] as? Double ?? 0.0
                     h.uptime = m["uptime"] as? String ?? "-"
                     self.sysMetrics = h
                 }
@@ -2028,7 +2032,6 @@ struct SystemManagerView: View {
                 Text("Tài nguyên (CPU / RAM / Disk)").tag(1)
                 Text("Tunnels (Cloudflared)").tag(2)
                 Text("Dịch vụ (Herdr & CLIProxy)").tag(3)
-                Text("Docker (\(state.sysDocker.count))").tag(4)
             }
             .pickerStyle(.segmented)
             
@@ -2162,16 +2165,19 @@ struct SystemManagerView: View {
                         .background(Color(white: 0.13))
                         .cornerRadius(8)
                         
-                        // Disk Card
+                        // Disk Card (btop 1:1 format)
+                        let dUsedPct = state.sysMetrics.diskPercent
+                        let dFreePct = state.sysMetrics.diskFreePercent
+                        let isUsed = state.quotaDisplayMode == "used"
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Ổ CỨNG (/)")
+                            Text(isUsed ? "Ổ CỨNG (/) · ĐÃ DÙNG" : "Ổ CỨNG (/) · CÒN TRỐNG")
                                 .font(.caption.bold())
                                 .foregroundStyle(.secondary)
-                            Text("\(String(format: "%.1f", state.sysMetrics.diskPercent))%")
+                            Text("\(String(format: "%.1f", isUsed ? dUsedPct : dFreePct))%")
                                 .font(.system(size: 24, weight: .bold, design: .monospaced))
-                                .foregroundStyle(state.sysMetrics.diskPercent > 90 ? Color.red : Color.primary)
-                            UsageProgressBar(percent: state.sysMetrics.diskPercent, tint: Color.purple)
-                            Text("\(String(format: "%.1f", state.sysMetrics.diskUsedGb)) GB / \(String(format: "%.1f", state.sysMetrics.diskTotalGb)) GB")
+                                .foregroundStyle(dUsedPct > 90 ? Color.red : Color.primary)
+                            UsageProgressBar(percent: isUsed ? dUsedPct : dFreePct, tint: Color.purple)
+                            Text("Trống: \(String(format: "%.0f", state.sysMetrics.diskFreeGb)) GiB · \(String(format: "%.0f", state.sysMetrics.diskUsedGb)) / \(String(format: "%.0f", state.sysMetrics.diskTotalGb)) GiB")
                                 .font(.caption2.monospaced())
                                 .foregroundStyle(.secondary)
                         }
@@ -2379,54 +2385,7 @@ struct SystemManagerView: View {
                 .frame(height: 330)
             }
             
-            // TAB 4: Docker Containers
-            else if selectedTab == 4 {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Các Container Docker đang chạy trên máy chủ Ubuntu:")
-                        .font(.headline)
-                    
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(state.sysDocker, id: \.id) { c in
-                                HStack(alignment: .center, spacing: 10) {
-                                    Circle()
-                                        .fill(c.status.contains("Up") ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.secondary)
-                                        .frame(width: 8, height: 8)
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 8) {
-                                            Text(c.name)
-                                                .font(.system(size: 12, weight: .bold))
-                                            Text("ID: \(c.id)")
-                                                .font(.system(size: 10, design: .monospaced))
-                                                .foregroundStyle(.secondary)
-                                            Text(c.status)
-                                                .font(.system(size: 10))
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                        Text(c.image)
-                                            .font(.system(size: 9.5, design: .monospaced))
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(1)
-                                        if !c.ports.isEmpty {
-                                            Text(c.ports)
-                                                .font(.system(size: 9, design: .monospaced))
-                                                .foregroundStyle(Color.accentColor.opacity(0.85))
-                                                .lineLimit(1)
-                                        }
-                                    }
-                                    
-                                    Spacer()
-                                }
-                                .padding(8)
-                                .background(Color(white: 0.12))
-                                .cornerRadius(6)
-                            }
-                        }
-                    }
-                    .frame(height: 310)
-                }
-            }
+
             
             Spacer()
             
@@ -2502,10 +2461,16 @@ struct UbuntuServerQuickMenuView: View {
                     tint: self.state.sysMetrics.ramPercent > 85 ? Color.orange : Color(red: 0/255, green: 195/255, blue: 137/255)
                 )
                 
+                let dUsedPct = Int(self.state.sysMetrics.diskPercent)
+                let dFreePct = Int(self.state.sysMetrics.diskFreePercent)
+                let isUsedMode = self.state.quotaDisplayMode == "used"
+                let dTitle = isUsedMode ? "Ổ cứng (/): \(dUsedPct)% đã dùng" : "Ổ cứng (/): \(dFreePct)% còn trống"
+                let dSub = "Trống \(String(format: "%.0f", self.state.sysMetrics.diskFreeGb)) GiB · \(String(format: "%.0f", self.state.sysMetrics.diskUsedGb)) / \(String(format: "%.0f", self.state.sysMetrics.diskTotalGb)) GiB"
+                
                 MetricRow(
-                    title: "Ổ cứng (/): \(Int(self.state.sysMetrics.diskPercent))% đã dùng",
-                    percent: self.state.sysMetrics.diskPercent,
-                    resetText: "\(String(format: "%.0f", self.state.sysMetrics.diskUsedGb)) / \(String(format: "%.0f", self.state.sysMetrics.diskTotalGb)) GB",
+                    title: dTitle,
+                    percent: isUsedMode ? self.state.sysMetrics.diskPercent : self.state.sysMetrics.diskFreePercent,
+                    resetText: dSub,
                     tint: Color(red: 175/255, green: 82/255, blue: 222/255)
                 )
             }
@@ -2614,12 +2579,6 @@ struct UbuntuServerQuickMenuView: View {
                             Text("\(self.state.sysTunnels.count) Tunnels")
                                 .font(.system(size: 9.5, weight: .medium))
                                 .foregroundStyle(Color.accentColor)
-                            Text("·")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            Text("\(self.state.sysDocker.count) Docker")
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(.secondary)
                         }
                     }
                     
@@ -2790,7 +2749,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 btn.image = img
                 btn.imagePosition = .imageLeading
             }
-            btn.title = " C \(Int(state.sysMetrics.cpuPercent))% · M \(Int(state.sysMetrics.ramPercent))% · \(state.sysPorts.count)P"
+            let diskFreeInt = Int(state.sysMetrics.diskFreePercent)
+            btn.title = " C \(Int(state.sysMetrics.cpuPercent))% · M \(Int(state.sysMetrics.ramPercent))% · D \(diskFreeInt)%"
         }
         let ubuntuMenu = NSMenu()
         let ubuntuMenuItem = NSMenuItem()
@@ -2853,8 +2813,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         uBtn.imagePosition = .imageLeading
                     }
                 }
-                let activeDevCount = self.state.sysPorts.filter { !$0.isInternal && $0.port != 8317 && $0.port != 8318 }.count
-                uBtn.title = " C \(Int(self.state.sysMetrics.cpuPercent))% · M \(Int(self.state.sysMetrics.ramPercent))% · \(activeDevCount)P"
+                let diskFreeInt = Int(self.state.sysMetrics.diskFreePercent)
+                uBtn.title = " C \(Int(self.state.sysMetrics.cpuPercent))% · M \(Int(self.state.sysMetrics.ramPercent))% · D \(diskFreeInt)%"
             }
             self.adjustMenuHostingHeights()
         }
