@@ -659,48 +659,10 @@ function buildLargeWidget(w, data) {
 }
 
 // ==========================================
-// INTERACTIVE SWITCHER CHO APP SCRIPTABLE
-// ==========================================
-async function showInteractiveSwitcher(data) {
-  const accounts = data.pool?.accounts || [];
-  if (accounts.length === 0) return;
-
-  const alert = new Alert();
-  alert.title = "⚡ CodexBar - Claude Accounts";
-  alert.message = "Chạm vào tài khoản để đưa lên ưu tiên số #1 (Selector Drain First):";
-
-  accounts.forEach((acc, idx) => {
-    const isFirst = idx === 0;
-    const prefix = isFirst ? "★ [Đang dùng] " : `#${idx + 1} `;
-    const emailPrefix = acc.name.split("@")[0];
-    alert.addAction(`${prefix}${emailPrefix} (5h: ${acc.remaining_5h}% · ${acc.plan || "Max"})`);
-  });
-
-  alert.addCancelAction("Đóng");
-
-  const chosen = await alert.presentAlert();
-  if (chosen >= 0 && chosen < accounts.length) {
-    const targetEmail = accounts[chosen].email;
-    try {
-      const req = new Request(URLS.SET_PRIORITY);
-      req.method = "POST";
-      req.headers = { "Content-Type": "application/json" };
-      req.body = JSON.stringify({ email: targetEmail });
-      req.timeoutInterval = 4;
-      await req.loadJSON();
-
-      const notif = new Notification();
-      notif.title = "Đã chuyển tài khoản ưu tiên";
-      notif.body = `Tài khoản #${chosen + 1} (${targetEmail.split("@")[0]}) hiện là #1 Drain Order.`;
-      notif.schedule();
-    } catch (_) {}
-  }
-}
-
-// ==========================================
-// MAIN ENTRY: THUẦN HIỂN THỊ TĨNH 100%
+// MAIN ENTRY: TỰ ĐỘNG RELOAD QUOTA NHANH GỌN (KHÔNG POPUP)
 // ==========================================
 async function main() {
+  // Luôn kéo dữ liệu quota mới nhất từ server
   const data = await fetchPoolData();
 
   const w = new ListWidget();
@@ -709,7 +671,6 @@ async function main() {
   grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
   w.backgroundGradient = grad;
 
-  // TUYỆT ĐỐI KHÔNG GÁN BẤT KỲ URL NÀO ĐỂ WIDGET HOÀN TOÀN TĨNH NGOÀI HOME SCREEN
   const family = config.widgetFamily || "large";
   if (family === "small") {
     buildSmallWidget(w, data);
@@ -722,21 +683,24 @@ async function main() {
   w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
   Script.setWidget(w);
 
-  // Chỉ khi người dùng chủ động mở app Scriptable thì mới mở xem trước hoặc chọn switcher
+  // Khi bấm vào widget với config là "Run Script":
+  // Tự động cập nhật xong widget, rung nhẹ xác nhận và đóng app ngay để quay về Home Screen!
   if (config.runsInApp) {
-    await showInteractiveSwitcher(data);
-    const updatedData = await fetchPoolData();
-    const previewWidget = new ListWidget();
-    previewWidget.backgroundGradient = grad;
-    if (family === "small") {
-      buildSmallWidget(previewWidget, updatedData);
-      await previewWidget.presentSmall();
-    } else if (family === "medium") {
-      buildMediumWidget(previewWidget, updatedData);
-      await previewWidget.presentMedium();
+    if (args.queryParameters && args.queryParameters.preview) {
+      if (family === "small") await w.presentSmall();
+      else if (family === "medium") await w.presentMedium();
+      else await w.presentLarge();
     } else {
-      buildLargeWidget(previewWidget, updatedData);
-      await previewWidget.presentLarge();
+      // Haptic rung nhẹ báo hiệu đã reload thành công
+      try {
+        const notif = new Notification();
+        notif.title = "⚡ CodexBar Claude";
+        notif.body = `Đã làm mới Quota thành công lúc ${new Date().toLocaleTimeString()}!`;
+        notif.schedule();
+      } catch (_) {}
+
+      // Tự động thoát Scriptable quay về màn hình chính
+      Safari.open("shortcuts://");
     }
   }
 }
