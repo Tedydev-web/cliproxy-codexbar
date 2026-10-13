@@ -6,14 +6,16 @@ Hệ thống được thiết kế **tách biệt làm 2 Widget độc lập** c
 
 ## 1. Widget 1: Claude Pool Quota (`CodexBarClaudeWidget.js`)
 * **File script**: [`ios-widget/CodexBarClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarClaudeWidget.js)
-* **Kích thước**: Khuyên dùng **Medium (2x4)** hoặc **Small (2x2)**
+* **Kích thước**: Hỗ trợ **Large (4x4)**, **Medium (2x4)** hoặc **Small (2x2)**
 * **Giao diện**:
-  - Tái tạo 1:1 theo card Claude của CodexBar macOS.
-  - Hiển thị đầy đủ **Phiên 5h** (% đã dùng, thời gian đặt lại, dự trữ nhịp độ).
-  - Hiển thị đầy đủ **Hàng tuần** (% đã dùng, thời gian đặt lại).
-  - Thanh tiến trình **Segmented Bar (3 đoạn)** màu cam rực rỡ (`#F97316`) kèm vạch xanh lá (`#22C55E`).
+  - Tái tạo 1:1 theo card Claude của CodexBar & Orbiter macOS.
+  - **Dạng Large (4x4)**: Hiển thị đầy đủ **cả 3 tài khoản trong Pool**:
+    - Tài khoản #1 đang ưu tiên: Full quota 5h, hàng tuần, thời gian đặt lại, dự trữ nhịp độ.
+    - 2 Tài khoản còn lại (#2 & #3): Hiển thị chi tiết từng card riêng với đầy đủ quota 5h & tuần, thanh tiến trình mini 3 đoạn, gói dịch vụ và huy hiệu trạng thái (● Khả dụng / ⚠️ 429 API / ⛔ Hết hạn) y hệt desktop!
+  - **Dạng Medium (2x4)**: Hiển thị tài khoản chính đang ưu tiên #1 với đầy đủ 2 thanh tiến trình 5h và Tuần full-width.
+  - **Dạng Small (2x2)**: Thu gọn tối giản hiển thị 2 thanh tiến trình 5h và Tuần.
 * **Tính năng Đổi Tài Khoản Ưu Tiên (Interactive Switcher)**:
-  - Khi bạn mở script trong app Scriptable (hoặc cấu hình widget "Run Script"), một bảng chọn Native iOS sẽ hiện lên danh sách **cả 3 tài khoản trong Pool**.
+  - Khi bạn mở script trong app Scriptable (hoặc bấm vào widget), một bảng chọn Native iOS sẽ hiện lên danh sách **cả 3 tài khoản trong Pool**.
   - Bạn chỉ cần bấm chọn 1 tài khoản, widget sẽ tự động gửi lệnh tới `/v1/set-priority` để đưa tài khoản đó lên **ưu tiên số #1 (Drain order)** ngay tức thì!
 
 ---

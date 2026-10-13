@@ -220,7 +220,7 @@ function drawSegmentedBar(width, height, usedPct, fillColor, pacePct) {
 function getWidgetContentWidth(family, hPadding) {
   const sw = Math.min(Device.screenSize().width, Device.screenSize().height);
   let totalW = 158;
-  if (family === "medium") {
+  if (family === "medium" || family === "large") {
     if (sw <= 375) totalW = 321;
     else if (sw <= 393) totalW = 338;
     else if (sw <= 402) totalW = 344;
@@ -437,6 +437,291 @@ function buildSmallWidget(w, data) {
 }
 
 // ==========================================
+// LARGE WIDGET (4X4): ĐẦY ĐỦ 3 TÀI KHOẢN & TRẠNG THÁI NHƯ DESKTOP
+// ==========================================
+function buildLargeWidget(w, data) {
+  const hPadding = 14;
+  w.setPadding(12, hPadding, 12, hPadding);
+
+  const accounts = data.pool?.accounts || [];
+  const acc0 = accounts[0] || {
+    name: "projectplayground2025@gmail.com",
+    plan: "Max 20x",
+    used_5h: 14,
+    remaining_5h: 86,
+    reset_5h: "1h 8m",
+    used_weekly: 17,
+    remaining_weekly: 83,
+    reset_weekly: "6d 15h",
+    is_available: true,
+    is_probe_error: false
+  };
+
+  const contentW = getWidgetContentWidth("large", hPadding);
+
+  // --- 1. HEADER CHÍNH ---
+  const row1 = w.addStack();
+  row1.layoutHorizontally();
+  row1.centerAlignContent();
+
+  const titleStack = row1.addStack();
+  titleStack.layoutHorizontally();
+  titleStack.centerAlignContent();
+  titleStack.spacing = 5;
+
+  const icon = titleStack.addImage(getClaudeIcon());
+  icon.imageSize = new Size(15, 15);
+  icon.tintColor = TOKENS.orangeFill;
+
+  const title = titleStack.addText("Claude");
+  title.font = Font.boldSystemFont(16);
+  title.textColor = TOKENS.textPrimary;
+
+  row1.addSpacer();
+
+  const emailStack = row1.addStack();
+  emailStack.layoutHorizontally();
+  emailStack.centerAlignContent();
+  emailStack.spacing = 4;
+
+  const star = emailStack.addText("★ #1");
+  star.font = Font.boldSystemFont(11);
+  star.textColor = TOKENS.orangeFill;
+
+  const email = emailStack.addText(acc0.name);
+  email.font = Font.systemFont(11.5);
+  email.textColor = TOKENS.textSecondary;
+  email.lineLimit = 1;
+
+  w.addSpacer(2);
+
+  const row2 = w.addStack();
+  row2.layoutHorizontally();
+  row2.centerAlignContent();
+
+  const agoText = formatAgoText(data.time);
+  const syncTxt = row2.addText(agoText);
+  syncTxt.font = Font.systemFont(10);
+  syncTxt.textColor = TOKENS.textSecondary;
+
+  row2.addSpacer();
+
+  const planTxt = row2.addText(`Gói ${acc0.plan || "Max 20x"}`);
+  planTxt.font = Font.systemFont(10.5);
+  planTxt.textColor = TOKENS.textSecondary;
+
+  w.addSpacer(5);
+
+  // Hairline Divider
+  const div1 = w.addStack();
+  div1.size = new Size(0, 0.5);
+  div1.backgroundColor = TOKENS.cardBorder;
+
+  w.addSpacer(6);
+
+  // --- 2. QUOTA TÀI KHOẢN #1 (ĐANG ƯU TIÊN SỐ 1) ---
+  const reset5hFormatted = formatResetWithEst(acc0.reset_5h);
+  const resetWkFormatted = formatResetWithEst(acc0.reset_weekly);
+
+  // Phiên 5h
+  const p5Head = w.addStack();
+  p5Head.layoutHorizontally();
+  p5Head.centerAlignContent();
+
+  const p5Title = p5Head.addText(`Phiên 5h: ${acc0.used_5h}% đã dùng`);
+  p5Title.font = Font.boldSystemFont(12);
+  p5Title.textColor = TOKENS.textPrimary;
+
+  p5Head.addSpacer();
+
+  const p5Reset = p5Head.addText(reset5hFormatted);
+  p5Reset.font = Font.systemFont(10);
+  p5Reset.textColor = TOKENS.textSecondary;
+
+  w.addSpacer(3);
+
+  const bar5 = drawSegmentedBar(contentW, 5, acc0.used_5h, TOKENS.orangeFill, acc0.remaining_5h);
+  const v5 = w.addImage(bar5);
+  v5.imageSize = new Size(contentW, 5);
+  v5.leftAlignImage();
+
+  w.addSpacer(2);
+
+  const sub5 = w.addText(`${acc0.remaining_5h}% dự trữ nhịp độ`);
+  sub5.font = Font.systemFont(9);
+  sub5.textColor = TOKENS.textMuted;
+
+  w.addSpacer(5);
+
+  // Hàng tuần
+  const pWkHead = w.addStack();
+  pWkHead.layoutHorizontally();
+  pWkHead.centerAlignContent();
+
+  const pWkTitle = pWkHead.addText(`Hàng tuần: ${acc0.used_weekly}% đã dùng`);
+  pWkTitle.font = Font.boldSystemFont(12);
+  pWkTitle.textColor = TOKENS.textPrimary;
+
+  pWkHead.addSpacer();
+
+  const pWkReset = pWkHead.addText(resetWkFormatted);
+  pWkReset.font = Font.systemFont(10);
+  pWkReset.textColor = TOKENS.textSecondary;
+
+  w.addSpacer(3);
+
+  const barWk = drawSegmentedBar(contentW, 5, acc0.used_weekly, TOKENS.orangeFill);
+  const vWk = w.addImage(barWk);
+  vWk.imageSize = new Size(contentW, 5);
+  vWk.leftAlignImage();
+
+  w.addSpacer(7);
+
+  // Hairline Divider
+  const div2 = w.addStack();
+  div2.size = new Size(0, 0.5);
+  div2.backgroundColor = TOKENS.cardBorder;
+
+  w.addSpacer(6);
+
+  // --- 3. SECTION: POOL ACCOUNTS (2 TÀI KHOẢN CÒN LẠI) ---
+  const poolHead = w.addStack();
+  poolHead.layoutHorizontally();
+  poolHead.centerAlignContent();
+
+  const poolTitle = poolHead.addText("Pool Accounts (Dự phòng)");
+  poolTitle.font = Font.boldSystemFont(11.5);
+  poolTitle.textColor = TOKENS.textSecondary;
+
+  poolHead.addSpacer();
+
+  const poolHint = poolHead.addText("▲▼ Chạm để đổi ưu tiên");
+  poolHint.font = Font.systemFont(10);
+  poolHint.textColor = TOKENS.textMuted;
+
+  w.addSpacer(5);
+
+  const remainingAccounts = accounts.slice(1);
+  const cardPadH = 9;
+  const cardContentW = contentW - (cardPadH * 2);
+
+  if (remainingAccounts.length === 0) {
+    const emptyStack = w.addStack();
+    const emptyTxt = emptyStack.addText("Không có tài khoản dự phòng nào trong Pool.");
+    emptyTxt.font = Font.systemFont(11);
+    emptyTxt.textColor = TOKENS.textMuted;
+  }
+
+  remainingAccounts.slice(0, 2).forEach((acc, idx) => {
+    const realIdx = idx + 2; // #2, #3
+    const card = w.addStack();
+    card.layoutVertically();
+    card.backgroundColor = new Color("#FFFFFF", 0.04);
+    card.cornerRadius = 8;
+    card.setPadding(6, cardPadH, 6, cardPadH);
+
+    // Row 1: STT + Tên tài khoản + Gói + Trạng thái
+    const r1 = card.addStack();
+    r1.layoutHorizontally();
+    r1.centerAlignContent();
+
+    const idxTxt = r1.addText(`#${realIdx} `);
+    idxTxt.font = Font.boldSystemFont(11);
+    idxTxt.textColor = TOKENS.orangeFill;
+
+    const nameTxt = r1.addText(acc.name);
+    nameTxt.font = Font.boldSystemFont(11);
+    nameTxt.textColor = TOKENS.textPrimary;
+    nameTxt.lineLimit = 1;
+
+    r1.addSpacer(4);
+
+    const planBadge = r1.addText(`· ${acc.plan || "Max"}`);
+    planBadge.font = Font.systemFont(9.5);
+    planBadge.textColor = TOKENS.textMuted;
+
+    r1.addSpacer();
+
+    // Trạng thái (Online/Khả dụng, 429, Hết hạn)
+    const statusStack = r1.addStack();
+    statusStack.layoutHorizontally();
+    statusStack.centerAlignContent();
+    statusStack.spacing = 3;
+
+    if (acc.is_probe_error) {
+      const warnTxt = statusStack.addText("⚠️ 429 API");
+      warnTxt.font = Font.boldSystemFont(9.5);
+      warnTxt.textColor = new Color("#FF9500");
+    } else if (acc.is_available === false) {
+      const errTxt = statusStack.addText("⛔ Hết hạn");
+      errTxt.font = Font.boldSystemFont(9.5);
+      errTxt.textColor = new Color("#FF3B30");
+    } else {
+      const dot = statusStack.addText("●");
+      dot.font = Font.systemFont(8);
+      dot.textColor = new Color("#34C759");
+      const okTxt = statusStack.addText("Khả dụng");
+      okTxt.font = Font.systemFont(9.5);
+      okTxt.textColor = new Color("#34C759");
+    }
+
+    card.addSpacer(3);
+
+    // Row 2: 5h Quota & mini bar
+    const r2 = card.addStack();
+    r2.layoutHorizontally();
+    r2.centerAlignContent();
+
+    const u5Txt = r2.addText(`5h: ${acc.used_5h || 0}% đã dùng (còn ${acc.remaining_5h ?? (100 - (acc.used_5h || 0))}%)`);
+    u5Txt.font = Font.systemFont(9.5);
+    u5Txt.textColor = TOKENS.textSecondary;
+
+    r2.addSpacer();
+
+    const r5Txt = r2.addText(acc.reset_5h ? `Reset: ${acc.reset_5h}` : "");
+    r5Txt.font = Font.systemFont(9);
+    r5Txt.textColor = TOKENS.textMuted;
+
+    card.addSpacer(2);
+
+    const bar5Mini = drawSegmentedBar(cardContentW, 3.5, acc.used_5h || 0, TOKENS.orangeFill, acc.remaining_5h);
+    const v5Mini = card.addImage(bar5Mini);
+    v5Mini.imageSize = new Size(cardContentW, 3.5);
+    v5Mini.leftAlignImage();
+
+    card.addSpacer(4);
+
+    // Row 3: Weekly Quota & mini bar
+    const r3 = card.addStack();
+    r3.layoutHorizontally();
+    r3.centerAlignContent();
+
+    const uwTxt = r3.addText(`Tuần: ${acc.used_weekly || 0}% đã dùng (còn ${acc.remaining_weekly ?? (100 - (acc.used_weekly || 0))}%)`);
+    uwTxt.font = Font.systemFont(9.5);
+    uwTxt.textColor = TOKENS.textSecondary;
+
+    r3.addSpacer();
+
+    const rwTxt = r3.addText(acc.reset_weekly ? `Reset: ${acc.reset_weekly}` : "");
+    rwTxt.font = Font.systemFont(9);
+    rwTxt.textColor = TOKENS.textMuted;
+
+    card.addSpacer(2);
+
+    const barWkMini = drawSegmentedBar(cardContentW, 3.5, acc.used_weekly || 0, TOKENS.orangeFill);
+    const vWkMini = card.addImage(barWkMini);
+    vWkMini.imageSize = new Size(cardContentW, 3.5);
+    vWkMini.leftAlignImage();
+
+    if (idx < remainingAccounts.length - 1) {
+      w.addSpacer(5);
+    }
+  });
+
+  w.addSpacer();
+}
+
+// ==========================================
 // INTERACTIVE SWITCHER CHO 3 TÀI KHOẢN
 // ==========================================
 async function showInteractiveSwitcher(data) {
@@ -493,6 +778,8 @@ async function main() {
     const family = config.widgetFamily || "medium";
     if (family === "small") {
       buildSmallWidget(w, data);
+    } else if (family === "large") {
+      buildLargeWidget(w, data);
     } else {
       buildMediumWidget(w, data);
     }
@@ -508,8 +795,18 @@ async function main() {
     grad.locations = [0.0, 1.0];
     grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
     w.backgroundGradient = grad;
-    buildMediumWidget(w, updatedData);
-    await w.presentMedium();
+
+    const family = config.widgetFamily || "medium";
+    if (family === "small") {
+      buildSmallWidget(w, updatedData);
+      await w.presentSmall();
+    } else if (family === "large") {
+      buildLargeWidget(w, updatedData);
+      await w.presentLarge();
+    } else {
+      buildMediumWidget(w, updatedData);
+      await w.presentMedium();
+    }
   }
 }
 
