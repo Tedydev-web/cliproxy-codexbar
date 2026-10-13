@@ -158,11 +158,13 @@ function drawSegmentedBar(width, height, percent, fillColor) {
   dc.respectScreenScale = true;
 
   const numSegments = 3;
-  const gap = 4;
-  const segW = (width - gap * (numSegments - 1)) / numSegments;
+  const gap = 3;
+  const totalGaps = gap * (numSegments - 1);
+  const totalFillable = width - totalGaps;
+  const segW = totalFillable / numSegments;
   const r = height / 2;
 
-  // 1. Rãnh nền xám
+  // 1. Rãnh nền xám (3 đoạn bo góc hoàn chỉnh bằng nhau)
   for (let i = 0; i < numSegments; i++) {
     const x = i * (segW + gap);
     const p = new Path();
@@ -174,29 +176,51 @@ function drawSegmentedBar(width, height, percent, fillColor) {
 
   // 2. Điểm lấp đầy (Fill)
   const clamped = Math.max(0, Math.min(100, percent));
-  const totalFillW = (width * clamped) / 100;
-  let remain = totalFillW;
+  let remain = (totalFillable * clamped) / 100;
 
   for (let i = 0; i < numSegments; i++) {
     if (remain <= 0) break;
     const x = i * (segW + gap);
-    const fillAmount = Math.min(segW, remain);
-    const p = new Path();
-    p.addRoundedRect(new Rect(x, 0, fillAmount, height), r, r);
-    dc.addPath(p);
-    dc.setFillColor(fillColor);
-    dc.fillPath();
-    remain -= segW;
+    const fillAmount = Math.max(0, Math.min(segW, remain));
+    if (fillAmount > 0) {
+      const p = new Path();
+      p.addRoundedRect(new Rect(x, 0, fillAmount, height), r, r);
+      dc.addPath(p);
+      dc.setFillColor(fillColor);
+      dc.fillPath();
+    }
+    remain -= fillAmount;
   }
 
   return dc.getImage();
+}
+
+function getWidgetContentWidth(family, hPadding) {
+  const sw = Math.min(Device.screenSize().width, Device.screenSize().height);
+  let totalW = 158;
+  if (family === "medium") {
+    if (sw <= 375) totalW = 321;
+    else if (sw <= 393) totalW = 338;
+    else if (sw <= 402) totalW = 344;
+    else if (sw <= 414) totalW = 360;
+    else totalW = 364; // Pro Max / Plus (428, 430, 440)
+  } else {
+    // small
+    if (sw <= 375) totalW = 148;
+    else if (sw <= 393) totalW = 158;
+    else if (sw <= 402) totalW = 162;
+    else if (sw <= 414) totalW = 169;
+    else totalW = 170; // Pro Max / Plus (428, 430, 440)
+  }
+  return Math.round(totalW - (hPadding * 2));
 }
 
 // ==========================================
 // MEDIUM WIDGET: 100% ĐỒNG BỘ VỚI ORBITER MACOS
 // ==========================================
 function buildMediumWidget(w, data) {
-  w.setPadding(14, 14, 14, 14);
+  const hPadding = 14;
+  w.setPadding(14, hPadding, 14, hPadding);
 
   const agy = data.agy || {
     email: "hieudat2310.bh@gmail.com",
@@ -286,10 +310,12 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(4);
 
-  // Thanh tiến trình 5h (Teal Green, 330pt)
-  const bar5 = drawSegmentedBar(330, 5.5, g5Rem, TOKENS.geminiTeal);
+  // Thanh tiến trình 5h (Teal Green)
+  const barW = getWidgetContentWidth("medium", hPadding);
+  const bar5 = drawSegmentedBar(barW, 5.5, g5Rem, TOKENS.geminiTeal);
   const v5 = w.addImage(bar5);
-  v5.imageSize = new Size(330, 5.5);
+  v5.imageSize = new Size(barW, 5.5);
+  v5.leftAlignImage();
 
   w.addSpacer(3);
 
@@ -316,10 +342,11 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(4);
 
-  // Thanh tiến trình Tuần (Amber Yellow, 330pt)
-  const barWk = drawSegmentedBar(330, 5.5, gWkRem, TOKENS.geminiAmber);
+  // Thanh tiến trình Tuần (Amber Yellow)
+  const barWk = drawSegmentedBar(barW, 5.5, gWkRem, TOKENS.geminiAmber);
   const vWk = w.addImage(barWk);
-  vWk.imageSize = new Size(330, 5.5);
+  vWk.imageSize = new Size(barW, 5.5);
+  vWk.leftAlignImage();
 
   w.addSpacer(3);
 
@@ -332,10 +359,12 @@ function buildMediumWidget(w, data) {
 // SMALL WIDGET (2X2)
 // ==========================================
 function buildSmallWidget(w, data) {
-  w.setPadding(12, 12, 12, 12);
+  const hPadding = 12;
+  w.setPadding(12, hPadding, 12, hPadding);
   const agy = data.agy || {};
   const g5Rem = agy.gemini?.five_hour_remaining ?? 96;
   const gWkRem = agy.gemini?.weekly_remaining ?? 32;
+  const smallW = getWidgetContentWidth("small", hPadding);
 
   const h = w.addStack();
   h.layoutHorizontally();
@@ -362,36 +391,40 @@ function buildSmallWidget(w, data) {
   // 5h Quota (Teal Green)
   const u5Head = w.addStack();
   u5Head.layoutHorizontally();
+  u5Head.centerAlignContent();
   const u5 = u5Head.addText(`5h: còn ${g5Rem}%`);
   u5.font = Font.boldSystemFont(11);
   u5.textColor = TOKENS.textPrimary;
   u5Head.addSpacer();
   const r5 = u5Head.addText(agy.gemini?.five_hour_refresh || "");
-  r5.font = Font.systemFont(9);
+  r5.font = Font.systemFont(9.5);
   r5.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const b5 = drawSegmentedBar(132, 4.5, g5Rem, TOKENS.geminiTeal);
+  const b5 = drawSegmentedBar(smallW, 4.5, g5Rem, TOKENS.geminiTeal);
   const v5 = w.addImage(b5);
-  v5.imageSize = new Size(132, 4.5);
+  v5.imageSize = new Size(smallW, 4.5);
+  v5.leftAlignImage();
 
   w.addSpacer(8);
 
   // Weekly Quota (Amber Yellow)
   const uwHead = w.addStack();
   uwHead.layoutHorizontally();
+  uwHead.centerAlignContent();
   const uw = uwHead.addText(`Tuần: còn ${gWkRem}%`);
   uw.font = Font.boldSystemFont(11);
   uw.textColor = TOKENS.textPrimary;
   uwHead.addSpacer();
   const rw = uwHead.addText(agy.gemini?.weekly_refresh || "");
-  rw.font = Font.systemFont(9);
+  rw.font = Font.systemFont(9.5);
   rw.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const bw = drawSegmentedBar(132, 4.5, gWkRem, TOKENS.geminiAmber);
+  const bw = drawSegmentedBar(smallW, 4.5, gWkRem, TOKENS.geminiAmber);
   const vw = w.addImage(bw);
-  vw.imageSize = new Size(132, 4.5);
+  vw.imageSize = new Size(smallW, 4.5);
+  vw.leftAlignImage();
 }
 
 // ==========================================

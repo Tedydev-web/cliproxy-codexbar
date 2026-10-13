@@ -29,14 +29,33 @@ Hệ thống được thiết kế **tách biệt làm 2 Widget độc lập** c
 
 ---
 
-## Cách Cài Đặt Trên iPhone (Chỉ 2 Bước):
+## 3. Widget 3: Ubuntu Server Monitor (`OrbiterServerMonitorWidget.js`)
+* **File script**: [`ios-widget/OrbiterServerMonitorWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterServerMonitorWidget.js)
+* **Kích thước**: Khuyên dùng **Medium (2x4)** hoặc **Small (2x2)**
+* **Giao diện**:
+  - Tái tạo 1:1 theo card **Ubuntu Host** trong Orbiter macOS Menubar (`OrbiterMenuBar.swift`).
+  - **Header**: Ubuntu Host (`100.127.1.234`) kèm thời gian Uptime và chấm tròn trạng thái `● Online` (Xanh lá).
+  - **CPU**: % Đang dùng, số Cores, chỉ số tải Load Average, thanh Segmented Bar xanh lá (đỏ nếu > 80%).
+  - **RAM**: % Đã dùng, dung lượng `GB đã dùng / tổng GB`, thanh Segmented Bar màu Mint/Teal (`#00C389`).
+  - **Ổ cứng (/)**: % Đã dùng, dung lượng còn trống và tổng ổ cứng, thanh Segmented Bar màu tím (`#AF52DE`).
+* **Tính năng chạm (Interactive)**:
+  - Khi mở trong app Scriptable, hiển thị toàn bộ danh sách **Dev Ports đang mở** (Port 8004, 8317, 8318, 3000...), dịch vụ hệ thống (CLIProxy, Herdr, Cloudflared) và Cloudflare Tunnels.
 
-1. **Thêm Widget Claude**:
+---
+
+## Cách Cài Đặt Trên iPhone:
+
+1. **Widget 1 (Claude Quota)**:
    - Trong app **Scriptable**, tạo script mới tên **`CodexBarClaude`**.
    - Copy mã từ file [`CodexBarClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarClaudeWidget.js) và dán vào.
-   - Ra màn hình chính thêm Widget Scriptable kích thước **Medium**, chọn script `CodexBarClaude`.
+   - Thêm widget ngoài Home Screen kích thước **Medium (2x4)** hoặc **Small (2x2)**, chọn script `CodexBarClaude`.
 
-2. **Thêm Widget Antigravity**:
+2. **Widget 2 (Gemini / Antigravity Quota)**:
    - Trong app **Scriptable**, tạo script mới tên **`OrbiterAGY`**.
    - Copy mã từ file [`OrbiterAGYWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterAGYWidget.js) và dán vào.
-   - Ra màn hình chính thêm Widget Scriptable kích thước **Medium**, chọn script `OrbiterAGY`.
+   - Thêm widget ngoài Home Screen kích thước **Medium (2x4)** hoặc **Small (2x2)**, chọn script `OrbiterAGY`.
+
+3. **Widget 3 (Ubuntu Server Monitor)**:
+   - Trong app **Scriptable**, tạo script mới tên **`OrbiterServerMonitor`**.
+   - Copy mã từ file [`OrbiterServerMonitorWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterServerMonitorWidget.js) và dán vào.
+   - Thêm widget ngoài Home Screen kích thước **Medium (2x4)** hoặc **Small (2x2)**, chọn script `OrbiterServerMonitor`.
