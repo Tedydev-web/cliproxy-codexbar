@@ -427,18 +427,26 @@ struct ClaudeFullCardView: View {
             
             // 2. Active Account Quota Metrics
             VStack(alignment: .leading, spacing: 11) {
-                MetricRow(
-                    title: "Phiên 5h: \(self.state.claude5h)% đã dùng",
-                    percent: Double(self.state.claude5h),
-                    resetText: formatResetWithEst(raw: self.state.claude5hReset),
-                    tint: Color(red: 218/255, green: 119/255, blue: 86/255),
-                    paceText: "\(self.state.claudePaceReserve)% dự trữ nhịp độ",
-                    paceMarker: Double(self.state.claudePaceReserve)
-                )
+                let isUsedMode = self.state.quotaDisplayMode == "used"
+                let c5hVal = isUsedMode ? self.state.claude5h : max(0, 100 - self.state.claude5h)
+                let c5hTitle = isUsedMode ? "Phiên 5h: \(c5hVal)% đã dùng" : "Phiên 5h: \(c5hVal)% còn lại"
+                let c5hPace = isUsedMode ? "\(self.state.claudePaceReserve)% dự trữ nhịp độ" : "Đã dùng \(self.state.claude5h)%"
                 
                 MetricRow(
-                    title: "Hàng tuần: \(self.state.claude7d)% đã dùng",
-                    percent: Double(self.state.claude7d),
+                    title: c5hTitle,
+                    percent: Double(c5hVal),
+                    resetText: formatResetWithEst(raw: self.state.claude5hReset),
+                    tint: Color(red: 218/255, green: 119/255, blue: 86/255),
+                    paceText: c5hPace,
+                    paceMarker: isUsedMode ? Double(self.state.claudePaceReserve) : nil
+                )
+                
+                let c7dVal = isUsedMode ? self.state.claude7d : max(0, 100 - self.state.claude7d)
+                let c7dTitle = isUsedMode ? "Hàng tuần: \(c7dVal)% đã dùng" : "Hàng tuần: \(c7dVal)% còn lại"
+                
+                MetricRow(
+                    title: c7dTitle,
+                    percent: Double(c7dVal),
                     resetText: formatResetWithEst(raw: self.state.claude7dReset),
                     tint: Color(red: 218/255, green: 119/255, blue: 86/255)
                 )
@@ -607,6 +615,8 @@ struct AntigravityFullCardView: View {
             
             // 2. Models Breakdown (All 4 Quota Bars using standard MetricRow)
             VStack(alignment: .leading, spacing: 12) {
+                let isUsedMode = self.state.quotaDisplayMode == "used"
+                
                 // Group 1: Gemini Models
                 VStack(alignment: .leading, spacing: 6) {
                     Text("GEMINI MODELS (Flash, Pro)")
@@ -614,23 +624,29 @@ struct AntigravityFullCardView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     
-                    // Bar 1: Gemini 5-Hour Limit Remaining
+                    let g5hVal = isUsedMode ? (100 - self.state.agyGemini5hRemaining) : self.state.agyGemini5hRemaining
+                    let g5hTitle = isUsedMode ? "Giới hạn 5h: \(g5hVal)% đã dùng" : "Giới hạn 5h còn lại: \(g5hVal)%"
+                    let g5hPace = isUsedMode ? "\(self.state.agyGemini5hRemaining)% còn lại" : "Đã dùng \(100 - self.state.agyGemini5hRemaining)%"
+                    
                     MetricRow(
-                        title: "Giới hạn 5h còn lại: \(self.state.agyGemini5hRemaining)%",
-                        percent: Double(self.state.agyGemini5hRemaining),
+                        title: g5hTitle,
+                        percent: Double(g5hVal),
                         resetText: formatResetWithEst(raw: self.state.agyGemini5hRefresh),
                         tint: Color(red: 0/255, green: 195/255, blue: 137/255), // Teal Green (Antigravity)
-                        paceText: "Đã dùng \(100 - self.state.agyGemini5hRemaining)%",
+                        paceText: g5hPace,
                         paceMarker: nil
                     )
                     
-                    // Bar 2: Gemini Weekly Limit Remaining
+                    let gWkVal = isUsedMode ? (100 - self.state.agyGeminiWeeklyRemaining) : self.state.agyGeminiWeeklyRemaining
+                    let gWkTitle = isUsedMode ? "Giới hạn tuần: \(gWkVal)% đã dùng" : "Giới hạn tuần còn lại: \(gWkVal)%"
+                    let gWkPace = isUsedMode ? "\(self.state.agyGeminiWeeklyRemaining)% còn lại" : "Đã dùng \(100 - self.state.agyGeminiWeeklyRemaining)%"
+                    
                     MetricRow(
-                        title: "Giới hạn tuần còn lại: \(self.state.agyGeminiWeeklyRemaining)%",
-                        percent: Double(self.state.agyGeminiWeeklyRemaining),
+                        title: gWkTitle,
+                        percent: Double(gWkVal),
                         resetText: formatResetWithEst(raw: self.state.agyGeminiWeeklyRefresh),
                         tint: Color(red: 245/255, green: 197/255, blue: 66/255), // Amber Yellow (Antigravity)
-                        paceText: "Đã dùng \(100 - self.state.agyGeminiWeeklyRemaining)%",
+                        paceText: gWkPace,
                         paceMarker: nil
                     )
                 }
@@ -644,23 +660,29 @@ struct AntigravityFullCardView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     
-                    // Bar 3: Claude & GPT 5-Hour Limit Remaining
+                    let cg5hVal = isUsedMode ? (100 - self.state.agyClaudeGpt5hRemaining) : self.state.agyClaudeGpt5hRemaining
+                    let cg5hTitle = isUsedMode ? "Giới hạn 5h: \(cg5hVal)% đã dùng" : "Giới hạn 5h còn lại: \(self.state.agyClaudeGpt5hText)"
+                    let cg5hPace = isUsedMode ? "\(self.state.agyClaudeGpt5hRemaining)% còn lại" : "100% khả dụng"
+                    
                     MetricRow(
-                        title: "Giới hạn 5h còn lại: \(self.state.agyClaudeGpt5hText)",
-                        percent: Double(self.state.agyClaudeGpt5hRemaining),
+                        title: cg5hTitle,
+                        percent: Double(cg5hVal),
                         resetText: formatResetWithEst(raw: self.state.agyClaudeGpt5hRefresh),
                         tint: Color(red: 0/255, green: 195/255, blue: 137/255), // Teal Green (Antigravity)
-                        paceText: "100% khả dụng",
+                        paceText: cg5hPace,
                         paceMarker: nil
                     )
                     
-                    // Bar 4: Claude & GPT Weekly Limit Remaining
+                    let cgWkVal = isUsedMode ? (100 - self.state.agyClaudeGptWeeklyRemaining) : self.state.agyClaudeGptWeeklyRemaining
+                    let cgWkTitle = isUsedMode ? "Giới hạn tuần: \(cgWkVal)% đã dùng" : "Giới hạn tuần còn lại: \(cgWkVal)%"
+                    let cgWkPace = isUsedMode ? "\(self.state.agyClaudeGptWeeklyRemaining)% còn lại" : "Đã dùng \(100 - self.state.agyClaudeGptWeeklyRemaining)%"
+                    
                     MetricRow(
-                        title: "Giới hạn tuần còn lại: \(self.state.agyClaudeGptWeeklyRemaining)%",
-                        percent: Double(self.state.agyClaudeGptWeeklyRemaining),
+                        title: cgWkTitle,
+                        percent: Double(cgWkVal),
                         resetText: formatResetWithEst(raw: self.state.agyClaudeGptWeeklyRefresh),
                         tint: Color(red: 245/255, green: 197/255, blue: 66/255), // Amber Yellow (Antigravity)
-                        paceText: "Đã dùng \(100 - self.state.agyClaudeGptWeeklyRemaining)%",
+                        paceText: cgWkPace,
                         paceMarker: nil
                     )
                 }
@@ -782,7 +804,7 @@ struct SettingsView: View {
     
     let intervals = [1, 15, 30, 60, 300]
     
-    var body: some View {
+    var contentView: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
                 Image(systemName: "gearshape.fill")
@@ -811,6 +833,37 @@ struct SettingsView: View {
                 .font(.headline)
                 
                 Text("Tự động gửi yêu cầu kiểm tra dữ liệu quota & thông số phần cứng Ubuntu mới nhất mỗi khi bạn click vào biểu tượng trên Menubar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Chế độ hiển thị Quota AI (Toàn bộ Nhà cung cấp):")
+                    .font(.headline)
+                
+                Picker("Kiểu hiển thị Quota", selection: Binding(
+                    get: { self.state.quotaDisplayMode },
+                    set: { newVal in
+                        self.state.quotaDisplayMode = newVal
+                        self.onSave()
+                    }
+                )) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chart.bar.fill")
+                        Text("Đã sử dụng (% đã dùng – Giống Claude / Chuẩn CodexBar)")
+                    }.tag("used")
+                    
+                    HStack(spacing: 6) {
+                        Image(systemName: "gauge.with.needle.fill")
+                        Text("Còn lại (% khả dụng – Giống Antigravity mặc định)")
+                    }.tag("remaining")
+                }
+                .pickerStyle(.radioGroup)
+                .padding(.leading, 8)
+                
+                Text("Lựa chọn này được đồng bộ tức thì trên cả thanh Menubar, thẻ Claude, Antigravity và danh sách tài khoản.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -971,10 +1024,17 @@ struct SettingsView: View {
                     NSApp.keyWindow?.close()
                 }
                 .keyboardShortcut(.defaultAction)
+                .controlSize(.regular)
             }
         }
-        .padding(20)
-        .frame(width: 450, height: 430)
+        .padding(22)
+    }
+    
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            contentView
+        }
+        .frame(minWidth: 500, idealWidth: 520, maxWidth: 650, minHeight: 450, idealHeight: 620)
     }
 }
 
@@ -1055,6 +1115,7 @@ class QuotaState: ObservableObject {
         if legacySec > 0 { return Double(legacySec) * 1000.0 }
         return 2000.0 // Default 2000ms
     }()
+    @Published var quotaDisplayMode: String = UserDefaults.standard.string(forKey: "quota_display_mode") ?? "used" // "used" hoặc "remaining"
     @Published var showGatewaySpendOnMenubar: Bool = false
     
     var baseUrl: String {
@@ -1068,8 +1129,10 @@ class QuotaState: ObservableObject {
         UserDefaults.standard.set(refreshInterval, forKey: "quota_refresh_interval")
         UserDefaults.standard.set(telemetryIntervalMs, forKey: "ubuntu_telemetry_interval_ms")
         UserDefaults.standard.set(Int(telemetryIntervalMs / 1000.0), forKey: "ubuntu_telemetry_interval")
+        UserDefaults.standard.set(quotaDisplayMode, forKey: "quota_display_mode")
         UserDefaults.standard.set(bridgeHost, forKey: "quota_bridge_host")
         AppDelegate.shared?.updateTimer()
+        self.onUpdate?()
     }
     
     func saveOrder() {
@@ -2640,7 +2703,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 btn.image = ic
                 btn.imagePosition = .imageLeading
             }
-            btn.title = " 5h \(state.agyGemini5hRemaining)% · W \(state.agyGeminiWeeklyRemaining)%"
+            let isUsed = state.quotaDisplayMode == "used"
+            let g5h = isUsed ? (100 - state.agyGemini5hRemaining) : state.agyGemini5hRemaining
+            let gWk = isUsed ? (100 - state.agyGeminiWeeklyRemaining) : state.agyGeminiWeeklyRemaining
+            btn.title = " 5h \(g5h)% · W \(gWk)%"
         }
         let agyMenu = NSMenu()
         let agyMenuItem = NSMenuItem()
@@ -2680,8 +2746,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 btn.image = ic
                 btn.imagePosition = .imageLeading
             }
-            var title = " 5h \(state.claude5h)% · W \(state.claude7d)%"
-            btn.title = title
+            let isUsed = state.quotaDisplayMode == "used"
+            let c5h = isUsed ? state.claude5h : max(0, 100 - state.claude5h)
+            let c7d = isUsed ? state.claude7d : max(0, 100 - state.claude7d)
+            btn.title = " 5h \(c5h)% · W \(c7d)%"
         }
         let claudeMenu = NSMenu()
         let claudeMenuItem = NSMenuItem()
@@ -2762,15 +2830,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     btn.image = loadTemplateIcon(name: "claude")
                     btn.imagePosition = .imageLeading
                 }
-                var title = " 5h \(self.state.claude5h)% · W \(self.state.claude7d)%"
-                btn.title = title
+                let isUsed = self.state.quotaDisplayMode == "used"
+                let c5h = isUsed ? self.state.claude5h : max(0, 100 - self.state.claude5h)
+                let c7d = isUsed ? self.state.claude7d : max(0, 100 - self.state.claude7d)
+                btn.title = " 5h \(c5h)% · W \(c7d)%"
             }
             if let agyBtn = self.agyItem.button {
                 if agyBtn.image == nil {
                     agyBtn.image = loadTemplateIcon(name: "antigravity")
                     agyBtn.imagePosition = .imageLeading
                 }
-                agyBtn.title = " 5h \(self.state.agyGemini5hRemaining)% · W \(self.state.agyGeminiWeeklyRemaining)%"
+                let isUsed = self.state.quotaDisplayMode == "used"
+                let g5h = isUsed ? (100 - self.state.agyGemini5hRemaining) : self.state.agyGemini5hRemaining
+                let gWk = isUsed ? (100 - self.state.agyGeminiWeeklyRemaining) : self.state.agyGeminiWeeklyRemaining
+                agyBtn.title = " 5h \(g5h)% · W \(gWk)%"
             }
             if let uBtn = self.ubuntuItem.button {
                 if uBtn.image == nil {
@@ -2917,11 +2990,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }))
         
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
+        window.minSize = NSSize(width: 480, height: 480)
         window.center()
         window.title = "Cài đặt CodexBar Custom"
         window.contentView = hosting
