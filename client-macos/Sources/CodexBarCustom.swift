@@ -748,6 +748,33 @@ struct AntigravityFullCardView: View {
 }
 
 
+func formatTelemetryInterval(_ ms: Double) -> String {
+    if ms < 1000.0 {
+        return "\(Int(ms)) ms"
+    } else if ms < 60_000.0 {
+        let sec = ms / 1000.0
+        if sec == floor(sec) {
+            return "\(Int(sec)) giây"
+        } else {
+            return String(format: "%.1f giây", sec)
+        }
+    } else if ms < 3_600_000.0 {
+        let mins = ms / 60_000.0
+        if mins == floor(mins) {
+            return "\(Int(mins)) phút"
+        } else {
+            return String(format: "%.1f phút", mins)
+        }
+    } else {
+        let hours = ms / 3_600_000.0
+        if hours == floor(hours) {
+            return "\(Int(hours)) giờ"
+        } else {
+            return String(format: "%.1f giờ", hours)
+        }
+    }
+}
+
 // MARK: - Native Settings View (CodexBarCustom Preferences)
 struct SettingsView: View {
     @ObservedObject var state: QuotaState
@@ -812,30 +839,103 @@ struct SettingsView: View {
             
             Divider()
             
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Tần suất cập nhật Giám sát Hệ thống (CPU / RAM / Ports):")
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Tần suất cập nhật Menubar & Hệ thống:")
+                        .font(.headline)
+                    Spacer()
+                    Text(formatTelemetryInterval(self.state.telemetryIntervalMs))
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color.accentColor)
+                }
                 
-                Picker("Tần suất Ubuntu Hub", selection: Binding(
-                    get: { self.state.telemetryInterval },
-                    set: { newVal in
-                        self.state.telemetryInterval = newVal
+                // Fine-tuning Stepper & Direct Adjustment Buttons
+                HStack(spacing: 8) {
+                    Text("Tinh chỉnh:")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    
+                    Button("-500ms") {
+                        let current = self.state.telemetryIntervalMs
+                        self.state.telemetryIntervalMs = max(100.0, current - 500.0)
                         self.onSave()
                     }
-                )) {
-                    Text("1 giây (Real-time như btop)").tag(1)
-                    Text("3 giây (Rất nhanh)").tag(3)
-                    Text("5 giây (Chuẩn)").tag(5)
-                    Text("15 giây").tag(15)
-                    Text("30 giây").tag(30)
-                    Text("1 phút").tag(60)
-                    Text("5 phút (Tiết kiệm pin)").tag(300)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    
+                    Button("-100ms") {
+                        let current = self.state.telemetryIntervalMs
+                        self.state.telemetryIntervalMs = max(100.0, current - 100.0)
+                        self.onSave()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    
+                    Button("+100ms") {
+                        let current = self.state.telemetryIntervalMs
+                        self.state.telemetryIntervalMs = min(86_400_000.0, current + 100.0)
+                        self.onSave()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    
+                    Button("+500ms") {
+                        let current = self.state.telemetryIntervalMs
+                        self.state.telemetryIntervalMs = min(86_400_000.0, current + 500.0)
+                        self.onSave()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    
+                    Spacer()
+                    
+                    Button("Mặc định (2000 ms)") {
+                        self.state.telemetryIntervalMs = 2000.0
+                        self.onSave()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
-                .pickerStyle(.radioGroup)
-                .padding(.leading, 8)
                 
-                Text("Gợi ý: Đặt 1s – 3s để theo dõi thông số CPU và RAM của máy Ubuntu tương tự như btop.")
-                    .font(.caption)
+                // Quick Presets
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Mốc chọn nhanh (Tối thiểu 100 ms – Tối đa 24 giờ):")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 6)], spacing: 6) {
+                        ForEach([
+                            (100.0, "100 ms"),
+                            (250.0, "250 ms"),
+                            (500.0, "500 ms"),
+                            (1000.0, "1 s"),
+                            (2000.0, "2 s (MĐ)"),
+                            (3000.0, "3 s"),
+                            (5000.0, "5 s"),
+                            (10000.0, "10 s"),
+                            (30000.0, "30 s"),
+                            (60000.0, "1 phút"),
+                            (300000.0, "5 phút"),
+                            (3600000.0, "1 giờ"),
+                            (86400000.0, "24 giờ")
+                        ], id: \.0) { item in
+                            Button(action: {
+                                self.state.telemetryIntervalMs = item.0
+                                self.onSave()
+                            }) {
+                                Text(item.1)
+                                    .font(.system(size: 11, weight: abs(self.state.telemetryIntervalMs - item.0) < 1.0 ? .bold : .regular))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 3)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(abs(self.state.telemetryIntervalMs - item.0) < 1.0 ? Color.accentColor : Color.secondary.opacity(0.3))
+                        }
+                    }
+                }
+                
+                Text("Hỗ trợ phạm vi từ 100 ms (tốc độ cực nhanh như btop/glances) đến 24 giờ (tiết kiệm tài nguyên tuyệt đối). Mặc định chuẩn: 2000 ms.")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             
@@ -947,7 +1047,14 @@ class QuotaState: ObservableObject {
     @Published var bridgeHost: String = UserDefaults.standard.string(forKey: "quota_bridge_host") ?? "http://100.127.1.234:8318"
     @Published var refreshOnOpen: Bool = UserDefaults.standard.bool(forKey: "quota_refresh_on_open")
     @Published var refreshInterval: Int = UserDefaults.standard.integer(forKey: "quota_refresh_interval") == 0 ? 60 : UserDefaults.standard.integer(forKey: "quota_refresh_interval")
-    @Published var telemetryInterval: Int = UserDefaults.standard.integer(forKey: "ubuntu_telemetry_interval") == 0 ? 3 : UserDefaults.standard.integer(forKey: "ubuntu_telemetry_interval")
+    @Published var telemetryIntervalMs: Double = {
+        let val = UserDefaults.standard.double(forKey: "ubuntu_telemetry_interval_ms")
+        if val > 0 { return min(86_400_000.0, max(100.0, val)) }
+        // Migration from legacy seconds key
+        let legacySec = UserDefaults.standard.integer(forKey: "ubuntu_telemetry_interval")
+        if legacySec > 0 { return Double(legacySec) * 1000.0 }
+        return 2000.0 // Default 2000ms
+    }()
     @Published var showGatewaySpendOnMenubar: Bool = false
     
     var baseUrl: String {
@@ -959,7 +1066,8 @@ class QuotaState: ObservableObject {
     
     func saveInterval() {
         UserDefaults.standard.set(refreshInterval, forKey: "quota_refresh_interval")
-        UserDefaults.standard.set(telemetryInterval, forKey: "ubuntu_telemetry_interval")
+        UserDefaults.standard.set(telemetryIntervalMs, forKey: "ubuntu_telemetry_interval_ms")
+        UserDefaults.standard.set(Int(telemetryIntervalMs / 1000.0), forKey: "ubuntu_telemetry_interval")
         UserDefaults.standard.set(bridgeHost, forKey: "quota_bridge_host")
         AppDelegate.shared?.updateTimer()
     }
@@ -2696,7 +2804,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         
         // 2. Continuous Telemetry Timer (for Menubar C % · M % · P real-time updates)
         telemetryTimer?.invalidate()
-        let tInterval = Double(state.telemetryInterval)
+        let tInterval = max(0.1, min(86400.0, state.telemetryIntervalMs / 1000.0))
         telemetryTimer = Timer.scheduledTimer(withTimeInterval: tInterval, repeats: true) { [weak self] _ in
             self?.state.fetchSystemData()
         }
@@ -2809,7 +2917,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }))
         
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 430),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
