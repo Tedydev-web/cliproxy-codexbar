@@ -46,18 +46,32 @@ Hệ thống giám sát và quản lý Quota CLIProxy (Claude & Antigravity) tr�
 
 ---
 
-## 🚀 Hướng dẫn cài đặt nhanh (Best Practices)
+## 📦 Cách cài đặt nhanh (1-Line Install & Packaging)
 
-### 1. Cài đặt trên máy chủ (Linux / Ubuntu / Server)
-Chạy script cài đặt 1-click để thiết lập daemon và systemd service:
+### Cách 1: Cài đặt tự động bằng 1 dòng lệnh (Khuyên dùng)
+Tự động nhận diện macOS (cài Menu Bar App + LaunchAgent) hoặc Linux (cài Backend Service + systemd):
 
 ```bash
-cd backend
-./setup-backend.sh
+curl -fsSL https://raw.githubusercontent.com/Tedydev-web/cliproxy-codexbar/main/install.sh | bash
 ```
 
-Service sẽ được kích hoạt tại cổng `8318` và tự khởi động lại nếu máy chủ reboot.
-Kiểm tra nhanh:
+### Cách 2: Tải file `.dmg` cài đặt trực tiếp trên macOS
+File `.dmg` tự động đóng gói ứng dụng `CodexBarCustom.app` kèm đường dẫn kéo thả vào thư mục `/Applications`:
+
+```bash
+cd client-macos
+./package-dmg.sh
+# File cài đặt sẽ được tạo tại: build/CodexBarCustom-macOS.dmg
+```
+
+### Cách 3: Đồng bộ toàn bộ các máy trong mạng nội bộ (Sync-All)
+```bash
+./sync-all.sh
+```
+
+---
+
+## 🚀 Hướng dẫn cài đặt thủ công
 ```bash
 curl http://localhost:8318/v1/pool-status
 ```
