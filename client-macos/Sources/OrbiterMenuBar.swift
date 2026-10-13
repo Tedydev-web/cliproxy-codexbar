@@ -358,7 +358,7 @@ struct PortInfo: Identifiable {
     let project: String
     let isInternal: Bool
     
-    // Explicit format as raw integer string without locale thousands separator (avoid 30.071 or 30,071)
+    // Explicit raw integer string to prevent locale thousands separator (avoid 30.071)
     var displayPort: String {
         return String(format: "%d", port)
     }
@@ -2410,23 +2410,13 @@ struct SystemManagerView: View {
 // MARK: - Dedicated Ubuntu Server Quick Menu View (Exact 1:1 CodexBar Pattern)
 struct UbuntuServerQuickMenuView: View {
     @ObservedObject var state: QuotaState
-    @State private var searchText: String = ""
     
     var activeDevPorts: [PortInfo] {
         // Priority to actual user dev servers (non-internal, dev ports)
         let primary = state.sysPorts.filter { !$0.isInternal && $0.port != 8317 && $0.port != 8318 }
-        let base = !primary.isEmpty ? primary : state.sysPorts.filter { !$0.isInternal }
-        
-        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        if q.isEmpty {
-            return base
-        }
-        return base.filter { p in
-            String(p.port).contains(q) ||
-            p.process.lowercased().contains(q) ||
-            p.project.lowercased().contains(q) ||
-            p.cwd.lowercased().contains(q)
-        }
+        if !primary.isEmpty { return primary }
+        // Fallback to non-IDE internal
+        return state.sysPorts.filter { !$0.isInternal }
     }
     
     var body: some View {
@@ -2492,154 +2482,71 @@ struct UbuntuServerQuickMenuView: View {
             
             Divider()
             
-            // 3. Quick Dev Ports & Search (Streamlined List, No Heavy Box Cards)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .center) {
-                    Text("Cổng Dev Đang Mở")
+            // 3. Quick Dev Ports & Kill (Clean CodexBar list)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Cổng Dev Đang Mở (Quick Kill)")
                         .font(.footnote)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(self.activeDevPorts.count) cổng")
+                    Text("\(self.activeDevPorts.count) cổng hoạt động")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
-                
-                // Minimalist Sleek Search Field
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.tertiary)
-                    TextField("Tìm port, tiến trình, dự án...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11))
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.primary.opacity(0.03))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                )
                 
                 if self.activeDevPorts.isEmpty {
-                    Text(searchText.isEmpty ? "Không có tiến trình dev nào đang chiếm cổng." : "Không tìm thấy port nào khớp với từ khóa.")
+                    Text("Không có tiến trình dev nào đang chiếm cổng.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 4)
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(self.activeDevPorts.prefix(8).enumerated()), id: \.element.id) { idx, p in
-                            if idx > 0 {
-                                Divider()
-                                    .opacity(0.25)
-                                    .padding(.vertical, 2)
+                    ForEach(Array(self.activeDevPorts.prefix(6))) { p in
+                        HStack(alignment: .center, spacing: 8) {
+                            Text(":\(p.displayPort)")
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 58, alignment: .leading)
+                            
+                            VStack(alignment: .leading, spacing: 1.5) {
+                                Text(p.process)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                
+                                Text(!p.project.isEmpty ? p.project : (!p.cwd.isEmpty ? p.cwd : "-"))
+                                    .font(.system(size: 9.5, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
                             }
                             
-                            HStack(alignment: .center, spacing: 10) {
-                                Text(":\(p.displayPort)")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 56, alignment: .leading)
-                                
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(p.process)
-                                        .font(.system(size: 11.5, weight: .medium))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    
-                                    Text(!p.project.isEmpty ? p.project : (!p.cwd.isEmpty ? p.cwd : "-"))
-                                        .font(.system(size: 9.5, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                                
-                                Spacer()
-                                
-                                Button(action: {
-                                    self.state.killPort(port: p.port, pid: p.pid)
-                                }) {
+                            Spacer()
+                            
+                            Button(action: {
+                                self.state.killPort(port: p.port, pid: p.pid)
+                            }) {
+                                HStack(spacing: 2) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 13))
+                                        .font(.system(size: 11.5))
                                         .foregroundStyle(Color.red.opacity(0.85))
                                 }
-                                .buttonStyle(.plain)
-                                .help("Dừng tiến trình trên cổng :\(p.port)")
                             }
-                            .padding(.vertical, 3.5)
-                            .padding(.horizontal, 2)
+                            .buttonStyle(.plain)
+                            .help("Dừng tiến trình trên cổng :\(p.port)")
                         }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(5)
                     }
                 }
             }
-            
-            Divider()
-                .padding(.top, 2)
-            
-            // Bottom Utility Action Bar
-            HStack(spacing: 12) {
-                Button(action: {
-                    AppDelegate.shared?.closeUbuntuPopover()
-                    AppDelegate.shared?.openSystemManagerWindow()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "macwindow.on.rectangle")
-                            .font(.system(size: 11))
-                        Text("Hub chi tiết")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                
-                Button(action: {
-                    self.state.fetchSystemData()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10.5))
-                        Text("Làm mới")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Button(action: {
-                    NSApplication.shared.terminate(nil)
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 11))
-                        Text("Thoát")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.top, 3)
-            .padding(.bottom, 6)
         }
         .padding(.horizontal, 14)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
-        .frame(width: 365)
-        .fixedSize(horizontal: true, vertical: true)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+        .frame(width: 365, alignment: .topLeading)
     }
 }
 
@@ -2650,8 +2557,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var claudeItem: NSStatusItem!
     var agyItem: NSStatusItem!
     var ubuntuItem: NSStatusItem!
-    var ubuntuPopover: NSPopover?
-    private var popoverEventMonitor: Any?
     
     let state = QuotaState()
     var timer: Timer?
@@ -2785,7 +2690,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         claudeMenu.delegate = self
         claudeItem.menu = claudeMenu
         
-        // 3. Ubuntu Server Hub Item & Interactive Popover (Full Keyboard Focus for Search)
+        // 3. Ubuntu Server Hub Item & Native NSMenu (Dedicated MenuBar Module)
         ubuntuItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let btn = ubuntuItem.button {
             if let img = NSImage(systemSymbolName: "cpu", accessibilityDescription: nil) {
@@ -2795,15 +2700,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let diskFreeInt = Int(state.sysMetrics.diskFreePercent)
             btn.title = " C \(Int(state.sysMetrics.cpuPercent))% · M \(Int(state.sysMetrics.ramPercent))% · D \(diskFreeInt)%"
-            btn.target = self
-            btn.action = #selector(self.ubuntuButtonClicked(_:))
-            btn.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+        let ubuntuMenu = NSMenu()
+        let ubuntuMenuItem = NSMenuItem()
+        let ubuntuHosting = MenuHostingView(rootView: UbuntuServerQuickMenuView(state: state))
+        self.ubuntuHostingView = ubuntuHosting
+        let ubuntuHeight = ubuntuHosting.fittingSize.height
+        let finalUbuntuH = (ubuntuHeight > 100 && ubuntuHeight < 900) ? ubuntuHeight : 490
+        ubuntuHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalUbuntuH)
+        ubuntuMenuItem.view = ubuntuHosting
+        ubuntuMenu.addItem(ubuntuMenuItem)
+        ubuntuMenu.addItem(NSMenuItem.separator())
         
-        let pop = NSPopover()
-        pop.behavior = .transient
-        pop.contentViewController = NSHostingController(rootView: UbuntuServerQuickMenuView(state: state))
-        self.ubuntuPopover = pop
+        let openHubWindowItem = NSMenuItem(title: "Mở Hub Quản lý Toàn diện", action: #selector(self.openHubWindowClicked), keyEquivalent: "u")
+        if let img = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: nil) {
+            openHubWindowItem.image = img
+        }
+        ubuntuMenu.addItem(openHubWindowItem)
+        
+        let ubuntuRefreshItem = NSMenuItem(title: "Làm mới", action: #selector(self.refreshClicked), keyEquivalent: "r")
+        if let img = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil) {
+            ubuntuRefreshItem.image = img
+        }
+        ubuntuMenu.addItem(ubuntuRefreshItem)
+        
+        let ubuntuQuitItem = NSMenuItem(title: "Thoát", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        if let img = NSImage(systemSymbolName: "xmark.square", accessibilityDescription: nil) {
+            ubuntuQuitItem.image = img
+        }
+        ubuntuMenu.addItem(ubuntuQuitItem)
+        ubuntuMenu.delegate = self
+        ubuntuItem.menu = ubuntuMenu
         
         state.onUpdate = { [weak self] in
             guard let self = self else { return }
@@ -2847,48 +2774,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     @objc func openHubWindowClicked() {
         openSystemManagerWindow()
-    }
-    
-    @objc func ubuntuButtonClicked(_ sender: NSStatusBarButton) {
-        guard let pop = ubuntuPopover else { return }
-        if pop.isShown {
-            closeUbuntuPopover()
-        } else {
-            showUbuntuPopover(sender)
-        }
-    }
-    
-    func showUbuntuPopover(_ sender: NSStatusBarButton) {
-        guard let pop = ubuntuPopover else { return }
-        state.fetchSystemData()
-        
-        if let vc = pop.contentViewController {
-            vc.view.layoutSubtreeIfNeeded()
-            let fit = vc.view.fittingSize
-            pop.contentSize = NSSize(width: max(365, fit.width), height: max(450, fit.height))
-        }
-        
-        pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-        NSApp.activate(ignoringOtherApps: true)
-        
-        // Remove existing monitor if any
-        if let m = popoverEventMonitor {
-            NSEvent.removeMonitor(m)
-            popoverEventMonitor = nil
-        }
-        
-        popoverEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            guard let self = self, let p = self.ubuntuPopover, p.isShown else { return }
-            self.closeUbuntuPopover()
-        }
-    }
-    
-    func closeUbuntuPopover() {
-        ubuntuPopover?.performClose(nil)
-        if let m = popoverEventMonitor {
-            NSEvent.removeMonitor(m)
-            popoverEventMonitor = nil
-        }
     }
     
     func updateTimer() {
