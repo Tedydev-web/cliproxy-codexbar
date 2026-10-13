@@ -1,37 +1,42 @@
-# Hướng Dẫn Cài Đặt Widget CodexBar / CLIProxy Quota Lên iPhone
+# Bộ Widget iOS Độc Lập Cho CodexBar & Orbiter Menubar
 
-File script: [`ios-widget/CodexBarWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarWidget.js)
-
-## Cách Hoạt Động
-- Ứng dụng **Scriptable** (miễn phí trên App Store) hỗ trợ viết JavaScript vẽ Widget native chuẩn iOS.
-- Khi iPhone bật app **Tailscale**, iPhone nằm chung mạng riêng ảo với Ubuntu Host (`100.127.1.234`).
-- Widget sẽ query trực tiếp API:
-  - `http://100.127.1.234:8318/v1/pool-status` (Quota Claude 5h & Weekly của các tài khoản theo thứ tự ưu tiên #1, #2)
-  - `http://100.127.1.234:8318/v1/system-telemetry` (CPU %, RAM %)
-- Tự động hiển thị và refresh mỗi 10-15 phút ngay trên Màn hình chính (Home Screen) hoặc Màn hình khóa (Lock Screen).
+Hệ thống được thiết kế **tách biệt làm 2 Widget độc lập** chuẩn kích thước **Medium (2x4)** và **Small (2x2)** của iOS, tương đồng 1:1 với phong cách giao diện CodexBar & Orbiter Menubar trên macOS:
 
 ---
 
-## Các Bước Cài Đặt (Chỉ 2 Phút)
+## 1. Widget 1: Claude Pool Quota (`CodexBarClaudeWidget.js`)
+* **File script**: [`ios-widget/CodexBarClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarClaudeWidget.js)
+* **Kích thước**: Khuyên dùng **Medium (2x4)** hoặc **Small (2x2)**
+* **Giao diện**:
+  - Tái tạo 1:1 theo card Claude của CodexBar macOS.
+  - Hiển thị đầy đủ **Phiên 5h** (% đã dùng, thời gian đặt lại, dự trữ nhịp độ).
+  - Hiển thị đầy đủ **Hàng tuần** (% đã dùng, thời gian đặt lại).
+  - Thanh tiến trình **Segmented Bar (3 đoạn)** màu cam rực rỡ (`#F97316`) kèm vạch xanh lá (`#22C55E`).
+* **Tính năng Đổi Tài Khoản Ưu Tiên (Interactive Switcher)**:
+  - Khi bạn mở script trong app Scriptable (hoặc cấu hình widget "Run Script"), một bảng chọn Native iOS sẽ hiện lên danh sách **cả 3 tài khoản trong Pool**.
+  - Bạn chỉ cần bấm chọn 1 tài khoản, widget sẽ tự động gửi lệnh tới `/v1/set-priority` để đưa tài khoản đó lên **ưu tiên số #1 (Drain order)** ngay tức thì!
 
-### Bước 1: Chuẩn bị trên iPhone
-1. Cài đặt app **Tailscale** từ App Store, đăng nhập cùng tài khoản và bật **Connect**.
-2. Cài đặt app **Scriptable** từ App Store (Miễn phí, chuẩn cộng đồng iOS dev).
+---
 
-### Bước 2: Thêm Script vào Scriptable
-1. Mở app **Scriptable** trên iPhone.
-2. Nhấn nút dấu **`+`** ở góc trên cùng bên phải để tạo script mới.
-3. Đổi tên script thành **`CodexBar`**.
-4. Copy toàn bộ nội dung trong file [`ios-widget/CodexBarWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarWidget.js) và dán vào.
-5. Nhấn nút **Play** ▶ ở góc dưới để chạy thử. Bạn sẽ thấy giao diện preview hiển thị Quota & Telemetry.
-6. Nhấn **Done**.
+## 2. Widget 2: Antigravity Quota (`OrbiterAGYWidget.js`)
+* **File script**: [`ios-widget/OrbiterAGYWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterAGYWidget.js)
+* **Kích thước**: Khuyên dùng **Medium (2x4)** hoặc **Small (2x2)**
+* **Giao diện**:
+  - Tái tạo 1:1 theo card `AntigravityFullCardView` trong Orbiter Menubar.
+  - Nhóm 1: **Gemini Models** (Flash Lite & Pro) — Thanh Segmented Bar màu **Teal Green (`#00C389`)**.
+  - Nhóm 2: **Claude & GPT Models** (Opus, Sonnet, GPT-OSS) — Thanh Segmented Bar màu **Purple (`#8B5CF6`)**.
+  - Hiển thị tài khoản email Antigravity (`hieudat2310.bh@gmail.com`) và gói `Tier Pro`.
 
-### Bước 3: Đưa Widget ra Màn hình chính iPhone
-1. Nhấn giữ vào một vùng trống trên Màn hình chính iPhone cho đến khi các icon rung rinh.
-2. Nhấn dấu **`+`** ở góc trên cùng bên trái màn hình.
-3. Tìm và chọn **Scriptable**.
-4. Chọn kích thước widget: **Medium** (khuyên dùng) hoặc Small, rồi nhấn **Thêm tiện ích (Add Widget)**.
-5. Nhấn vào widget vừa thêm trên màn hình:
-   - **Script**: Chọn `CodexBar`
-   - **When Interacting**: Chọn `Open App` hoặc `Run Script`
-6. Nhấn ra ngoài màn hình chính để hoàn tất!
+---
+
+## Cách Cài Đặt Trên iPhone (Chỉ 2 Bước):
+
+1. **Thêm Widget Claude**:
+   - Trong app **Scriptable**, tạo script mới tên **`CodexBarClaude`**.
+   - Copy mã từ file [`CodexBarClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarClaudeWidget.js) và dán vào.
+   - Ra màn hình chính thêm Widget Scriptable kích thước **Medium**, chọn script `CodexBarClaude`.
+
+2. **Thêm Widget Antigravity**:
+   - Trong app **Scriptable**, tạo script mới tên **`OrbiterAGY`**.
+   - Copy mã từ file [`OrbiterAGYWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterAGYWidget.js) và dán vào.
+   - Ra màn hình chính thêm Widget Scriptable kích thước **Medium**, chọn script `OrbiterAGY`.
