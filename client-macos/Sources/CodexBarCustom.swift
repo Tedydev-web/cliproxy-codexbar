@@ -135,7 +135,7 @@ struct MetricRow: View {
     }
 }
 
-// MARK: - Minimal Sleek Account Row (Minimal Card-based, Ultra-fast Reorder)
+// MARK: - Minimal Sleek Account Row (Exact CodexBar Native Row Style)
 struct CompactAccountRowView: View {
     let email: String
     let index: Int
@@ -152,64 +152,55 @@ struct CompactAccountRowView: View {
     @State private var isHovered: Bool = false
     
     var body: some View {
-        HStack(alignment: .center, spacing: 5) {
-            // 1. Slim Priority Indicator & Quick 1-Click Order Controls
+        HStack(alignment: .center, spacing: 6) {
+            // 1. Subtle Inline Order & Priority Arrows
             if let onMoveUp = onMoveUp, let onMoveDown = onMoveDown {
-                VStack(spacing: 0) {
-                    Button(action: onMoveUp) {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 7, weight: .black))
-                            .foregroundStyle(index > 0 ? Color.secondary : Color.clear)
-                            .frame(width: 18, height: 11)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(index == 0)
-                    
+                HStack(spacing: 1) {
                     Text("#\(index + 1)")
-                        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-                        .foregroundStyle(self.isCurrent ? Color.accentColor : Color.secondary.opacity(0.8))
-                        .padding(.vertical, 0.5)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(self.isCurrent ? Color.accentColor : Color.secondary.opacity(0.6))
+                        .frame(width: 18, alignment: .leading)
                     
-                    Button(action: onMoveDown) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .black))
-                            .foregroundStyle(index < totalCount - 1 ? Color.secondary : Color.clear)
-                            .frame(width: 18, height: 11)
+                    VStack(spacing: 0) {
+                        Button(action: onMoveUp) {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 6.5, weight: .bold))
+                                .foregroundStyle(index > 0 ? Color.secondary : Color.clear)
+                                .frame(width: 12, height: 9)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(index == 0)
+                        
+                        Button(action: onMoveDown) {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 6.5, weight: .bold))
+                                .foregroundStyle(index < totalCount - 1 ? Color.secondary : Color.clear)
+                                .frame(width: 12, height: 9)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(index >= totalCount - 1)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(index >= totalCount - 1)
                 }
-                .frame(width: 18, height: 32)
-                .background(Color(white: 0.15).opacity(0.4))
-                .cornerRadius(4)
             }
             
-            // 2. Minimal Sleek Account Card
+            // 2. Native CodexBar Style Account Row
             Button(action: onSwitch) {
-                VStack(alignment: .leading, spacing: 3) {
-                    // Line 1: Email + Active Star / Headroom Bar
-                    HStack(alignment: .center, spacing: 5) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // Line 1: Identity & Headroom / Status (CodexBar MenuCardCompactAccountRow layout)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(self.email)
-                            .font(.system(size: 11.5, weight: self.isCurrent ? .semibold : .medium))
-                            .foregroundStyle(self.isAvailable ? Color.primary : Color(red: 255/255, green: 110/255, blue: 110/255))
+                            .font(.system(size: 11.5, weight: self.isCurrent ? .semibold : .regular))
+                            .foregroundStyle(self.isCurrent ? Color.primary : (self.isAvailable ? Color.primary.opacity(0.88) : Color.secondary))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         
                         if self.isCurrent {
-                            HStack(spacing: 2.5) {
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 7.5))
-                                Text("Đang dùng")
-                                    .font(.system(size: 8.5, weight: .bold))
-                            }
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.accentColor.opacity(0.18))
-                            .foregroundStyle(Color.accentColor)
-                            .cornerRadius(3)
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(Color(nsColor: .systemYellow))
                         }
                         
-                        Spacer(minLength: 4)
+                        Spacer(minLength: 8)
                         
                         if self.isProbeError {
                             HStack(spacing: 2) {
@@ -218,52 +209,46 @@ struct CompactAccountRowView: View {
                                 Text("429")
                                     .font(.system(size: 9.5, weight: .bold, design: .monospaced))
                             }
-                            .foregroundStyle(Color.orange)
+                            .foregroundStyle(Color(nsColor: .systemOrange))
                         } else if !self.isAvailable {
                             Text("Hết hạn")
-                                .font(.system(size: 9.5, weight: .semibold))
-                                .foregroundStyle(Color(red: 255/255, green: 115/255, blue: 115/255))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(Color.red.opacity(0.12))
-                                .cornerRadius(3)
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(Color(nsColor: .systemRed))
                         } else {
+                            // CodexBar mini progress capsule
                             Capsule()
-                                .fill(Color(white: 0.28, opacity: 0.6))
-                                .frame(width: 38, height: 3.5)
+                                .fill(Color(white: 0.28, opacity: 0.5))
+                                .frame(width: 44, height: 4)
                                 .overlay(alignment: .leading) {
                                     Capsule()
                                         .fill(Color(red: 218/255, green: 119/255, blue: 86/255))
-                                        .frame(width: 38 * CGFloat(self.remainingPercent) / 100.0)
+                                        .frame(width: 44 * CGFloat(max(0, min(100, self.remainingPercent))) / 100.0)
                                 }
                             Text("\(self.remainingPercent)%")
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 10, weight: .regular, design: .monospaced))
                                 .foregroundStyle(.secondary)
-                                .frame(minWidth: 24, alignment: .trailing)
+                                .frame(minWidth: 26, alignment: .trailing)
                         }
                     }
                     
-                    // Line 2: Sub-details (Slim, subtle, elegant)
+                    // Line 2: Details & Reset time (Clean, subtle secondary text)
                     Text(self.subDetails)
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(self.isAvailable ? Color.secondary : Color(white: 0.52))
+                        .font(.footnote)
+                        .foregroundStyle(self.isAvailable ? Color.secondary : Color(nsColor: .systemRed).opacity(0.85))
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 5)
+                .padding(.vertical, 4)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(self.isCurrent ? Color.accentColor.opacity(0.09) : (self.isHovered ? Color.white.opacity(0.05) : Color(white: 0.14).opacity(0.35)))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(self.isCurrent ? Color.accentColor.opacity(0.3) : Color.white.opacity(0.04), lineWidth: 0.8)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(self.isHovered ? Color.white.opacity(0.06) : (self.isCurrent ? Color.white.opacity(0.03) : Color.clear))
                 )
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .onHover { h in self.isHovered = h }
         }
+        .padding(.vertical, 1)
     }
 }
 
@@ -406,13 +391,13 @@ struct ClaudeFullCardView: View {
             // 3. Pool Account List (Minimal Card-based with Instant Reordering)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Thứ tự ưu tiên Pool (Điều phối tự động)")
-                        .font(.caption)
+                    Text("Pool Accounts")
+                        .font(.footnote)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("▲▼ Điều chỉnh · Chạm để đổi")
-                        .font(.caption2)
+                    Text("▲▼ Thứ tự ưu tiên")
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
                 
@@ -491,22 +476,23 @@ struct ClaudeFullCardView: View {
                 AppDelegate.shared?.openGatewayWindow()
             }) {
                 HStack(spacing: 8) {
-                    // Official DeepSeek Whale Brand Icon
+                    // Official DeepSeek Whale Brand Icon (Monochrome/Template White style)
                     if let dsImg = loadTemplateIcon(name: "deepseek") {
                         Image(nsImage: dsImg)
                             .resizable()
-                            .renderingMode(.original)
-                            .frame(width: 15, height: 15)
+                            .renderingMode(.template)
+                            .foregroundStyle(Color.primary)
+                            .frame(width: 14, height: 14)
                     } else {
                         Image(systemName: "circle.fill")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color(red: 77/255, green: 107/255, blue: 254/255))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
                     }
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .center, spacing: 5) {
+                        HStack(alignment: .center, spacing: 6) {
                             Text("DeepSeek")
-                                .font(.system(size: 11.5, weight: .semibold))
+                                .font(.system(size: 11.5, weight: .medium))
                                 .foregroundStyle(.primary)
                             
                             Text("Team Gateway")
@@ -518,16 +504,12 @@ struct ClaudeFullCardView: View {
                             if self.state.gwIsActiveNow {
                                 HStack(spacing: 3) {
                                     Circle()
-                                        .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
+                                        .fill(Color(nsColor: .systemGreen))
                                         .frame(width: 5, height: 5)
                                     Text("Đang dùng")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                                        .font(.system(size: 8.5, weight: .medium))
+                                        .foregroundStyle(Color(nsColor: .systemGreen))
                                 }
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(Color(red: 52/255, green: 199/255, blue: 89/255).opacity(0.14))
-                                .cornerRadius(3)
                             } else {
                                 Text(self.state.gwLastActiveHuman)
                                     .font(.system(size: 9))
@@ -539,7 +521,7 @@ struct ClaudeFullCardView: View {
                         HStack(spacing: 4) {
                             Text("Đã dùng \(self.state.gwSpendFormatted)")
                                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(Color(red: 77/255, green: 107/255, blue: 254/255))
+                                .foregroundStyle(Color.primary.opacity(0.85))
                             Text("· Hạn mức: \(self.state.gwMaxBudgetFormatted)")
                                 .font(.system(size: 9.5))
                                 .foregroundStyle(.secondary)
@@ -552,10 +534,8 @@ struct ClaudeFullCardView: View {
                         .font(.system(size: 8.5, weight: .bold))
                         .foregroundStyle(.tertiary)
                 }
-                .padding(.vertical, 5)
-                .padding(.horizontal, 8)
-                .background(Color(white: 0.14).opacity(0.5))
-                .cornerRadius(6)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1224,8 +1204,8 @@ let ICON_CLAUDE_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IAr
 
 let ICON_AGY_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAJxsHGAAACaUlEQVRYCe2XwUtVQRTGfSphQmBqIRhtkmgjESL4SjCIQMKIai2Em6BlC2lfEQiiixYtIvoHWuXahS7ColVGkVAthAjUTSqo4Os3oL7HuWdmzni5DwQHPt6dc77vO+fOXObe19BwPI7YCpTy9lupVAbwuAKawBcwXyqVdvmt76CRHvAZyPGdgGuwfoOCl8CK7KRmvs51uS4dUagFfK0p7rtcJtFeeFMUGfd1oMSnCm2Igq1gTSnsC22R6EppqjGFDHcUnE7QnID7MIGfRuVuF3xLEYj/Jpf7eMl0iumFQNFY6mrG0BNI2bJ7Hg9L+L6F5DgpDd22mio8s9a0t+xHG0VWgHs9HHZc5JWyFBNbV+gmRnmacX0Mx5pxeWtDJrNIQZOHdcuWKdYdKRhLb0JoZ9u2QsToCvH89GKQtxnXQysYchehEW0I8YjHwH3zvAXXwRnQCdx58xLsAG34vDSuHmOFPiin3gYx7zNBbgCsKrqfehVjFMNzYFcxvhuzQDMIdhRtX0zrzWP2WDF84xWIBNrnin5C0OxTzBaF4V/m5rc9XPcx90N4/GHebO9ij4nomjBy07FUIzS3FB/zu+2gHibvhdFH5qZz68CkenMzwuuT5ATniPuFwTbzy0FRIIn2PPgnPG0vXERNQP69eRqoZ0rh+Ug09Iu5OyzDA9IzIZxjnv4QKmXweSe8Xyu0agjyAyH4xryjysh3hZf7kyAP2ieqK8QyqD3I3LadVck5gnieArNgf7iDN3vqE5zeYzjCK3AyR92gFO9m8ALsL8BkRkCyDdwBPZlkQQFqdYMboLCbL6j1Y9vqCvwHoDyc53bTRvcAAAAASUVORK5CYII="
 
-// Official DeepSeek Whale Brand Icon from steipete/CodexBar (Clean 48x48 PNG)
-let ICON_DEEPSEEK_B64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAHXUlEQVRoge2ZfYxcZRXGf8+d3U4pFJCWpah8hCjFgKF+RPzAhKqxLO1MWUiJ1aBAcdPOzoqYIFQFNxpBCASa7g6lWjSGALJa6MxWBBpSEwULrUYkVGOjUmzB7oavbdjSztzHP3ZnOzs7d+fOdP2DhOe/e85zznnevPe+73nfC+/iXbyzsXiVz7ioy6c1G98ynWLK6OlxsGOQBYbTAjOSbOPJ/h4drMVNBL7VeAT4ajO1dERKq5DO+r0OwwzS1cBJY2ZbWj7Qq19W89u7nWwJPQTsHz5Rp2ztUbHRmrFmoKfHwZ8GOT90uBBxltDxMkdbHATvguBfwh+3vRSpdWK0VtcSDxDAJ4BjgGOOHaILWDPNA7DSXVy5Y9DfBc6QVOEZF/h5MK6d4NWZ+7g9KnvCzCvH2b4jlS3NGd4f3Lz15zowlapUxleAlxZyQUcQSer03FSXtxhvAM6YKmEUBG/196sU5Q9Djq94TGDdOPtoP3NJp0+OiklnfCHyPQScBxEzsGSl30fCW4EPNCO8DMP7l3b7C5vWaksE5bUatg8favX9wEKAJd/wB1WiHcI5oA8ZdwAtmJdqDqC920mF3nyk4ssIQz+QyrijkNPvq31BwMuu/e5dcFHGCwKFl6nkbwOJ6vVG+B8Ak16hFoe3AOdOh/gxzEXeksq6vdqRPMjzQO3lVX5AaDWQqOW3gm1QNYB0xguxvnnkmichib0xnfHCSmP/er0B/C4i5qwp8tlFNsKEAViWb2ea94YKzLT86/Qqz59o1k+byPXkwDrtgYoBpLpYDHz0SBTGwHsceNOyTh9XNhT66AcmfR9ToCjphvLD4RmQV06LxPqYP9LqX/T0OCgXlnUl4uV44bou36vt5acAYNG1PgGzaPq1RkiA9PZ94Y3l53xOu8KivkjtZbWMg1hdhT7dVWkMAGa8zSL+T41dFCR9P5X1ivLz5nV6XrC1BvVF8N2JkuYXcspVO0dFK/xUxbf7ms0O4VcsHSs4hyZ34joQ9volWbcO9GodWMafriL05fsS2amStADIWjDe27RowcAa7a4kpa7xqZS4DLsbOHUaBxHIvntJV9iOuB+Pd7BlTPVKjSYAsBg/UMwMGKwmFdZod6FXtxcDnSmrG9jbgEjLuknS5YjHaxEEadkPTgqEMNYAgHllw8G3mRtFfnSt3s7n1Jto1dnApvraAfhPcpCb8726r9CrC23fFjMOK/h3PU6wbJkTwIyyoWja6gU9cpdeL/SpQ9L1QGS3OYZTDrR575Ku0oZlywgGcsENaHQXrYdEyN/rcYLBsxEcbucTibgfrJzv1W1CnZXxtWD0A6GLRtpYBLJQNzBcr8KBJH+rxwnGjnFvjBcLw4YauXyf7gV9a8oihPOAGZhZAPle7TX6YZ3Uex67U6/Wq1/+BobGLdJH6gVVY3Rz8R1RfqPvAScoODxTwQjrgDejs/oPcWoHYxWGKmyfXdbjGbXpPvj5ULFgNbZtwR3/d6q2/kX57gpe89d/EuhP0VtwJ5zszdO7tVd/L0Hpxx5zszdO7tVd/L0Hp1/oY8N96VdsAX7wVTWT0Z3/lQfC/eP3dD3p1d5kP/pB61vXfP/f4F3/hT9u1f/534139r/8f8B51H9N/m1W6IAAAAASUVORK5CYII="
+// Official DeepSeek Whale Brand Icon from steipete/CodexBar (Template Monochrome PNG)
+let ICON_DEEPSEEK_B64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAEoElEQVRoge2ZfWhWVRzHv8e5Tc23lqyyciILXRkJWuFLf2wVagUVYqJE1CoINYioYIRl2QtBBQVJBEVBhRJlRv3RexQRYYIWZFAxs7ZWviwdNd30+fTHuQ+d3Z1777n3eSYU+8JgnPt7+X7Pc875/c690ihG8d8GMAtoKupvqkmmDGCMpHmSmiT1S/rYGDOQYPu6pH5jzI0jwSUXgOnAw0AP/6IErEqwrwf6gN+AsUVyBjlFM7pEUqukOZKmSjpF0oCkHyV1Slog6RpJtTH3DmPM1oTQF0uaGP2tk/R0Tv6ZxA3QDvxEMRwEalLir3RsjwMPAeMCeN0EbMsymgZ8VJB4Gb9k5LjN4/MNcGaKzzLgGNAtJSwh4CxJn0pqzpqNDJwNXG6M+TDhea9n7AJJr8kuVwHnSlou6TRJLZKuk+XtnxzsxtpV4cy72A8sSci1OMVvHvAodmn58EqSgKeqSL6Mo8ByT64p2OXgw56MmHf4yLdij72RQD/Q6sn5foFYJewyHxLIADurydiDQ8DsWN7rC8QZvqeAq6vLNRHfA1NiE/d5Dv9BYIFPwDsjwTYB27HFsZy7GegO9L3TR74Bq+xk4oEYh7nYJZaEY8DaYeQj59UnhfJQlIBbYjze9NjtBTYDM33cy4VsoTPWK2mnpB5JkyXNlTTLq7wyGEnPA7XGmOcAI2lRzOZZY8z6zEjAZ47iGZ7nM4C7gZ9H6NfYDqzyjG8KmooYsfEpdvXAeqArB7kSsAG4AXgvp7AHQwW41fCcAPupwFuBJPYRdaTYI/PxHAJuDiFfE3OaHyjaAPeS3Ku4+B14IcplgDcCBcT3hJfIWIa2DytDBDj+7WS3H+uwt64rI5/pwJEAAQ1Z+ccYY45LOuyMXZhHgDHmRUl3ZZidIalO0oTIp1tS1gbtMsYcCiIB/OCofjfIaXiMJwJmdIVjPwk4nGKbdA0dgnI5P+CMXQrUFdDQIemrDJul5X+MMX2StqTYfhGcGdgSU98W7Dw0TgvJ/T3ACWAtdiM3Ap+k2J6XJ/F9MefCbweATSmkyviT9NPru7xJL4sFOADUFxQwkfDOMgkb8yYdj70xuVhdREAU79YKyA8SUEx9Sd+OBdqF07PnjFUDfFtQQNDp40u6xhNsTaFgNt4VBcgPAi1FE47DlnwXncCkCkSEtgxlbC6aq5zwfk/Ql1LsG4AvgXuA+DtRAU3AX4Hku3DuykUFTAb+8ARvT7A/3bH5Gv9dYkMA+RKwrCLyTkLfCTIIXJtgv9ux6wEWx57XATsyBDxTFfJRQgN84ElyFM+mxnaaLv4GrorZNAO9KQJup+D3gSQR0/C/Ui8BjwETHNtFHrsBYnUEaIvGk7AX+9q80NHtE3E+yd3iQeBl4MkosQ8nsPdo48RcQXqvBLb+DNtLRUUsZXiFzovdQAf2F5hPWK+U61KVJaKN9L49L45g34c+gq3W7i+yH3gVZ4lWS8RsircGLn4FLorFrgVOpdIaECCiHthIeGGKYyvQOKIkA4U0Yj/GdQaQ7sVelhZmRy6Gwh+6safLHEmXSJopqVH2o3afpH2S9kjaEb00GMX/Fv8AkgohsjDF8bwAAAAASUVORK5CYII="
 
 func loadTemplateIcon(name: String) -> NSImage? {
     if let img = NSImage(contentsOfFile: "/tmp/icon-\(name).png") {
@@ -1242,6 +1222,7 @@ func loadTemplateIcon(name: String) -> NSImage? {
         b64 = ICON_AGY_B64
     }
     if let data = Data(base64Encoded: b64), let img = NSImage(data: data) {
+        img.isTemplate = true
         img.size = NSSize(width: 16, height: 16)
         return img
     }
@@ -1671,7 +1652,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             var title = " 5h \(state.claude5h)% · W \(state.claude7d)%"
             if state.showGatewaySpendOnMenubar && !state.gwSpendFormatted.isEmpty {
-                title += " · 🐳 \(state.gwSpendFormatted)"
+                title += " · \(state.gwSpendFormatted)"
             }
             btn.title = title
         }
@@ -1715,7 +1696,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 var title = " 5h \(self.state.claude5h)% · W \(self.state.claude7d)%"
                 if self.state.showGatewaySpendOnMenubar && !self.state.gwSpendFormatted.isEmpty {
-                    title += " · 🐳 \(self.state.gwSpendFormatted)"
+                    title += " · \(self.state.gwSpendFormatted)"
                 }
                 btn.title = title
             }
