@@ -35,7 +35,13 @@ WRAPPER
     cp backend/cliproxy-quota-bridge.service "${HOME}/.config/systemd/user/"
     systemctl --user daemon-reload
     systemctl --user enable --now cliproxy-quota-bridge.service
-    echo "🎉 Cài đặt Backend Quota Bridge trên Linux thành công!"
+
+    # Cài đặt kèm Claude Token Keeper & Vault
+    echo ">> Cài đặt Claude Token Keeper & Vault (Refresh định kỳ mỗi 4h)..."
+    cd "${TMP_DIR}/token-keeper"
+    ./setup-keeper.sh
+
+    echo "🎉 Cài đặt Backend Quota Bridge và Claude Token Keeper trên Linux thành công!"
 else
     echo "❌ Hệ điều hành ${OS} chưa được hỗ trợ."
     exit 1

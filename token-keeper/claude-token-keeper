@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""
+Claude Token Keeper & Vault (Production-Grade v2)
+- Autonomous atomic refresh via CLIProxy native Management API
+- 3-stage Exponential Backoff & Smart Retry on transient network/proxy drops
+- Sequential Staggering (2.0s) between accounts to protect IP & avoid concurrent OAuth triggers
+- Self-Healing Integrity Guard: Automatic rollback from Vault on corrupted auth JSON
+"""
+
+import os
+import sys
+import glob
+import shutil
+import datetime
+import json
+import time
+import urllib.request
+import urllib.error
+
+AUTH_DIR = os.path.expanduser("~/.cliproxy/auth")
+BACKUP_VAULT = os.path.expanduser("~/.cliproxy/backups/auth-vault")
+LOG_FILE = os.path.expanduser("~/.cliproxy/logs/token-keeper.log")
+MANAGEMENT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET", "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY")
+MGMT_PORT = int(os.environ.get("CLIPROXY_MGMT_PORT", 8317))
+
+def log(msg):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted = f"[{timestamp}] {msg}"
+    print(formatted)
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        if os.path.exists(LOG_FILE) and os.path.getsize(LOG_FILE) > 3 * 1024 * 1024:
+            shutil.move(LOG_FILE, LOG_FILE + ".old")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(formatted + "\n")
+    except Exception:
+        pass
+
+def validate_auth_file(filepath):
+    """Verify that the auth file is valid JSON and contains legitimate credentials."""
+    if not os.path.exists(filepath) or os.path.getsize(filepath) < 50:
+        return False
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        token = data.get("access_token") or data.get("refresh_token")
+        return bool(token and len(token) > 15)
+    except Exception:
+        return False
+
+def backup_tokens():
+    """Create timestamped snapshots in Vault and keep 10 latest revisions per file."""
+    os.makedirs(BACKUP_VAULT, exist_ok=True)
+    token_files = glob.glob(os.path.join(AUTH_DIR, "*.json"))
+    today_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backed_up = 0
+    
+    for tf in token_files:
+        if not validate_auth_file(tf):
+            continue
+        basename = os.path.basename(tf)
+        dest = os.path.join(BACKUP_VAULT, f"{basename}.{today_str}.bak")
+        try:
+            shutil.copy2(tf, dest)
+            backed_up += 1
+        except Exception as e:
+            log(f"Lỗi khi sao lưu {basename}: {e}")
+        
+    # Retention pruning: retain 10 latest snapshots
+    for tf in token_files:
+        basename = os.path.basename(tf)
+        file_backups = sorted(glob.glob(os.path.join(BACKUP_VAULT, f"{basename}.*.bak")))
+        if len(file_backups) > 10:
+            for old in file_backups[:-10]:
+                try:
+                    os.remove(old)
+                except OSError:
+                    pass
+
+    log(f"Vault Backup: Đã sao lưu thành công {backed_up} files token an toàn vào {BACKUP_VAULT}")
+
+def restore_latest_from_vault(filename):
+    """Self-healing: restore corrupted auth file from latest healthy snapshot in Vault."""
+    file_backups = sorted(glob.glob(os.path.join(BACKUP_VAULT, f"{filename}.*.bak")))
+    for bkp in reversed(file_backups):
+        if validate_auth_file(bkp):
+            dest = os.path.join(AUTH_DIR, filename)
+            shutil.copy2(bkp, dest)
+            log(f"[SELF-HEALING] Đã tự động phục hồi {filename} từ bản sao lưu Vault: {os.path.basename(bkp)}")
+            return True
+    log(f"[SELF-HEALING CẢNH BÁO] Không tìm thấy bản backup hợp lệ trong Vault cho {filename}")
+    return False
+
+def refresh_single_account(filename, max_retries=3):
+    """Execute refresh for a single account with retry & exponential backoff."""
+    url = f"http://127.0.0.1:{MGMT_PORT}/v0/management/auth-files/refresh"
+    backoffs = [2.0, 5.0, 10.0]
+    
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps({"name": filename}).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {MANAGEMENT_SECRET}",
+                    "Content-Type": "application/json"
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("ok"):
+                    fpath = os.path.join(AUTH_DIR, filename)
+                    if not validate_auth_file(fpath):
+                        log(f"[CẢNH BÁO] File {filename} sau refresh không đạt chuẩn toàn vẹn. Kích hoạt Rollback...")
+                        restore_latest_from_vault(filename)
+                        return False
+                    
+                    exp = data.get("auth", {}).get("metadata", {}).get("expired", "N/A")
+                    log(f"✅ Làm mới token thành công cho {filename} | Hạn mới: {exp}")
+                    return True
+                else:
+                    log(f"⚠️ Cảnh báo từ CLIProxy khi làm mới {filename} (Lần thử {attempt+1}/{max_retries}): {data}")
+        except (urllib.error.URLError, TimeoutError) as e:
+            log(f"⚠️ Kết nối CLIProxy tạm thời gián đoạn khi làm mới {filename} (Lần thử {attempt+1}/{max_retries}): {e}")
+        except Exception as e:
+            log(f"⚠️ Lỗi phát sinh khi làm mới {filename} (Lần thử {attempt+1}/{max_retries}): {e}")
+
+        if attempt < max_retries - 1:
+            delay = backoffs[attempt]
+            time.sleep(delay)
+
+    log(f"❌ THẤT BẠI: Không thể làm mới token cho {filename} sau {max_retries} lần thử.")
+    # Check if existing file is intact; if broken, rollback from vault
+    fpath = os.path.join(AUTH_DIR, filename)
+    if not validate_auth_file(fpath):
+        restore_latest_from_vault(filename)
+    return False
+
+def refresh_tokens():
+    """Trigger atomic token refresh with anti-burst sequential staggering."""
+    claude_files = sorted(glob.glob(os.path.join(AUTH_DIR, "claude-*.json")))
+    if not claude_files:
+        log("Không tìm thấy file token claude-*.json nào để làm mới.")
+        return
+
+    success_count = 0
+    total = len(claude_files)
+    
+    for idx, cf in enumerate(claude_files):
+        fn = os.path.basename(cf)
+        if refresh_single_account(fn):
+            success_count += 1
+            
+        # Stagger delay: 2 seconds pause between accounts to protect Anthropic OAuth endpoint
+        if idx < total - 1:
+            time.sleep(2.0)
+
+    log(f"Hoàn tất chu trình Proactive Refresh: {success_count}/{total} tài khoản đã được gia hạn.")
+
+def main():
+    log("=== Bắt đầu chu trình Claude Token Keeper & Vault (v2 Production) ===")
+    backup_tokens()
+    refresh_tokens()
+    log("=== Hoàn tất chu trình Token Keeper ===")
+
+if __name__ == "__main__":
+    main()

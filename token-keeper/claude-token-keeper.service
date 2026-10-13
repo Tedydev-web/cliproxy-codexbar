@@ -1,0 +1,13 @@
+[Unit]
+Description=Claude OAuth Token Keeper and Vault Backup (Production-Grade v2)
+After=network-online.target cliproxy.service
+Wants=network-online.target cliproxy.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/claude-token-keeper
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

@@ -114,15 +114,21 @@ cliproxy-codexbar/
 │   ├── cliproxy-quota-bridge        # Python daemon đọc dữ liệu CCS CLIProxy
 │   ├── cliproxy-quota-bridge.service# File cấu hình systemd user unit
 │   └── setup-backend.sh             # Script cài đặt backend 1-click
+├── token-keeper/
+│   ├── claude-token-keeper          # Script bảo vệ phiên & proactive refresh
+│   ├── claude-token-keeper.service  # Systemd user service unit
+│   ├── claude-token-keeper.timer    # Systemd user timer unit (chu kỳ 4h)
+│   └── setup-keeper.sh              # Script cài đặt Token Keeper 1-click
 ├── client-macos/
 │   ├── Sources/
 │   │   └── CodexBarCustom.swift     # Mã nguồn Swift thuần (Single-file AppKit/SwiftUI)
-│   ├── Resources/                   # Biểu tượng template dự phòng
-│   │   ├── icon-claude.png
-│   │   └── icon-antigravity.png
-│   ├── com.tedydev.codexbarcustom.plist # LaunchAgent cho macOS
+│   ├── Resources/                   # Biểu tượng PNG template
+│   ├── package-dmg.sh               # Đóng gói thành macOS .app và file .dmg
 │   ├── build.sh                     # Script biên dịch Swift
 │   └── install-client.sh            # Script cài đặt client 1-click
+├── install.sh                       # 1-Line global curl installer (Linux + macOS)
+├── package.json                     # Cấu hình phân phối qua npm / npx
+├── sync-all.sh                      # Kịch bản đồng bộ tức thì toàn bộ cụm máy
 └── README.md
 ```
 

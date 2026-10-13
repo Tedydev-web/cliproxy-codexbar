@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Claude OAuth Token Keeper every 4 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=4h
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
