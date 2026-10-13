@@ -5,15 +5,16 @@
  * Orbiter iOS Widget - Antigravity (AGY) Quota
  * 100% Matching Pattern & Style of AntigravityFullCardView in Orbiter Menubar
  * Supports Medium (2x4) & Small (2x2) Widget Families
- * Hiển thị Quota Gemini Models (Teal) và Claude/GPT Models (Purple)
+ * Full-width Segmented Progress Bars (Không bị hụt lề phải)
+ * Tối ưu Pin & Hiệu năng: 5 phút refresh & On-demand caching
  */
 
 const CONFIG = {
   HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
   PORT: "8318",
   TIMEOUT: 4,
-  REFRESH_MIN: 10,
-  CACHE_KEY: "orbiter_agy_v8"
+  REFRESH_MIN: 5,
+  CACHE_KEY: "orbiter_agy_v9"
 };
 
 const URLS = {
@@ -32,7 +33,6 @@ const TOKENS = {
   textSecondary: new Color("#9CA3AF"),
   textMuted: new Color("#6B7280"),
 
-  // Màu sắc riêng của Antigravity từ Swift OrbiterMenuBar
   geminiTeal: new Color("#00C389"),    // Teal Green của Gemini
   claudePurple: new Color("#8B5CF6"),  // Purple của Claude/GPT Models
   trackGray: new Color("#272D34"),     // Rãnh segmented bar
@@ -69,7 +69,7 @@ async function fetchAgyData() {
 }
 
 // ==========================================
-// DRAWING: SEGMENTED USAGE PROGRESS BAR (3 ĐOẠN)
+// DRAWING: FULL-WIDTH SEGMENTED BAR (3 ĐOẠN)
 // ==========================================
 function drawSegmentedBar(width, height, usedPct, fillColor) {
   const dc = new DrawContext();
@@ -78,7 +78,7 @@ function drawSegmentedBar(width, height, usedPct, fillColor) {
   dc.respectScreenScale = true;
 
   const numSegments = 3;
-  const gap = 3.5;
+  const gap = 4;
   const segW = (width - gap * (numSegments - 1)) / numSegments;
   const r = height / 2;
 
@@ -122,10 +122,10 @@ function drawSegmentedBar(width, height, usedPct, fillColor) {
 }
 
 // ==========================================
-// MEDIUM WIDGET: 100% ANTIGRAVITY MACOS CARD
+// MEDIUM WIDGET (FULL WIDTH 330PT)
 // ==========================================
 function buildMediumWidget(w, data) {
-  w.setPadding(12, 16, 12, 16);
+  w.setPadding(14, 14, 14, 14);
 
   const agy = data.agy || {
     email: "hieudat2310.bh@gmail.com",
@@ -152,7 +152,7 @@ function buildMediumWidget(w, data) {
   row1.addSpacer();
 
   const email = row1.addText(agy.email || "");
-  email.font = Font.systemFont(11.5);
+  email.font = Font.systemFont(12);
   email.textColor = TOKENS.textSecondary;
   email.lineLimit = 1;
 
@@ -194,15 +194,15 @@ function buildMediumWidget(w, data) {
   gHead.addSpacer();
 
   const gReset = gHead.addText(`Đặt lại sau ${gemReset}`);
-  gReset.font = Font.systemFont(10.5);
+  gReset.font = Font.systemFont(11);
   gReset.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
-  // Thanh tiến trình Gemini (Teal Green)
-  const gBar = drawSegmentedBar(300, 5, gemUsed, TOKENS.geminiTeal);
+  // Thanh tiến trình Gemini (Full-width 330pt)
+  const gBar = drawSegmentedBar(330, 5.5, gemUsed, TOKENS.geminiTeal);
   const gView = w.addImage(gBar);
-  gView.imageSize = new Size(300, 5);
+  gView.imageSize = new Size(330, 5.5);
 
   w.addSpacer(3);
 
@@ -224,19 +224,19 @@ function buildMediumWidget(w, data) {
   cHead.addSpacer();
 
   const cReset = cHead.addText(`Đặt lại sau ${claudeReset}`);
-  cReset.font = Font.systemFont(10.5);
+  cReset.font = Font.systemFont(11);
   cReset.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
-  // Thanh tiến trình Claude/GPT (Purple)
-  const cBar = drawSegmentedBar(300, 5, claudeUsed, TOKENS.claudePurple);
+  // Thanh tiến trình Claude/GPT (Full-width 330pt)
+  const cBar = drawSegmentedBar(330, 5.5, claudeUsed, TOKENS.claudePurple);
   const cView = w.addImage(cBar);
-  cView.imageSize = new Size(300, 5);
+  cView.imageSize = new Size(330, 5.5);
 }
 
 // ==========================================
-// SMALL WIDGET
+// SMALL WIDGET (2X2)
 // ==========================================
 function buildSmallWidget(w, data) {
   w.setPadding(12, 12, 12, 12);
@@ -246,6 +246,7 @@ function buildSmallWidget(w, data) {
 
   const h = w.addStack();
   h.layoutHorizontally();
+  h.centerAlignContent();
   const t = h.addText("AGY");
   t.font = Font.boldSystemFont(14);
   t.textColor = TOKENS.textPrimary;
@@ -256,35 +257,39 @@ function buildSmallWidget(w, data) {
 
   w.addSpacer(6);
 
-  const uG = w.addText(`Gemini: ${gemUsed}% dùng`);
+  // Gemini
+  const gHead = w.addStack();
+  gHead.layoutHorizontally();
+  const uG = gHead.addText(`Gemini: ${gemUsed}% dùng`);
   uG.font = Font.boldSystemFont(11);
   uG.textColor = TOKENS.textPrimary;
-
-  w.addSpacer(2);
-  const bg = drawSegmentedBar(125, 4, gemUsed, TOKENS.geminiTeal);
-  const vg = w.addImage(bg);
-  vg.imageSize = new Size(125, 4);
-
-  w.addSpacer(2);
-  const rg = w.addText(`Reset ${agy.gemini?.five_hour_refresh || "--"}`);
+  gHead.addSpacer();
+  const rg = gHead.addText(agy.gemini?.five_hour_refresh || "");
   rg.font = Font.systemFont(9);
   rg.textColor = TOKENS.textMuted;
 
+  w.addSpacer(3);
+  const bg = drawSegmentedBar(132, 4.5, gemUsed, TOKENS.geminiTeal);
+  const vg = w.addImage(bg);
+  vg.imageSize = new Size(132, 4.5);
+
   w.addSpacer(8);
 
-  const uC = w.addText(`Claude: ${claudeUsed}% dùng`);
+  // Claude
+  const cHead = w.addStack();
+  cHead.layoutHorizontally();
+  const uC = cHead.addText(`Claude: ${claudeUsed}% dùng`);
   uC.font = Font.boldSystemFont(11);
   uC.textColor = TOKENS.textPrimary;
-
-  w.addSpacer(2);
-  const bc = drawSegmentedBar(125, 4, claudeUsed, TOKENS.claudePurple);
-  const vc = w.addImage(bc);
-  vc.imageSize = new Size(125, 4);
-
-  w.addSpacer(2);
-  const rc = w.addText(`Reset ${agy.claude_gpt?.weekly_refresh || "--"}`);
+  cHead.addSpacer();
+  const rc = cHead.addText(agy.claude_gpt?.weekly_refresh || "");
   rc.font = Font.systemFont(9);
   rc.textColor = TOKENS.textMuted;
+
+  w.addSpacer(3);
+  const bc = drawSegmentedBar(132, 4.5, claudeUsed, TOKENS.claudePurple);
+  const vc = w.addImage(bc);
+  vc.imageSize = new Size(132, 4.5);
 }
 
 // ==========================================
@@ -297,6 +302,8 @@ async function main() {
   grad.locations = [0.0, 1.0];
   grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
   w.backgroundGradient = grad;
+
+  w.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name());
 
   const family = config.widgetFamily || "medium";
   if (family === "small") {

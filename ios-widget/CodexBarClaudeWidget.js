@@ -5,15 +5,17 @@
  * CodexBar iOS Widget - Claude Pool Quota
  * 100% Matching Pattern & Style of CodexBar macOS & Orbiter Menubar
  * Supports Medium (2x4) & Small (2x2) Widget Families
- * Tích hợp Interactive Account Switcher khi chạm mở script
+ * Full-width Segmented Progress Bars (Không bị hụt lề phải)
+ * Interactive Account Switcher (Khi mở app hoặc cấu hình Run Script)
+ * Tối ưu Pin & Hiệu năng: On-Demand Refresh khi mở, Caching thông minh
  */
 
 const CONFIG = {
   HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
   PORT: "8318",
   TIMEOUT: 4,
-  REFRESH_MIN: 10,
-  CACHE_KEY: "codexbar_claude_v8"
+  REFRESH_MIN: 5, // Chu kỳ refresh đề xuất cho iOS
+  CACHE_KEY: "codexbar_claude_v9"
 };
 
 const URLS = {
@@ -39,7 +41,7 @@ const TOKENS = {
 };
 
 // ==========================================
-// DATA & CACHING
+// DATA & CACHING (ON-DEMAND + OFFLINE CACHE)
 // ==========================================
 async function fetchPoolData() {
   const fm = FileManager.local();
@@ -49,6 +51,7 @@ async function fetchPoolData() {
     try { cache = JSON.parse(fm.readString(path)); } catch (_) {}
   }
 
+  // Network request với timeout ngắn 4s để tiết kiệm pin tối đa
   try {
     const r = new Request(URLS.POOL);
     r.timeoutInterval = CONFIG.TIMEOUT;
@@ -60,6 +63,7 @@ async function fetchPoolData() {
     }
   } catch (_) {}
 
+  // Fallback sang cache nếu không có mạng / chưa bật Tailscale
   if (cache) {
     cache.online = false;
     return cache;
@@ -68,7 +72,7 @@ async function fetchPoolData() {
 }
 
 // ==========================================
-// DRAWING: SEGMENTED USAGE PROGRESS BAR (3 ĐOẠN)
+// DRAWING: FULL-WIDTH SEGMENTED BAR (3 ĐOẠN)
 // ==========================================
 function drawSegmentedBar(width, height, usedPct) {
   const dc = new DrawContext();
@@ -77,7 +81,7 @@ function drawSegmentedBar(width, height, usedPct) {
   dc.respectScreenScale = true;
 
   const numSegments = 3;
-  const gap = 3.5;
+  const gap = 4;
   const segW = (width - gap * (numSegments - 1)) / numSegments;
   const r = height / 2;
 
@@ -121,20 +125,21 @@ function drawSegmentedBar(width, height, usedPct) {
 }
 
 // ==========================================
-// MEDIUM WIDGET: 100% CODEXBAR MACOS CARD
+// MEDIUM WIDGET (FULL WIDTH 330PT, KHÔNG HỤT LỀ)
 // ==========================================
 function buildMediumWidget(w, data) {
-  w.setPadding(12, 16, 12, 16);
+  // Padding cân đối 14pt mỗi bên -> Tổng width khả dụng = ~330pt trên iPhone tiêu chuẩn
+  w.setPadding(14, 14, 14, 14);
 
   const acc = data.pool?.accounts?.[0] || {
     name: "projectplayground2025@gmail.com",
     plan: "Max 20x",
-    used_5h: 11,
-    remaining_5h: 89,
-    reset_5h: "3h 49m",
-    used_weekly: 16,
-    remaining_weekly: 84,
-    reset_weekly: "6d 17h"
+    used_5h: 14,
+    remaining_5h: 86,
+    reset_5h: "1h 8m",
+    used_weekly: 17,
+    remaining_weekly: 83,
+    reset_weekly: "6d 15h"
   };
 
   // Header Line 1: Claude & Email
@@ -149,7 +154,7 @@ function buildMediumWidget(w, data) {
   row1.addSpacer();
 
   const email = row1.addText(acc.name);
-  email.font = Font.systemFont(11.5);
+  email.font = Font.systemFont(12);
   email.textColor = TOKENS.textSecondary;
   email.lineLimit = 1;
 
@@ -191,15 +196,15 @@ function buildMediumWidget(w, data) {
   p5Head.addSpacer();
 
   const p5Reset = p5Head.addText(`Đặt lại sau ${acc.reset_5h}`);
-  p5Reset.font = Font.systemFont(10.5);
+  p5Reset.font = Font.systemFont(11);
   p5Reset.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
-  // Thanh tiến trình 5h
-  const bar5 = drawSegmentedBar(300, 5, acc.used_5h);
+  // Thanh tiến trình 5h full-width (330pt)
+  const bar5 = drawSegmentedBar(330, 5.5, acc.used_5h);
   const v5 = w.addImage(bar5);
-  v5.imageSize = new Size(300, 5);
+  v5.imageSize = new Size(330, 5.5);
 
   w.addSpacer(3);
 
@@ -221,79 +226,96 @@ function buildMediumWidget(w, data) {
   pWkHead.addSpacer();
 
   const pWkReset = pWkHead.addText(`Đặt lại sau ${acc.reset_weekly}`);
-  pWkReset.font = Font.systemFont(10.5);
+  pWkReset.font = Font.systemFont(11);
   pWkReset.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
-  // Thanh tiến trình Tuần
-  const barWk = drawSegmentedBar(300, 5, acc.used_weekly);
+  // Thanh tiến trình Tuần full-width (330pt)
+  const barWk = drawSegmentedBar(330, 5.5, acc.used_weekly);
   const vWk = w.addImage(barWk);
-  vWk.imageSize = new Size(300, 5);
+  vWk.imageSize = new Size(330, 5.5);
 }
 
 // ==========================================
-// SMALL WIDGET
+// SMALL WIDGET (2X2) - ĐỒNG BỘ ĐẦY ĐỦ 1:1
 // ==========================================
 function buildSmallWidget(w, data) {
   w.setPadding(12, 12, 12, 12);
-  const acc = data.pool?.accounts?.[0] || {};
+  const acc = data.pool?.accounts?.[0] || {
+    name: "playground",
+    plan: "Max 20x",
+    used_5h: 14,
+    remaining_5h: 86,
+    reset_5h: "1h 8m",
+    used_weekly: 17,
+    remaining_weekly: 83,
+    reset_weekly: "6d 15h"
+  };
 
   const h = w.addStack();
   h.layoutHorizontally();
+  h.centerAlignContent();
   const t = h.addText("Claude");
   t.font = Font.boldSystemFont(14);
   t.textColor = TOKENS.textPrimary;
   h.addSpacer();
-  const p = h.addText("20x");
+  const p = h.addText(acc.plan?.replace("Max ", "") || "20x");
   p.font = Font.boldSystemFont(10);
   p.textColor = TOKENS.textSecondary;
 
   w.addSpacer(6);
 
-  const u5 = w.addText(`5h: ${acc.used_5h || 0}% đã dùng`);
+  // 5h Quota
+  const u5Head = w.addStack();
+  u5Head.layoutHorizontally();
+  const u5 = u5Head.addText(`5h: ${acc.used_5h}% đã dùng`);
   u5.font = Font.boldSystemFont(11);
   u5.textColor = TOKENS.textPrimary;
-
-  w.addSpacer(2);
-  const b5 = drawSegmentedBar(125, 4, acc.used_5h || 0);
-  const v5 = w.addImage(b5);
-  v5.imageSize = new Size(125, 4);
-
-  w.addSpacer(2);
-  const r5 = w.addText(`Reset ${acc.reset_5h || "--"}`);
+  u5Head.addSpacer();
+  const r5 = u5Head.addText(acc.reset_5h || "");
   r5.font = Font.systemFont(9);
   r5.textColor = TOKENS.textMuted;
 
+  w.addSpacer(3);
+  // Full-width bar cho Small Widget (132pt)
+  const b5 = drawSegmentedBar(132, 4.5, acc.used_5h);
+  const v5 = w.addImage(b5);
+  v5.imageSize = new Size(132, 4.5);
+
   w.addSpacer(8);
 
-  const uw = w.addText(`Tuần: ${acc.used_weekly || 0}% đã dùng`);
+  // Weekly Quota
+  const uwHead = w.addStack();
+  uwHead.layoutHorizontally();
+  const uw = uwHead.addText(`Tuần: ${acc.used_weekly}% đã dùng`);
   uw.font = Font.boldSystemFont(11);
   uw.textColor = TOKENS.textPrimary;
-
-  w.addSpacer(2);
-  const bw = drawSegmentedBar(125, 4, acc.used_weekly || 0);
-  const vw = w.addImage(bw);
-  vw.imageSize = new Size(125, 4);
-
-  w.addSpacer(2);
-  const rw = w.addText(`Reset ${acc.reset_weekly || "--"}`);
+  uwHead.addSpacer();
+  const rw = uwHead.addText(acc.reset_weekly || "");
   rw.font = Font.systemFont(9);
   rw.textColor = TOKENS.textMuted;
+
+  w.addSpacer(3);
+  const bw = drawSegmentedBar(132, 4.5, acc.used_weekly);
+  const vw = w.addImage(bw);
+  vw.imageSize = new Size(132, 4.5);
 }
 
 // ==========================================
-// INTERACTIVE MODAL (SWITCH ACCOUNT NHANH)
+// INTERACTIVE SWITCHER CHO 3 TÀI KHOẢN
 // ==========================================
 async function showInteractiveSwitcher(data) {
   const accounts = data.pool?.accounts || [];
+  if (accounts.length === 0) return;
+
   const alert = new Alert();
   alert.title = "⚡ CodexBar - Claude Accounts";
-  alert.message = "Chọn tài khoản để đưa lên ưu tiên số #1 (Selector Drain First):";
+  alert.message = "Chạm vào tài khoản để đưa lên ưu tiên số #1 (Selector Drain First):";
 
   accounts.forEach((acc, idx) => {
     const isFirst = idx === 0;
-    const prefix = isFirst ? "★ " : `#${idx + 1} `;
+    const prefix = isFirst ? "★ [Đang dùng] " : `#${idx + 1} `;
     const emailPrefix = acc.name.split("@")[0];
     alert.addAction(`${prefix}${emailPrefix} (5h: ${acc.remaining_5h}% · ${acc.plan || "Max"})`);
   });
@@ -332,6 +354,9 @@ async function main() {
     grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
     w.backgroundGradient = grad;
 
+    // Khi chạm vào Widget trên màn hình chính: Mở Scriptable để switch tài khoản ngay
+    w.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name());
+
     const family = config.widgetFamily || "medium";
     if (family === "small") {
       buildSmallWidget(w, data);
@@ -339,18 +364,23 @@ async function main() {
       buildMediumWidget(w, data);
     }
 
+    // Cơ chế iOS Battery: Đặt lịch 5 phút để iOS cập nhật lại khi người dùng xem trang widget
     w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
     Script.setWidget(w);
   } else {
-    // Khi mở app hoặc test trong Scriptable: Hiện widget preview + mở modal chọn tài khoản
+    // Khi người dùng bấm vào Widget hoặc chạy trong app Scriptable:
+    // 1. Mở modal chọn ngay 3 tài khoản Claude để switch
+    // 2. Hiển thị Preview Widget sau khi switch
+    await showInteractiveSwitcher(data);
+    const updatedData = await fetchPoolData();
+
     const w = new ListWidget();
     const grad = new LinearGradient();
     grad.locations = [0.0, 1.0];
     grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
     w.backgroundGradient = grad;
-    buildMediumWidget(w, data);
+    buildMediumWidget(w, updatedData);
     await w.presentMedium();
-    await showInteractiveSwitcher(data);
   }
 }
 
