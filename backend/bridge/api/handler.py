@@ -10,14 +10,25 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     agy_provider = None
     keeper_provider = None
     gateway_provider = None
+    system_provider = None
 
     def send_json(self, status_code, data):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
         self.wfile.write(payload)
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.end_headers()
 
     def do_GET(self):
         if self.path.startswith("/v1/pool-status"):
@@ -36,6 +47,28 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/keeper-telemetry"):
             data = self.keeper_provider.get_telemetry()
             self.send_json(200, data)
+        elif self.path.startswith("/v1/system-telemetry"):
+            if not self.system_provider:
+                self.send_json(503, {"error": "System provider not initialized"})
+                return
+            metrics = self.system_provider.get_system_metrics()
+            ports = self.system_provider.get_listening_ports()
+            services = self.system_provider.get_services_status()
+            docker_list = self.system_provider.get_docker_containers()
+            tunnels = self.system_provider.get_active_tunnels()
+            self.send_json(200, {
+                "metrics": metrics,
+                "ports": ports,
+                "services": services,
+                "docker": docker_list,
+                "tunnels": tunnels
+            })
+        elif self.path.startswith("/v1/system-metrics"):
+            metrics = self.system_provider.get_system_metrics() if self.system_provider else {}
+            self.send_json(200, metrics)
+        elif self.path.startswith("/v1/system-ports"):
+            ports = self.system_provider.get_listening_ports() if self.system_provider else []
+            self.send_json(200, {"ports": ports})
         elif self.path == "/health":
             self.send_json(200, {"status": "healthy", "service": "cliproxy-quota-bridge"})
         else:
@@ -75,5 +108,55 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "order": new_order})
             else:
                 self.send_json(400, {"error": "Invalid order payload"})
+
+        elif self.path.startswith("/v1/kill-port"):
+            if not self.system_provider:
+                self.send_json(503, {"error": "System provider unavailable"})
+                return
+            port = req_data.get("port")
+            pid = req_data.get("pid")
+            if not port:
+                self.send_json(400, {"error": "Missing 'port' field"})
+                return
+            res = self.system_provider.kill_port_process(int(port), pid=pid)
+            self.send_json(200, res)
+
+        elif self.path.startswith("/v1/tunnel-start"):
+            if not self.system_provider:
+                self.send_json(503, {"error": "System provider unavailable"})
+                return
+            port = req_data.get("port")
+            if not port:
+                self.send_json(400, {"error": "Missing 'port' field"})
+                return
+            res = self.system_provider.start_quick_tunnel(int(port))
+            self.send_json(200, res)
+
+        elif self.path.startswith("/v1/tunnel-stop"):
+            if not self.system_provider:
+                self.send_json(503, {"error": "System provider unavailable"})
+                return
+            tunnel_id = req_data.get("tunnel_id")
+            if not tunnel_id:
+                self.send_json(400, {"error": "Missing 'tunnel_id' field"})
+                return
+            res = self.system_provider.stop_quick_tunnel(tunnel_id)
+            self.send_json(200, res)
+
+        elif self.path.startswith("/v1/restart-service"):
+            if not self.system_provider:
+                self.send_json(503, {"error": "System provider unavailable"})
+                return
+            svc = req_data.get("service")
+            res = self.system_provider.restart_service(svc)
+            self.send_json(200, res)
+
+        elif self.path.startswith("/v1/update-herdr"):
+            if not self.system_provider:
+                self.send_json(503, {"error": "System provider unavailable"})
+                return
+            res = self.system_provider.update_herdr()
+            self.send_json(200, res)
+
         else:
             self.send_json(404, {"error": "Endpoint not found"})

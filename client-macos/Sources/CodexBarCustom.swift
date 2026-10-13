@@ -329,6 +329,62 @@ struct GatewayCommandItem: Identifiable {
     let command: String
 }
 
+// MARK: - System Telemetry Data Models
+struct HostMetricInfo {
+    var cpuPercent: Double = 0.0
+    var cpuCount: Int = 0
+    var loadAvg: [Double] = [0.0, 0.0, 0.0]
+    var ramTotalGb: Double = 0.0
+    var ramUsedGb: Double = 0.0
+    var ramPercent: Double = 0.0
+    var diskTotalGb: Double = 0.0
+    var diskUsedGb: Double = 0.0
+    var diskPercent: Double = 0.0
+    var uptime: String = "-"
+}
+
+struct PortInfo: Identifiable {
+    var id: String { "\(host):\(port)-\(pid ?? 0)" }
+    let port: Int
+    let host: String
+    let pid: Int?
+    let process: String
+    let command: String
+    let cwd: String
+    let user: String
+    let isDocker: Bool
+}
+
+struct ServiceInfo: Identifiable {
+    var id: String { name }
+    let name: String
+    let unit: String
+    let active: Bool
+    let version: String
+    let port: Int?
+    let canRestart: Bool
+    let canUpdate: Bool
+}
+
+struct DockerContainerInfo: Identifiable {
+    let id: String
+    let name: String
+    let status: String
+    let image: String
+    let ports: String
+}
+
+struct TunnelInfo: Identifiable {
+    let id: String
+    let type: String
+    let target: String
+    let url: String
+    let isActive: Bool
+    let isQuick: Bool
+    let port: Int?
+    let startedAt: String?
+}
+
 // MARK: - Claude Full Card View
 struct ClaudeFullCardView: View {
     @ObservedObject var state: QuotaState
@@ -523,6 +579,62 @@ struct ClaudeFullCardView: View {
                                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                                 .foregroundStyle(Color.primary.opacity(0.85))
                             Text("· Hạn mức: \(self.state.gwMaxBudgetFormatted)")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+            
+            // 6. Ubuntu Host System & Ports Manager
+            Button(action: {
+                AppDelegate.shared?.openSystemManagerWindow()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 14, height: 14)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Ubuntu Server Hub")
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(.primary)
+                            
+                            Spacer()
+                            
+                            Text("Uptime: \(self.state.sysMetrics.uptime)")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                        }
+                        
+                        HStack(spacing: 6) {
+                            Text("CPU \(Int(self.state.sysMetrics.cpuPercent))%")
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(self.state.sysMetrics.cpuPercent > 80 ? Color.red : Color.primary.opacity(0.85))
+                            Text("·")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("RAM \(Int(self.state.sysMetrics.ramPercent))%")
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(self.state.sysMetrics.ramPercent > 85 ? Color.orange : Color.primary.opacity(0.85))
+                            Text("·")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("\(self.state.sysPorts.count) ports")
                                 .font(.system(size: 9.5))
                                 .foregroundStyle(.secondary)
                         }
@@ -752,6 +864,62 @@ struct AntigravityFullCardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            
+            Divider()
+            
+            // 5. Ubuntu Server Hub
+            Button(action: {
+                AppDelegate.shared?.openSystemManagerWindow()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 14, height: 14)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Ubuntu Server Hub")
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(.primary)
+                            
+                            Spacer()
+                            
+                            Text("Uptime: \(self.state.sysMetrics.uptime)")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                        }
+                        
+                        HStack(spacing: 6) {
+                            Text("CPU \(Int(self.state.sysMetrics.cpuPercent))%")
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(self.state.sysMetrics.cpuPercent > 80 ? Color.red : Color.primary.opacity(0.85))
+                            Text("·")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("RAM \(Int(self.state.sysMetrics.ramPercent))%")
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(self.state.sysMetrics.ramPercent > 85 ? Color.orange : Color.primary.opacity(0.85))
+                            Text("·")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("\(self.state.sysPorts.count) ports")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)
@@ -938,6 +1106,15 @@ class QuotaState: ObservableObject {
     @Published var gwLastActiveHuman: String = "Chưa hoạt động"
     @Published var gwLastActiveTime: String = ""
     @Published var gwQuickCommands: [GatewayCommandItem] = []
+    
+    // Ubuntu System & Port & Tunnel Telemetry
+    @Published var sysMetrics: HostMetricInfo = HostMetricInfo()
+    @Published var sysPorts: [PortInfo] = []
+    @Published var sysServices: [ServiceInfo] = []
+    @Published var sysDocker: [DockerContainerInfo] = []
+    @Published var sysTunnels: [TunnelInfo] = []
+    @Published var sysActionMessage: String = ""
+    @Published var isStartingTunnel: Bool = false
     
     // Default refresh: 60s (1 phút)
     @Published var lastQuotaFetchDate: Date = Date()
@@ -1199,6 +1376,194 @@ class QuotaState: ObservableObject {
                 }
             }.resume()
         }
+        
+        self.fetchSystemData()
+    }
+    
+    func fetchSystemData() {
+        guard let url = URL(string: "\(self.baseUrl)/v1/system-telemetry") else { return }
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+            DispatchQueue.main.async {
+                // 1. Metrics
+                if let m = json["metrics"] as? [String: Any] {
+                    var h = HostMetricInfo()
+                    h.cpuPercent = m["cpu_percent"] as? Double ?? 0.0
+                    h.cpuCount = m["cpu_count"] as? Int ?? 0
+                    if let la = m["load_avg"] as? [Double] { h.loadAvg = la }
+                    h.ramTotalGb = m["ram_total_gb"] as? Double ?? 0.0
+                    h.ramUsedGb = m["ram_used_gb"] as? Double ?? 0.0
+                    h.ramPercent = m["ram_percent"] as? Double ?? 0.0
+                    h.diskTotalGb = m["disk_total_gb"] as? Double ?? 0.0
+                    h.diskUsedGb = m["disk_used_gb"] as? Double ?? 0.0
+                    h.diskPercent = m["disk_percent"] as? Double ?? 0.0
+                    h.uptime = m["uptime"] as? String ?? "-"
+                    self.sysMetrics = h
+                }
+                
+                // 2. Ports
+                if let rawPorts = json["ports"] as? [[String: Any]] {
+                    var pList: [PortInfo] = []
+                    for p in rawPorts {
+                        let pt = p["port"] as? Int ?? 0
+                        let h = p["host"] as? String ?? ""
+                        let pid = p["pid"] as? Int
+                        let proc = p["process"] as? String ?? ""
+                        let cmd = p["command"] as? String ?? ""
+                        let cwd = p["cwd"] as? String ?? ""
+                        let u = p["user"] as? String ?? ""
+                        let isD = p["is_docker"] as? Bool ?? false
+                        pList.append(PortInfo(port: pt, host: h, pid: pid, process: proc, command: cmd, cwd: cwd, user: u, isDocker: isD))
+                    }
+                    self.sysPorts = pList
+                }
+                
+                // 3. Services
+                if let rawSvcs = json["services"] as? [[String: Any]] {
+                    var sList: [ServiceInfo] = []
+                    for s in rawSvcs {
+                        let nm = s["name"] as? String ?? ""
+                        let un = s["unit"] as? String ?? ""
+                        let act = s["active"] as? Bool ?? false
+                        let ver = s["version"] as? String ?? ""
+                        let pt = s["port"] as? Int
+                        let canR = s["can_restart"] as? Bool ?? false
+                        let canU = s["can_update"] as? Bool ?? false
+                        sList.append(ServiceInfo(name: nm, unit: un, active: act, version: ver, port: pt, canRestart: canR, canUpdate: canU))
+                    }
+                    self.sysServices = sList
+                }
+                
+                // 4. Docker
+                if let rawD = json["docker"] as? [[String: Any]] {
+                    var dList: [DockerContainerInfo] = []
+                    for d in rawD {
+                        let cid = d["id"] as? String ?? ""
+                        let nm = d["name"] as? String ?? ""
+                        let st = d["status"] as? String ?? ""
+                        let img = d["image"] as? String ?? ""
+                        let pts = d["ports"] as? String ?? ""
+                        dList.append(DockerContainerInfo(id: cid, name: nm, status: st, image: img, ports: pts))
+                    }
+                    self.sysDocker = dList
+                }
+                
+                // 5. Tunnels
+                if let rawT = json["tunnels"] as? [[String: Any]] {
+                    var tList: [TunnelInfo] = []
+                    for t in rawT {
+                        let tid = t["id"] as? String ?? ""
+                        let typ = t["type"] as? String ?? ""
+                        let tgt = t["target"] as? String ?? ""
+                        let u = t["url"] as? String ?? ""
+                        let act = t["is_active"] as? Bool ?? false
+                        let isQ = t["is_quick"] as? Bool ?? false
+                        let pt = t["port"] as? Int
+                        let stAt = t["started_at"] as? String
+                        tList.append(TunnelInfo(id: tid, type: typ, target: tgt, url: u, isActive: act, isQuick: isQ, port: pt, startedAt: stAt))
+                    }
+                    self.sysTunnels = tList
+                }
+                
+                self.onUpdate?()
+            }
+        }.resume()
+    }
+    
+    func killPort(port: Int, pid: Int?) {
+        guard let url = URL(string: "\(self.baseUrl)/v1/kill-port") else { return }
+        self.sysActionMessage = "Đang dừng port \(port)..."
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["port": port]
+        if let p = pid { body["pid"] = p }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            DispatchQueue.main.async {
+                self.sysActionMessage = "Đã tắt tiến trình port \(port)!"
+                self.fetchSystemData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.sysActionMessage = "" }
+            }
+        }.resume()
+    }
+    
+    func startQuickTunnel(port: Int) {
+        guard let url = URL(string: "\(self.baseUrl)/v1/tunnel-start") else { return }
+        self.isStartingTunnel = true
+        self.sysActionMessage = "Đang tạo Cloudflare Tunnel cho port \(port)..."
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["port": port]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            DispatchQueue.main.async {
+                self.isStartingTunnel = false
+                guard let data = data,
+                      let res = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let ok = res["ok"] as? Bool, ok else {
+                    self.sysActionMessage = "Tạo Tunnel thất bại!"
+                    return
+                }
+                self.sysActionMessage = "Tunnel tạo thành công!"
+                self.fetchSystemData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.sysActionMessage = "" }
+            }
+        }.resume()
+    }
+    
+    func stopQuickTunnel(tunnelId: String) {
+        guard let url = URL(string: "\(self.baseUrl)/v1/tunnel-stop") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["tunnel_id": tunnelId]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: req) { _, _, _ in
+            DispatchQueue.main.async {
+                self.sysActionMessage = "Đã đóng tunnel!"
+                self.fetchSystemData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.sysActionMessage = "" }
+            }
+        }.resume()
+    }
+    
+    func restartManagedService(name: String) {
+        guard let url = URL(string: "\(self.baseUrl)/v1/restart-service") else { return }
+        self.sysActionMessage = "Đang khởi động lại \(name)..."
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["service": name]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: req) { _, _, _ in
+            DispatchQueue.main.async {
+                self.sysActionMessage = "Đã restart \(name)!"
+                self.fetchSystemData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { self.sysActionMessage = "" }
+            }
+        }.resume()
+    }
+    
+    func updateHerdrCLI() {
+        guard let url = URL(string: "\(self.baseUrl)/v1/update-herdr") else { return }
+        self.sysActionMessage = "Đang kiểm tra & cập nhật Herdr..."
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            DispatchQueue.main.async {
+                self.sysActionMessage = "Hoàn tất kiểm tra Herdr!"
+                self.fetchSystemData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.sysActionMessage = "" }
+            }
+        }.resume()
     }
 }
 
@@ -1573,6 +1938,522 @@ struct GatewayDetailView: View {
     }
 }
 
+// MARK: - Ubuntu Host & Dev Hub Window View
+struct SystemManagerView: View {
+    @ObservedObject var state: QuotaState
+    @State private var selectedTab: Int = 0
+    @State private var newTunnelPortText: String = ""
+    @State private var portSearchText: String = ""
+    @State private var portFilterUserOnly: Bool = true
+    
+    var filteredPorts: [PortInfo] {
+        var list = state.sysPorts
+        if portFilterUserOnly {
+            // Focus on common dev ports or user processes
+            list = list.filter { p in
+                return p.port >= 3000 && p.port != 41641
+            }
+        }
+        if !portSearchText.isEmpty {
+            let q = portSearchText.lowercased()
+            list = list.filter {
+                String($0.port).contains(q) ||
+                $0.process.lowercased().contains(q) ||
+                $0.command.lowercased().contains(q) ||
+                $0.cwd.lowercased().contains(q)
+            }
+        }
+        return list
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack(spacing: 12) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 28))
+                    .foregroundStyle(Color.accentColor)
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text("Ubuntu Server Manager & Dev Hub")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text(state.bridgeHost)
+                            .font(.system(size: 10, design: .monospaced))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.08))
+                            .cornerRadius(4)
+                    }
+                    Text("Giám sát CPU/RAM/Ổ cứng · Tắt port bị chiếm · Quản lý Services & Cloudflare Tunnel")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                Button(action: {
+                    state.fetchSystemData()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Làm mới")
+                    }
+                    .font(.caption)
+                }
+            }
+            
+            // Action Feedback Notification Banner
+            if !state.sysActionMessage.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.accentColor)
+                    Text(state.sysActionMessage)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.primary)
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.14))
+                .cornerRadius(6)
+            }
+            
+            // Tab Picker
+            Picker("", selection: $selectedTab) {
+                Text("Cổng mạng (Ports & Kill)").tag(0)
+                Text("Tài nguyên (CPU / RAM / Disk)").tag(1)
+                Text("Tunnels (Cloudflared)").tag(2)
+                Text("Dịch vụ (Herdr & CLIProxy)").tag(3)
+                Text("Docker (\(state.sysDocker.count))").tag(4)
+            }
+            .pickerStyle(.segmented)
+            
+            Divider()
+            
+            // TAB 0: Listening Ports & Kill Actions
+            if selectedTab == 0 {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Tìm theo port (vd: 8000, 30071), tên tiến trình, thư mục...", text: $portSearchText)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        Toggle("Chỉ hiện Port Dev (≥3000)", isOn: $portFilterUserOnly)
+                            .font(.caption)
+                    }
+                    
+                    Text("Nhấn 'Dừng Port' để giải phóng ngay lập tức cổng mạng bị chiếm dụng:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            if filteredPorts.isEmpty {
+                                Text("Không tìm thấy port nào phù hợp.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .padding(20)
+                            } else {
+                                ForEach(filteredPorts) { p in
+                                    HStack(alignment: .center, spacing: 10) {
+                                        // Port Badge
+                                        Text(":\(p.port)")
+                                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(Color.accentColor)
+                                            .frame(width: 65, alignment: .leading)
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack(spacing: 6) {
+                                                Text(p.process)
+                                                    .font(.system(size: 12, weight: .semibold))
+                                                if let pid = p.pid {
+                                                    Text("PID: \(pid)")
+                                                        .font(.system(size: 10, design: .monospaced))
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                                Text("(\(p.host))")
+                                                    .font(.system(size: 10))
+                                                    .foregroundStyle(.tertiary)
+                                            }
+                                            
+                                            if !p.cwd.isEmpty {
+                                                Text(p.cwd)
+                                                    .font(.system(size: 9.5, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                                    .truncationMode(.middle)
+                                            } else {
+                                                Text(p.command)
+                                                    .font(.system(size: 9.5, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        // Tunnel button for this port
+                                        Button(action: {
+                                            state.startQuickTunnel(port: p.port)
+                                        }) {
+                                            HStack(spacing: 3) {
+                                                Image(systemName: "link.badge.plus")
+                                                Text("Bật Tunnel")
+                                            }
+                                            .font(.system(size: 10.5))
+                                        }
+                                        .buttonStyle(.bordered)
+                                        
+                                        // Kill button
+                                        Button(action: {
+                                            state.killPort(port: p.port, pid: p.pid)
+                                        }) {
+                                            HStack(spacing: 3) {
+                                                Image(systemName: "xmark.circle.fill")
+                                                Text("Dừng Port")
+                                            }
+                                            .font(.system(size: 10.5, weight: .semibold))
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .tint(Color.red.opacity(0.85))
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Color(white: 0.12))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .frame(height: 310)
+                }
+            }
+            
+            // TAB 1: System Hardware Metrics (CPU, RAM, Disk)
+            else if selectedTab == 1 {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 16) {
+                        // CPU Card
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("CPU (\(state.sysMetrics.cpuCount) Cores)")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            Text("\(String(format: "%.1f", state.sysMetrics.cpuPercent))%")
+                                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                                .foregroundStyle(state.sysMetrics.cpuPercent > 80 ? Color.red : Color.primary)
+                            UsageProgressBar(percent: state.sysMetrics.cpuPercent, tint: Color.accentColor)
+                            Text("Load: \(state.sysMetrics.loadAvg.map { String(format: "%.2f", $0) }.joined(separator: " "))")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .background(Color(white: 0.13))
+                        .cornerRadius(8)
+                        
+                        // RAM Card
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("BỘ NHỚ RAM")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            Text("\(String(format: "%.1f", state.sysMetrics.ramPercent))%")
+                                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                                .foregroundStyle(state.sysMetrics.ramPercent > 85 ? Color.orange : Color.primary)
+                            UsageProgressBar(percent: state.sysMetrics.ramPercent, tint: Color(red: 52/255, green: 199/255, blue: 89/255))
+                            Text("\(String(format: "%.1f", state.sysMetrics.ramUsedGb)) GB / \(String(format: "%.1f", state.sysMetrics.ramTotalGb)) GB")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .background(Color(white: 0.13))
+                        .cornerRadius(8)
+                        
+                        // Disk Card
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Ổ CỨNG (/)")
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            Text("\(String(format: "%.1f", state.sysMetrics.diskPercent))%")
+                                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                                .foregroundStyle(state.sysMetrics.diskPercent > 90 ? Color.red : Color.primary)
+                            UsageProgressBar(percent: state.sysMetrics.diskPercent, tint: Color.purple)
+                            Text("\(String(format: "%.1f", state.sysMetrics.diskUsedGb)) GB / \(String(format: "%.1f", state.sysMetrics.diskTotalGb)) GB")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(12)
+                        .background(Color(white: 0.13))
+                        .cornerRadius(8)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Thông tin hệ thống host:")
+                            .font(.headline)
+                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                            GridRow {
+                                Text("Thời gian hoạt động (Uptime):").foregroundStyle(.secondary)
+                                Text(state.sysMetrics.uptime).font(.system(.body, design: .monospaced))
+                            }
+                            GridRow {
+                                Text("Địa chỉ IP máy chủ:").foregroundStyle(.secondary)
+                                Text("100.127.1.234 (Tailscale)").font(.system(.body, design: .monospaced))
+                            }
+                            GridRow {
+                                Text("Tổng số cổng TCP đang mở:").foregroundStyle(.secondary)
+                                Text("\(state.sysPorts.count) cổng mạng đang lắng nghe").font(.system(.body, design: .monospaced))
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(white: 0.12))
+                    .cornerRadius(8)
+                    
+                    Spacer()
+                }
+                .frame(height: 330)
+            }
+            
+            // TAB 2: Cloudflare Tunnels (Active & Quick on-demand)
+            else if selectedTab == 2 {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text("Tạo Tunnel Public mới qua Cloudflared:")
+                            .font(.subheadline.bold())
+                        Spacer()
+                    }
+                    
+                    HStack(spacing: 10) {
+                        TextField("Nhập Port cần Public (vd: 8000 hoặc 30071)", text: $newTunnelPortText)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 280)
+                        
+                        Button(action: {
+                            if let p = Int(newTunnelPortText.trimmingCharacters(in: .whitespaces)) {
+                                state.startQuickTunnel(port: p)
+                                newTunnelPortText = ""
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                if state.isStartingTunnel {
+                                    ProgressView().scaleEffect(0.6).frame(width: 14, height: 14)
+                                } else {
+                                    Image(systemName: "bolt.fill")
+                                }
+                                Text("Bật Tunnel Ngay")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(newTunnelPortText.isEmpty || state.isStartingTunnel)
+                    }
+                    
+                    Divider().padding(.vertical, 4)
+                    
+                    Text("Danh sách Tunnel đang hoạt động:")
+                        .font(.headline)
+                    
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(state.sysTunnels, id: \.id) { tun in
+                                HStack(alignment: .center, spacing: 10) {
+                                    Circle()
+                                        .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
+                                        .frame(width: 8, height: 8)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 6) {
+                                            Text(tun.type)
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Text("→ \(tun.target)")
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Text(tun.url)
+                                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if tun.url.hasPrefix("http") {
+                                        Button(action: {
+                                            if let u = URL(string: tun.url) { NSWorkspace.shared.open(u) }
+                                        }) {
+                                            Text("Mở Web")
+                                                .font(.system(size: 11))
+                                        }
+                                        
+                                        Button(action: {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(tun.url, forType: .string)
+                                            state.sysActionMessage = "Đã sao chép link Tunnel!"
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { state.sysActionMessage = "" }
+                                        }) {
+                                            Image(systemName: "doc.on.doc")
+                                                .font(.system(size: 11))
+                                        }
+                                    }
+                                    
+                                    if tun.isQuick {
+                                        Button(action: {
+                                            state.stopQuickTunnel(tunnelId: tun.id)
+                                        }) {
+                                            Text("Tắt Tunnel")
+                                                .font(.system(size: 11, weight: .semibold))
+                                                .foregroundStyle(Color.red)
+                                        }
+                                    }
+                                }
+                                .padding(10)
+                                .background(Color(white: 0.12))
+                                .cornerRadius(6)
+                            }
+                        }
+                    }
+                    .frame(height: 250)
+                }
+            }
+            
+            // TAB 3: Managed Services (Herdr & CLIProxy)
+            else if selectedTab == 3 {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Quản lý và cập nhật các dịch vụ nền tảng:")
+                        .font(.headline)
+                    
+                    VStack(spacing: 10) {
+                        ForEach(state.sysServices) { svc in
+                            HStack(alignment: .center, spacing: 12) {
+                                Circle()
+                                    .fill(svc.active ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.red)
+                                    .frame(width: 10, height: 10)
+                                
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 8) {
+                                        Text(svc.name)
+                                            .font(.system(size: 13, weight: .bold))
+                                        Text("v\(svc.version)")
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                        if let pt = svc.port {
+                                            Text("Port: :\(pt)")
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .padding(.horizontal, 4)
+                                                .padding(.vertical, 1)
+                                                .background(Color.white.opacity(0.08))
+                                                .cornerRadius(3)
+                                        }
+                                    }
+                                    Text(svc.unit)
+                                        .font(.system(size: 10.5, design: .monospaced))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                
+                                Spacer()
+                                
+                                if svc.canRestart {
+                                    Button(action: {
+                                        state.restartManagedService(name: svc.unit)
+                                    }) {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "arrow.clockwise")
+                                            Text("Khởi động lại")
+                                        }
+                                        .font(.system(size: 11))
+                                    }
+                                }
+                                
+                                if svc.canUpdate {
+                                    Button(action: {
+                                        state.updateHerdrCLI()
+                                    }) {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "arrow.triangle.2.circlepath")
+                                            Text("Cập nhật (herdr update)")
+                                        }
+                                        .font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                }
+                            }
+                            .padding(12)
+                            .background(Color(white: 0.12))
+                            .cornerRadius(8)
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                .frame(height: 330)
+            }
+            
+            // TAB 4: Docker Containers
+            else if selectedTab == 4 {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Các Container Docker đang chạy trên máy chủ Ubuntu:")
+                        .font(.headline)
+                    
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(state.sysDocker, id: \.id) { c in
+                                HStack(alignment: .center, spacing: 10) {
+                                    Circle()
+                                        .fill(c.status.contains("Up") ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.secondary)
+                                        .frame(width: 8, height: 8)
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 8) {
+                                            Text(c.name)
+                                                .font(.system(size: 12, weight: .bold))
+                                            Text("ID: \(c.id)")
+                                                .font(.system(size: 10, design: .monospaced))
+                                                .foregroundStyle(.secondary)
+                                            Text(c.status)
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        Text(c.image)
+                                            .font(.system(size: 9.5, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                        if !c.ports.isEmpty {
+                                            Text(c.ports)
+                                                .font(.system(size: 9, design: .monospaced))
+                                                .foregroundStyle(Color.accentColor.opacity(0.85))
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                .padding(8)
+                                .background(Color(white: 0.12))
+                                .cornerRadius(6)
+                            }
+                        }
+                    }
+                    .frame(height: 310)
+                }
+            }
+            
+            Spacer()
+            
+            HStack {
+                Spacer()
+                Button("Đóng") {
+                    AppDelegate.shared?.systemManagerWindow?.close()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(18)
+        .frame(width: 660, height: 530)
+    }
+}
+
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static var shared: AppDelegate?
@@ -1585,6 +2466,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var settingsWindow: NSWindow?
     var keeperWindow: NSWindow?
     var gatewayWindow: NSWindow?
+    var systemManagerWindow: NSWindow?
     
     func menuWillOpen(_ menu: NSMenu) {
         state.updateAgoText()
@@ -1802,6 +2684,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.gatewayWindow = window
+    }
+
+    func openSystemManagerWindow() {
+        if let win = systemManagerWindow {
+            win.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let hosting = NSHostingView(rootView: SystemManagerView(state: state))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 660, height: 530),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.center()
+        window.title = "Ubuntu Server Hub & Ports Manager"
+        window.contentView = hosting
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.systemManagerWindow = window
     }
 
     func openSettingsWindow() {
