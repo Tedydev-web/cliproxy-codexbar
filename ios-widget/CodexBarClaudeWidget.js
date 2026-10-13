@@ -488,10 +488,9 @@ function buildLargeWidget(w, data) {
     const isFirst = idx === 0;
     const realNum = idx + 1;
 
-    // Container cho từng tài khoản (Hỗ trợ chạm trực tiếp để chuyển đổi ưu tiên #1)
+    // Container cho từng tài khoản (Thuần hiển thị tĩnh, không gán url để không mở app)
     const accStack = w.addStack();
     accStack.layoutVertically();
-    accStack.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name()) + "&action=switch&email=" + encodeURIComponent(acc.email);
 
     // --- A. ACCOUNT HEADER ROW ---
     const accHead = accStack.addStack();
@@ -659,7 +658,7 @@ function buildLargeWidget(w, data) {
 
   w.addSpacer();
 
-  // Subtle Footer Hint (SF Symbol + Apple Design)
+  // Subtle Footer Info (SF Symbol + Apple Design)
   const footRow = w.addStack();
   footRow.layoutHorizontally();
   footRow.centerAlignContent();
@@ -667,21 +666,21 @@ function buildLargeWidget(w, data) {
   footRow.addSpacer();
 
   try {
-    const arrowSym = SFSymbol.named("arrow.up.arrow.down");
-    arrowSym.applyFont(Font.systemFont(9));
-    const arrowImg = footRow.addImage(arrowSym.image);
-    arrowImg.imageSize = new Size(9.5, 9.5);
-    arrowImg.tintColor = TOKENS.textMuted;
+    const checkSym = SFSymbol.named("bolt.shield.fill");
+    checkSym.applyFont(Font.systemFont(9));
+    const checkImg = footRow.addImage(checkSym.image);
+    checkImg.imageSize = new Size(9.5, 9.5);
+    checkImg.tintColor = TOKENS.textMuted;
   } catch (_) {}
 
-  const footTxt = footRow.addText("Chạm vào tài khoản để chuyển đổi ưu tiên #1");
+  const footTxt = footRow.addText("CodexBar Proxy · Tự động cân bằng tải Pool");
   footTxt.font = Font.systemFont(10);
   footTxt.textColor = TOKENS.textMuted;
   footRow.addSpacer();
 }
 
 // ==========================================
-// INTERACTIVE SWITCHER CHO 3 TÀI KHOẢN
+// INTERACTIVE SWITCHER CHO APP SCRIPTABLE
 // ==========================================
 async function showInteractiveSwitcher(data) {
   const accounts = data.pool?.accounts || [];
@@ -720,47 +719,9 @@ async function showInteractiveSwitcher(data) {
 }
 
 // ==========================================
-// MAIN ENTRY
+// MAIN ENTRY: THUẦN HIỂN THỊ TĨNH 100%
 // ==========================================
 async function main() {
-  // 1. Xử lý chạm trực tiếp (Native deep-link chuyển tài khoản khi bấm vào hàng tài khoản trên Home Screen)
-  if (args.queryParameters && args.queryParameters.action === "switch" && args.queryParameters.email) {
-    const targetEmail = args.queryParameters.email;
-    try {
-      const req = new Request(URLS.SET_PRIORITY);
-      req.method = "POST";
-      req.headers = { "Content-Type": "application/json" };
-      req.body = JSON.stringify({ email: targetEmail });
-      req.timeoutInterval = 3;
-      await req.loadJSON();
-
-      // Bắn thông báo xác nhận tinh tế
-      const notif = new Notification();
-      notif.title = "⚡ CodexBar - Claude";
-      notif.body = `Đã chuyển ${targetEmail.split("@")[0]} lên ưu tiên số #1 (Drain First).`;
-      notif.schedule();
-    } catch (_) {}
-
-    // Kéo dữ liệu mới và cập nhật widget ngay lập tức
-    const updatedData = await fetchPoolData();
-    const w = new ListWidget();
-    const grad = new LinearGradient();
-    grad.locations = [0.0, 1.0];
-    grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
-    w.backgroundGradient = grad;
-    const family = config.widgetFamily || "large";
-    if (family === "small") buildSmallWidget(w, updatedData);
-    else if (family === "medium") buildMediumWidget(w, updatedData);
-    else buildLargeWidget(w, updatedData);
-    w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
-    Script.setWidget(w);
-
-    // Tự động quay về Home Screen ngay lập tức (không giữ chân trong Scriptable)
-    Safari.open("shortcuts://");
-    Script.complete();
-    return;
-  }
-
   const data = await fetchPoolData();
 
   const w = new ListWidget();
@@ -769,8 +730,8 @@ async function main() {
   grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
   w.backgroundGradient = grad;
 
-  // TUYỆT ĐỐI KHÔNG GÁN w.url tổng để tránh bị văng app Scriptable khi chạm vào vùng trống
-  const family = config.widgetFamily || (config.runsInWidget ? "large" : "large");
+  // TUYỆT ĐỐI KHÔNG GÁN BẤT KỲ URL NÀO ĐỂ WIDGET HOÀN TOÀN TĨNH NGOÀI HOME SCREEN
+  const family = config.widgetFamily || "large";
   if (family === "small") {
     buildSmallWidget(w, data);
   } else if (family === "medium") {
@@ -782,10 +743,22 @@ async function main() {
   w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
   Script.setWidget(w);
 
-  if (!config.runsInWidget) {
-    if (family === "small") await w.presentSmall();
-    else if (family === "medium") await w.presentMedium();
-    else await w.presentLarge();
+  // Chỉ khi người dùng chủ động mở app Scriptable thì mới mở xem trước hoặc chọn switcher
+  if (config.runsInApp) {
+    await showInteractiveSwitcher(data);
+    const updatedData = await fetchPoolData();
+    const previewWidget = new ListWidget();
+    previewWidget.backgroundGradient = grad;
+    if (family === "small") {
+      buildSmallWidget(previewWidget, updatedData);
+      await previewWidget.presentSmall();
+    } else if (family === "medium") {
+      buildMediumWidget(previewWidget, updatedData);
+      await previewWidget.presentMedium();
+    } else {
+      buildLargeWidget(previewWidget, updatedData);
+      await previewWidget.presentLarge();
+    }
   }
 }
 
