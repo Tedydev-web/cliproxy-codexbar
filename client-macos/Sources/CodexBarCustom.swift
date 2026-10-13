@@ -595,62 +595,6 @@ struct ClaudeFullCardView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            
-            Divider()
-            
-            // 6. Ubuntu Host System & Ports Manager
-            Button(action: {
-                AppDelegate.shared?.openSystemManagerWindow()
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 14, height: 14)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text("Ubuntu Server Hub")
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(.primary)
-                            
-                            Spacer()
-                            
-                            Text("Uptime: \(self.state.sysMetrics.uptime)")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.tertiary)
-                        }
-                        
-                        HStack(spacing: 6) {
-                            Text("CPU \(Int(self.state.sysMetrics.cpuPercent))%")
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(self.state.sysMetrics.cpuPercent > 80 ? Color.red : Color.primary.opacity(0.85))
-                            Text("·")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            Text("RAM \(Int(self.state.sysMetrics.ramPercent))%")
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(self.state.sysMetrics.ramPercent > 85 ? Color.orange : Color.primary.opacity(0.85))
-                            Text("·")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            Text("\(self.state.sysPorts.count) ports")
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)
@@ -861,62 +805,6 @@ struct AntigravityFullCardView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            
-            Divider()
-            
-            // 5. Ubuntu Server Hub
-            Button(action: {
-                AppDelegate.shared?.openSystemManagerWindow()
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 14, height: 14)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text("Ubuntu Server Hub")
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(.primary)
-                            
-                            Spacer()
-                            
-                            Text("Uptime: \(self.state.sysMetrics.uptime)")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.tertiary)
-                        }
-                        
-                        HStack(spacing: 6) {
-                            Text("CPU \(Int(self.state.sysMetrics.cpuPercent))%")
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(self.state.sysMetrics.cpuPercent > 80 ? Color.red : Color.primary.opacity(0.85))
-                            Text("·")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            Text("RAM \(Int(self.state.sysMetrics.ramPercent))%")
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .foregroundStyle(self.state.sysMetrics.ramPercent > 85 ? Color.orange : Color.primary.opacity(0.85))
-                            Text("·")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            Text("\(self.state.sysPorts.count) ports")
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -2454,12 +2342,212 @@ struct SystemManagerView: View {
     }
 }
 
+// MARK: - Dedicated Ubuntu Server Quick Menu View (Exact 1:1 CodexBar Pattern)
+struct UbuntuServerQuickMenuView: View {
+    @ObservedObject var state: QuotaState
+    
+    var devPorts: [PortInfo] {
+        return state.sysPorts.filter { $0.port >= 3000 && $0.port != 41641 }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            // 1. Header (Ubuntu Host Identity & Status)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Ubuntu Host")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Text("100.127.1.234")
+                        .font(.subheadline.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Uptime: \(self.state.sysMetrics.uptime)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
+                            .frame(width: 6, height: 6)
+                        Text("Online")
+                            .font(.subheadline)
+                            .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // 2. Hardware Resource Metrics (Exact CodexBar MetricRow pattern with progress bar)
+            VStack(alignment: .leading, spacing: 10) {
+                MetricRow(
+                    title: "CPU: \(Int(self.state.sysMetrics.cpuPercent))% · \(self.state.sysMetrics.cpuCount) Cores",
+                    percent: self.state.sysMetrics.cpuPercent,
+                    resetText: "Load: \(self.state.sysMetrics.loadAvg.map { String(format: "%.2f", $0) }.joined(separator: " "))",
+                    tint: self.state.sysMetrics.cpuPercent > 80 ? Color.red : Color(red: 52/255, green: 199/255, blue: 89/255)
+                )
+                
+                MetricRow(
+                    title: "RAM: \(Int(self.state.sysMetrics.ramPercent))% đã dùng",
+                    percent: self.state.sysMetrics.ramPercent,
+                    resetText: "\(String(format: "%.1f", self.state.sysMetrics.ramUsedGb)) / \(String(format: "%.1f", self.state.sysMetrics.ramTotalGb)) GB",
+                    tint: self.state.sysMetrics.ramPercent > 85 ? Color.orange : Color(red: 0/255, green: 195/255, blue: 137/255)
+                )
+                
+                MetricRow(
+                    title: "Ổ cứng (/): \(Int(self.state.sysMetrics.diskPercent))% đã dùng",
+                    percent: self.state.sysMetrics.diskPercent,
+                    resetText: "\(String(format: "%.0f", self.state.sysMetrics.diskUsedGb)) / \(String(format: "%.0f", self.state.sysMetrics.diskTotalGb)) GB",
+                    tint: Color(red: 175/255, green: 82/255, blue: 222/255)
+                )
+            }
+            
+            Divider()
+            
+            // 3. Quick Dev Ports & Kill (Bordered rows like CodexBar Pool Accounts)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Cổng Dev Đang Mở (Quick Kill)")
+                        .font(.footnote)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(self.devPorts.count) ports")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                
+                if self.devPorts.isEmpty {
+                    Text("Không có cổng dev nào đang mở.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 4)
+                } else {
+                    ForEach(Array(self.devPorts.prefix(4))) { p in
+                        HStack(alignment: .center, spacing: 6) {
+                            Text(":\(p.port)")
+                                .font(.system(size: 11.5, weight: .bold, design: .monospaced))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 55, alignment: .leading)
+                            
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 4) {
+                                    Text(p.process)
+                                        .font(.system(size: 11, weight: .medium))
+                                    if let pid = p.pid {
+                                        Text("(\(pid))")
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                if !p.cwd.isEmpty {
+                                    Text(p.cwd)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                self.state.killPort(port: p.port, pid: p.pid)
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.red.opacity(0.85))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Tắt cổng :\(p.port)")
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(4)
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // 4. Quick Services & Tunnels Overview Row (Clickable -> Opens Hub Window)
+            Button(action: {
+                AppDelegate.shared?.openSystemManagerWindow()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "server.rack")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 14, height: 14)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("Bảng điều khiển chi tiết")
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(.primary)
+                            
+                            Spacer()
+                            
+                            Text("Mở Hub Window")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                        }
+                        
+                        HStack(spacing: 6) {
+                            Text("CLIProxy")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                            Text("·")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("Herdr")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                            Text("·")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("\(self.state.sysTunnels.count) Tunnels")
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(Color.accentColor)
+                            Text("·")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                            Text("\(self.state.sysDocker.count) Docker")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+        .frame(width: 365, alignment: .topLeading)
+    }
+}
+
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static var shared: AppDelegate?
     
     var claudeItem: NSStatusItem!
     var agyItem: NSStatusItem!
+    var ubuntuItem: NSStatusItem!
     
     let state = QuotaState()
     var timer: Timer?
@@ -2478,6 +2566,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     var claudeHostingView: NSView?
     var agyHostingView: NSView?
+    var ubuntuHostingView: NSView?
     
     func adjustMenuHostingHeights() {
         if let ch = claudeHostingView {
@@ -2490,6 +2579,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let h = ah.fittingSize.height
             if h > 100 {
                 ah.frame = NSRect(x: 0, y: 0, width: 365, height: h)
+            }
+        }
+        if let uh = ubuntuHostingView {
+            let h = uh.fittingSize.height
+            if h > 100 {
+                uh.frame = NSRect(x: 0, y: 0, width: 365, height: h)
             }
         }
     }
@@ -2581,6 +2676,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         claudeMenu.delegate = self
         claudeItem.menu = claudeMenu
         
+        // 3. Ubuntu Server Hub Item & Native NSMenu (Dedicated MenuBar Module)
+        ubuntuItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let btn = ubuntuItem.button {
+            if let img = NSImage(systemSymbolName: "cpu", accessibilityDescription: nil) {
+                img.isTemplate = true
+                btn.image = img
+                btn.imagePosition = .imageLeading
+            }
+            btn.title = " C \(Int(state.sysMetrics.cpuPercent))% · M \(Int(state.sysMetrics.ramPercent))% · \(state.sysPorts.count)P"
+        }
+        let ubuntuMenu = NSMenu()
+        let ubuntuMenuItem = NSMenuItem()
+        let ubuntuHosting = MenuHostingView(rootView: UbuntuServerQuickMenuView(state: state))
+        self.ubuntuHostingView = ubuntuHosting
+        let ubuntuHeight = ubuntuHosting.fittingSize.height
+        let finalUbuntuH = (ubuntuHeight > 100 && ubuntuHeight < 900) ? ubuntuHeight : 490
+        ubuntuHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalUbuntuH)
+        ubuntuMenuItem.view = ubuntuHosting
+        ubuntuMenu.addItem(ubuntuMenuItem)
+        ubuntuMenu.addItem(NSMenuItem.separator())
+        
+        let openHubWindowItem = NSMenuItem(title: "Mở Hub Quản lý Toàn diện", action: #selector(self.openHubWindowClicked), keyEquivalent: "u")
+        if let img = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: nil) {
+            openHubWindowItem.image = img
+        }
+        ubuntuMenu.addItem(openHubWindowItem)
+        
+        let ubuntuRefreshItem = NSMenuItem(title: "Làm mới", action: #selector(self.refreshClicked), keyEquivalent: "r")
+        if let img = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil) {
+            ubuntuRefreshItem.image = img
+        }
+        ubuntuMenu.addItem(ubuntuRefreshItem)
+        
+        let ubuntuQuitItem = NSMenuItem(title: "Thoát", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        if let img = NSImage(systemSymbolName: "xmark.square", accessibilityDescription: nil) {
+            ubuntuQuitItem.image = img
+        }
+        ubuntuMenu.addItem(ubuntuQuitItem)
+        ubuntuMenu.delegate = self
+        ubuntuItem.menu = ubuntuMenu
+        
         state.onUpdate = { [weak self] in
             guard let self = self else { return }
             if let btn = self.claudeItem.button {
@@ -2601,11 +2737,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 agyBtn.title = " 5h \(self.state.agyGemini5hRemaining)% · W \(self.state.agyGeminiWeeklyRemaining)%"
             }
+            if let uBtn = self.ubuntuItem.button {
+                if uBtn.image == nil {
+                    if let img = NSImage(systemSymbolName: "cpu", accessibilityDescription: nil) {
+                        img.isTemplate = true
+                        uBtn.image = img
+                        uBtn.imagePosition = .imageLeading
+                    }
+                }
+                uBtn.title = " C \(Int(self.state.sysMetrics.cpuPercent))% · M \(Int(self.state.sysMetrics.ramPercent))% · \(self.state.sysPorts.count)P"
+            }
             self.adjustMenuHostingHeights()
         }
         
         state.fetchData()
         updateTimer()
+    }
+    
+    @objc func openHubWindowClicked() {
+        openSystemManagerWindow()
     }
     
     func updateTimer() {
