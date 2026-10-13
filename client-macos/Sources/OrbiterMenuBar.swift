@@ -2573,10 +2573,60 @@ struct UbuntuServerQuickMenuView: View {
                     }
                 }
             }
+            
+            Divider()
+                .padding(.top, 2)
+            
+            // Bottom Utility Action Bar
+            HStack(spacing: 12) {
+                Button(action: {
+                    AppDelegate.shared?.closeUbuntuPopover()
+                    AppDelegate.shared?.openSystemManagerWindow()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "macwindow.on.rectangle")
+                            .font(.system(size: 11))
+                        Text("Hub chi tiết")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                
+                Button(action: {
+                    self.state.fetchSystemData()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10.5))
+                        Text("Làm mới")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                
+                Spacer()
+                
+                Button(action: {
+                    NSApplication.shared.terminate(nil)
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: 11))
+                        Text("Thoát")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 2)
+            .padding(.bottom, 2)
         }
         .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 6)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
         .frame(width: 365, alignment: .topLeading)
     }
 }
@@ -2588,6 +2638,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var claudeItem: NSStatusItem!
     var agyItem: NSStatusItem!
     var ubuntuItem: NSStatusItem!
+    var ubuntuPopover: NSPopover?
+    private var popoverEventMonitor: Any?
     
     let state = QuotaState()
     var timer: Timer?
@@ -2721,7 +2773,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         claudeMenu.delegate = self
         claudeItem.menu = claudeMenu
         
-        // 3. Ubuntu Server Hub Item & Native NSMenu (Dedicated MenuBar Module)
+        // 3. Ubuntu Server Hub Item & Interactive Popover (Full Keyboard Focus for Search)
         ubuntuItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let btn = ubuntuItem.button {
             if let img = NSImage(systemSymbolName: "cpu", accessibilityDescription: nil) {
@@ -2731,37 +2783,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             let diskFreeInt = Int(state.sysMetrics.diskFreePercent)
             btn.title = " C \(Int(state.sysMetrics.cpuPercent))% · M \(Int(state.sysMetrics.ramPercent))% · D \(diskFreeInt)%"
+            btn.target = self
+            btn.action = #selector(self.ubuntuButtonClicked(_:))
+            btn.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        let ubuntuMenu = NSMenu()
-        let ubuntuMenuItem = NSMenuItem()
-        let ubuntuHosting = MenuHostingView(rootView: UbuntuServerQuickMenuView(state: state))
-        self.ubuntuHostingView = ubuntuHosting
-        let ubuntuHeight = ubuntuHosting.fittingSize.height
-        let finalUbuntuH = (ubuntuHeight > 100 && ubuntuHeight < 900) ? ubuntuHeight : 490
-        ubuntuHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalUbuntuH)
-        ubuntuMenuItem.view = ubuntuHosting
-        ubuntuMenu.addItem(ubuntuMenuItem)
-        ubuntuMenu.addItem(NSMenuItem.separator())
         
-        let openHubWindowItem = NSMenuItem(title: "Mở Hub Quản lý Toàn diện", action: #selector(self.openHubWindowClicked), keyEquivalent: "u")
-        if let img = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: nil) {
-            openHubWindowItem.image = img
-        }
-        ubuntuMenu.addItem(openHubWindowItem)
-        
-        let ubuntuRefreshItem = NSMenuItem(title: "Làm mới", action: #selector(self.refreshClicked), keyEquivalent: "r")
-        if let img = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil) {
-            ubuntuRefreshItem.image = img
-        }
-        ubuntuMenu.addItem(ubuntuRefreshItem)
-        
-        let ubuntuQuitItem = NSMenuItem(title: "Thoát", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        if let img = NSImage(systemSymbolName: "xmark.square", accessibilityDescription: nil) {
-            ubuntuQuitItem.image = img
-        }
-        ubuntuMenu.addItem(ubuntuQuitItem)
-        ubuntuMenu.delegate = self
-        ubuntuItem.menu = ubuntuMenu
+        let pop = NSPopover()
+        pop.behavior = .transient
+        pop.contentViewController = NSHostingController(rootView: UbuntuServerQuickMenuView(state: state))
+        self.ubuntuPopover = pop
         
         state.onUpdate = { [weak self] in
             guard let self = self else { return }
@@ -2805,6 +2835,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     @objc func openHubWindowClicked() {
         openSystemManagerWindow()
+    }
+    
+    @objc func ubuntuButtonClicked(_ sender: NSStatusBarButton) {
+        guard let pop = ubuntuPopover else { return }
+        if pop.isShown {
+            closeUbuntuPopover()
+        } else {
+            showUbuntuPopover(sender)
+        }
+    }
+    
+    func showUbuntuPopover(_ sender: NSStatusBarButton) {
+        guard let pop = ubuntuPopover else { return }
+        state.fetchSystemData()
+        pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Remove existing monitor if any
+        if let m = popoverEventMonitor {
+            NSEvent.removeMonitor(m)
+            popoverEventMonitor = nil
+        }
+        
+        popoverEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            guard let self = self, let p = self.ubuntuPopover, p.isShown else { return }
+            self.closeUbuntuPopover()
+        }
+    }
+    
+    func closeUbuntuPopover() {
+        ubuntuPopover?.performClose(nil)
+        if let m = popoverEventMonitor {
+            NSEvent.removeMonitor(m)
+            popoverEventMonitor = nil
+        }
     }
     
     func updateTimer() {
