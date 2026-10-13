@@ -24,7 +24,7 @@ class SystemProvider:
         try:
             mem = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
-            cpu = psutil.cpu_percent(interval=0.05)
+            cpu = psutil.cpu_percent(interval=0.1)
             load = os.getloadavg()
             uptime_seconds = int(time.time() - psutil.boot_time())
             
@@ -77,13 +77,72 @@ class SystemProvider:
                             
                             cmd_full = cmd_name
                             cwd_str = ""
+                            display_process = cmd_name
+                            project_hint = ""
+                            is_ide_internal = False
+                            
                             if pid:
                                 try:
                                     p = psutil.Process(pid)
                                     cmdline = p.cmdline()
+                                    exe = p.exe()
+                                    cwd_str = p.cwd()
                                     if cmdline:
                                         cmd_full = " ".join(cmdline)
-                                    cwd_str = p.cwd()
+                                    
+                                    # Detect IDE internal background listener
+                                    if "cursor-server" in exe or "cursor-server" in cmd_full or ".vscode-server" in exe:
+                                        is_ide_internal = True
+                                        display_process = "Cursor / IDE Internal"
+                                    elif "agy" in exe or "agy" in cmd_full:
+                                        is_ide_internal = True
+                                        display_process = "Antigravity CLI"
+                                    elif "node" in exe or "node" in cmd_name.lower():
+                                        # Check framework in cmd_full or script args
+                                        if "react-router" in cmd_full:
+                                            display_process = "React Router (Dev)"
+                                        elif "next" in cmd_full:
+                                            display_process = "Next.js (Dev)"
+                                        elif "vite" in cmd_full:
+                                            display_process = "Vite (Dev)"
+                                        elif "remix" in cmd_full:
+                                            display_process = "Remix (Dev)"
+                                        elif "nuxt" in cmd_full:
+                                            display_process = "Nuxt (Dev)"
+                                        elif "astro" in cmd_full:
+                                            display_process = "Astro (Dev)"
+                                        else:
+                                            # Find script name
+                                            script_name = ""
+                                            for arg in cmdline[1:]:
+                                                if not arg.startswith("-") and ("/" in arg or arg.endswith(".js")):
+                                                    script_name = os.path.basename(arg)
+                                                    break
+                                            display_process = f"node ({script_name})" if script_name else "Node.js"
+                                    elif "python" in exe or "python" in cmd_name.lower():
+                                        py_script = ""
+                                        for arg in cmdline[1:]:
+                                            if not arg.startswith("-") and arg.endswith(".py"):
+                                                py_script = os.path.basename(arg)
+                                                break
+                                        display_process = f"python ({py_script})" if py_script else "Python"
+                                    elif "cli-proxy" in exe or "cli-proxy" in cmd_name:
+                                        display_process = "CLIProxy API"
+                                    elif "workerd" in exe:
+                                        display_process = "Cloudflare Worker"
+                                    elif "ssh" in exe:
+                                        display_process = "SSH Tunnel"
+
+                                    # Extract clean project workspace relative path
+                                    if cwd_str:
+                                        if "/Documents/workspace/" in cwd_str:
+                                            project_hint = cwd_str.split("/Documents/workspace/")[-1]
+                                        elif "/opt/" in cwd_str:
+                                            project_hint = cwd_str.split("/opt/")[-1]
+                                        elif cwd_str == "/home/tedydev":
+                                            project_hint = "~"
+                                        else:
+                                            project_hint = os.path.basename(cwd_str)
                                 except Exception:
                                     pass
 
@@ -91,11 +150,14 @@ class SystemProvider:
                                 "port": port,
                                 "host": host,
                                 "pid": pid,
-                                "process": cmd_name,
-                                "command": cmd_full[:120],
+                                "process": display_process,
+                                "raw_process": cmd_name,
+                                "project": project_hint,
+                                "command": cmd_full[:140],
                                 "cwd": cwd_str,
                                 "user": user,
-                                "is_docker": "docker" in cmd_name or "containerd" in cmd_name
+                                "is_docker": "docker" in cmd_name or "containerd" in cmd_name,
+                                "is_internal": is_ide_internal
                             }
         except Exception:
             pass

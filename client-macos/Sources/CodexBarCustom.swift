@@ -353,6 +353,8 @@ struct PortInfo: Identifiable {
     let cwd: String
     let user: String
     let isDocker: Bool
+    let project: String
+    let isInternal: Bool
 }
 
 struct ServiceInfo: Identifiable {
@@ -1231,7 +1233,9 @@ class QuotaState: ObservableObject {
                         let cwd = p["cwd"] as? String ?? ""
                         let u = p["user"] as? String ?? ""
                         let isD = p["is_docker"] as? Bool ?? false
-                        pList.append(PortInfo(port: pt, host: h, pid: pid, process: proc, command: cmd, cwd: cwd, user: u, isDocker: isD))
+                        let proj = p["project"] as? String ?? ""
+                        let isInt = p["is_internal"] as? Bool ?? false
+                        pList.append(PortInfo(port: pt, host: h, pid: pid, process: proc, command: cmd, cwd: cwd, user: u, isDocker: isD, project: proj, isInternal: isInt))
                     }
                     self.sysPorts = pList
                 }
@@ -2275,8 +2279,12 @@ struct SystemManagerView: View {
 struct UbuntuServerQuickMenuView: View {
     @ObservedObject var state: QuotaState
     
-    var devPorts: [PortInfo] {
-        return state.sysPorts.filter { $0.port >= 3000 && $0.port != 41641 }
+    var activeDevPorts: [PortInfo] {
+        // Priority to actual user dev servers (non-internal, dev ports)
+        let primary = state.sysPorts.filter { !$0.isInternal && $0.port != 8317 && $0.port != 8318 }
+        if !primary.isEmpty { return primary }
+        // Fallback to non-IDE internal
+        return state.sysPorts.filter { !$0.isInternal }
     }
     
     var body: some View {
@@ -2336,7 +2344,7 @@ struct UbuntuServerQuickMenuView: View {
             
             Divider()
             
-            // 3. Quick Dev Ports & Kill (Bordered rows like CodexBar Pool Accounts)
+            // 3. Quick Dev Ports & Kill (Clean CodexBar list)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("Cổng Dev Đang Mở (Quick Kill)")
@@ -2344,23 +2352,23 @@ struct UbuntuServerQuickMenuView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(self.devPorts.count) ports")
+                    Text("\(self.activeDevPorts.count) cổng hoạt động")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
                 
-                if self.devPorts.isEmpty {
-                    Text("Không có cổng dev nào đang mở.")
+                if self.activeDevPorts.isEmpty {
+                    Text("Không có tiến trình dev nào đang chiếm cổng.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 4)
                 } else {
-                    ForEach(Array(self.devPorts.prefix(4))) { p in
+                    ForEach(Array(self.activeDevPorts.prefix(5))) { p in
                         HStack(alignment: .center, spacing: 6) {
                             Text(":\(p.port)")
                                 .font(.system(size: 11.5, weight: .bold, design: .monospaced))
                                 .foregroundStyle(Color.accentColor)
-                                .frame(width: 55, alignment: .leading)
+                                .frame(width: 58, alignment: .leading)
                             
                             VStack(alignment: .leading, spacing: 1) {
                                 HStack(spacing: 4) {
@@ -2372,7 +2380,13 @@ struct UbuntuServerQuickMenuView: View {
                                             .foregroundStyle(.tertiary)
                                     }
                                 }
-                                if !p.cwd.isEmpty {
+                                if !p.project.isEmpty {
+                                    Text(p.project)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                } else if !p.cwd.isEmpty {
                                     Text(p.cwd)
                                         .font(.system(size: 9, design: .monospaced))
                                         .foregroundStyle(.secondary)
@@ -2391,10 +2405,10 @@ struct UbuntuServerQuickMenuView: View {
                                     .foregroundStyle(Color.red.opacity(0.85))
                             }
                             .buttonStyle(.plain)
-                            .help("Tắt cổng :\(p.port)")
+                            .help("Dừng tiến trình trên cổng :\(p.port)")
                         }
                         .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
+                        .padding(.vertical, 3.5)
                         .background(Color.white.opacity(0.04))
                         .cornerRadius(4)
                     }
@@ -2488,6 +2502,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         state.updateAgoText()
         self.adjustMenuHostingHeights()
+        // Always refresh host telemetry immediately on click for true real-time responsiveness
+        state.fetchSystemData()
         if state.refreshOnOpen {
             state.fetchData()
         }
@@ -2674,7 +2690,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         uBtn.imagePosition = .imageLeading
                     }
                 }
-                uBtn.title = " C \(Int(self.state.sysMetrics.cpuPercent))% · M \(Int(self.state.sysMetrics.ramPercent))% · \(self.state.sysPorts.count)P"
+                let activeDevCount = self.state.sysPorts.filter { !$0.isInternal && $0.port != 8317 && $0.port != 8318 }.count
+                uBtn.title = " C \(Int(self.state.sysMetrics.cpuPercent))% · M \(Int(self.state.sysMetrics.ramPercent))% · \(activeDevCount)P"
             }
             self.adjustMenuHostingHeights()
         }
