@@ -823,6 +823,24 @@ struct SettingsView: View {
             
             Divider()
             
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle("Hiển thị chi phí DeepSeek Gateway trên Menubar", isOn: Binding(
+                    get: { self.state.showGatewaySpendOnMenubar },
+                    set: { newVal in
+                        self.state.showGatewaySpendOnMenubar = newVal
+                        UserDefaults.standard.set(newVal, forKey: "show_gateway_spend_on_menubar")
+                        self.state.onUpdate?()
+                    }
+                ))
+                .font(.headline)
+                
+                Text("Hiển thị thông số chi phí đã tiêu thụ (vd: $0.00786) kèm theo Quota 5h và 7d trên thanh Menubar macOS.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Divider()
+            
             VStack(alignment: .leading, spacing: 10) {
                 Text("Tần suất làm mới dữ liệu:")
                     .font(.headline)
@@ -946,6 +964,7 @@ class QuotaState: ObservableObject {
     @Published var bridgeHost: String = UserDefaults.standard.string(forKey: "quota_bridge_host") ?? "http://100.127.1.234:8318"
     @Published var refreshOnOpen: Bool = UserDefaults.standard.bool(forKey: "quota_refresh_on_open")
     @Published var refreshInterval: Int = UserDefaults.standard.integer(forKey: "quota_refresh_interval") == 0 ? 60 : UserDefaults.standard.integer(forKey: "quota_refresh_interval")
+    @Published var showGatewaySpendOnMenubar: Bool = UserDefaults.standard.object(forKey: "show_gateway_spend_on_menubar") == nil ? true : UserDefaults.standard.bool(forKey: "show_gateway_spend_on_menubar")
     
     var baseUrl: String {
         let host = bridgeHost.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1205,8 +1224,8 @@ let ICON_CLAUDE_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IAr
 
 let ICON_AGY_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAJxsHGAAACaUlEQVRYCe2XwUtVQRTGfSphQmBqIRhtkmgjESL4SjCIQMKIai2Em6BlC2lfEQiiixYtIvoHWuXahS7ColVGkVAthAjUTSqo4Os3oL7HuWdmzni5DwQHPt6dc77vO+fOXObe19BwPI7YCpTy9lupVAbwuAKawBcwXyqVdvmt76CRHvAZyPGdgGuwfoOCl8CK7KRmvs51uS4dUagFfK0p7rtcJtFeeFMUGfd1oMSnCm2Igq1gTSnsC22R6EppqjGFDHcUnE7QnID7MIGfRuVuF3xLEYj/Jpf7eMl0iumFQNFY6mrG0BNI2bJ7Hg9L+L6F5DgpDd22mio8s9a0t+xHG0VWgHs9HHZc5JWyFBNbV+gmRnmacX0Mx5pxeWtDJrNIQZOHdcuWKdYdKRhLb0JoZ9u2QsToCvH89GKQtxnXQysYchehEW0I8YjHwH3zvAXXwRnQCdx58xLsAG34vDSuHmOFPiin3gYx7zNBbgCsKrqfehVjFMNzYFcxvhuzQDMIdhRtX0zrzWP2WDF84xWIBNrnin5C0OxTzBaF4V/m5rc9XPcx90N4/GHebO9ij4nomjBy07FUIzS3FB/zu+2gHibvhdFH5qZz68CkenMzwuuT5ATniPuFwTbzy0FRIIn2PPgnPG0vXERNQP69eRqoZ0rh+Ug09Iu5OyzDA9IzIZxjnv4QKmXweSe8Xyu0agjyAyH4xryjysh3hZf7kyAP2ieqK8QyqD3I3LadVck5gnieArNgf7iDN3vqE5zeYzjCK3AyR92gFO9m8ALsL8BkRkCyDdwBPZlkQQFqdYMboLCbL6j1Y9vqCvwHoDyc53bTRvcAAAAASUVORK5CYII="
 
-// Official DeepSeek Whale Brand Icon from steipete/CodexBar
-let ICON_DEEPSEEK_B64 = "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"
+// Official DeepSeek Whale Brand Icon from steipete/CodexBar (Clean 48x48 PNG)
+let ICON_DEEPSEEK_B64 = "iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABmJLR0QA/wD/AP+gvaeTAAAHXUlEQVRoge2ZfYxcZRXGf8+d3U4pFJCWpah8hCjFgKF+RPzAhKqxLO1MWUiJ1aBAcdPOzoqYIFQFNxpBCASa7g6lWjSGALJa6MxWBBpSEwULrUYkVGOjUmzB7oavbdjSztzHP3ZnOzs7d+fOdP2DhOe/e85zznnevPe+73nfC+/iXbyzsXiVz7ioy6c1G98ynWLK6OlxsGOQBYbTAjOSbOPJ/h4drMVNBL7VeAT4ajO1dERKq5DO+r0OwwzS1cBJY2ZbWj7Qq19W89u7nWwJPQTsHz5Rp2ztUbHRmrFmoKfHwZ8GOT90uBBxltDxMkdbHATvguBfwh+3vRSpdWK0VtcSDxDAJ4BjgGOOHaILWDPNA7DSXVy5Y9DfBc6QVOEZF/h5MK6d4NWZ+7g9KnvCzCvH2b4jlS3NGd4f3Lz15zowlapUxleAlxZyQUcQSer03FSXtxhvAM6YKmEUBG/196sU5Q9Djq94TGDdOPtoP3NJp0+OiklnfCHyPQScBxEzsGSl30fCW4EPNCO8DMP7l3b7C5vWaksE5bUatg8favX9wEKAJd/wB1WiHcI5oA8ZdwAtmJdqDqC920mF3nyk4ssIQz+QyrijkNPvq31BwMuu/e5dcFHGCwKFl6nkbwOJ6vVG+B8Ak16hFoe3AOdOh/gxzEXeksq6vdqRPMjzQO3lVX5AaDWQqOW3gm1QNYB0xguxvnnkmichib0xnfHCSmP/er0B/C4i5qwp8tlFNsKEAViWb2ea94YKzLT86/Qqz59o1k+byPXkwDrtgYoBpLpYDHz0SBTGwHsceNOyTh9XNhT66AcmfR9ToCjphvLD4RmQV06LxPqYP9LqX/T0OCgXlnUl4uV44bou36vt5acAYNG1PgGzaPq1RkiA9PZ94Y3l53xOu8KivkjtZbWMg1hdhT7dVWkMAGa8zSL+T41dFCR9P5X1ivLz5nV6XrC1BvVF8N2JkuYXcspVO0dFK/xUxbf7ms0O4VcsHSs4hyZ34joQ9volWbcO9GodWMafriL05fsS2amStADIWjDe27RowcAa7a4kpa7xqZS4DLsbOHUaBxHIvntJV9iOuB+Pd7BlTPVKjSYAsBg/UMwMGKwmFdZod6FXtxcDnSmrG9jbgEjLuknS5YjHaxEEadkPTgqEMNYAgHllw8G3mRtFfnSt3s7n1Jto1dnApvraAfhPcpCb8726r9CrC23fFjMOK/h3PU6wbJkTwIyyoWja6gU9cpdeL/SpQ9L1QGS3OYZTDrR575Ku0oZlywgGcsENaHQXrYdEyN/rcYLBsxEcbucTibgfrJzv1W1CnZXxtWD0A6GLRtpYBLJQNzBcr8KBJH+rxwnGjnFvjBcLw4YauXyf7gV9a8oihPOAGZhZAPle7TX6YZ3Uex67U6/Wq1/+BobGLdJH6gVVY3Rz8R1RfqPvAScoODxTwQjrgDejs/oPcWoHYxWGKmyfXdbjGbXpPvj5ULFgNbZtwR3/d6q2/kX57gpe89d/EuhP0VtwJ5zszdO7tVd/L0Hpxx5zszdO7tVd/L0Hp1/oY8N96VdsAX7wVTWT0Z3/lQfC/eP3dD3p1d5kP/pB61vXfP/f4F3/hT9u1f/534139r/8f8B51H9N/m1W6IAAAAASUVORK5CYII="
 
 func loadTemplateIcon(name: String) -> NSImage? {
     if let img = NSImage(contentsOfFile: "/tmp/icon-\(name).png") {
@@ -1650,7 +1669,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 btn.image = ic
                 btn.imagePosition = .imageLeading
             }
-            btn.title = " 5h \(state.claude5h)% · W \(state.claude7d)%"
+            var title = " 5h \(state.claude5h)% · W \(state.claude7d)%"
+            if state.showGatewaySpendOnMenubar && !state.gwSpendFormatted.isEmpty {
+                title += " · 🐳 \(state.gwSpendFormatted)"
+            }
+            btn.title = title
         }
         let claudeMenu = NSMenu()
         let claudeMenuItem = NSMenuItem()
@@ -1690,7 +1713,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     btn.image = loadTemplateIcon(name: "claude")
                     btn.imagePosition = .imageLeading
                 }
-                btn.title = " 5h \(self.state.claude5h)% · W \(self.state.claude7d)%"
+                var title = " 5h \(self.state.claude5h)% · W \(self.state.claude7d)%"
+                if self.state.showGatewaySpendOnMenubar && !self.state.gwSpendFormatted.isEmpty {
+                    title += " · 🐳 \(self.state.gwSpendFormatted)"
+                }
+                btn.title = title
             }
             if let agyBtn = self.agyItem.button {
                 if agyBtn.image == nil {
