@@ -437,288 +437,192 @@ function buildSmallWidget(w, data) {
 }
 
 // ==========================================
-// LARGE WIDGET (4X4): ĐẦY ĐỦ 3 TÀI KHOẢN & TRẠNG THÁI NHƯ DESKTOP
+// LARGE WIDGET (4X4): APPLE DESIGN & CODEXBAR PATTERN (THOÁNG ĐẠT, KHÔNG CARD HÓA)
 // ==========================================
 function buildLargeWidget(w, data) {
   const hPadding = 14;
-  w.setPadding(12, hPadding, 12, hPadding);
+  w.setPadding(14, hPadding, 12, hPadding);
 
-  const accounts = data.pool?.accounts || [];
-  const acc0 = accounts[0] || {
-    name: "projectplayground2025@gmail.com",
-    plan: "Max 20x",
-    used_5h: 14,
-    remaining_5h: 86,
-    reset_5h: "1h 8m",
-    used_weekly: 17,
-    remaining_weekly: 83,
-    reset_weekly: "6d 15h",
-    is_available: true,
-    is_probe_error: false
-  };
-
+  const rawAccounts = data.pool?.accounts || [];
+  const accounts = rawAccounts.length > 0 ? rawAccounts : [
+    { name: "projectplayground2025@gmail.com", plan: "Max 20x", used_5h: 0, remaining_5h: 100, reset_5h: "4h 58m", used_weekly: 18, remaining_weekly: 82, reset_weekly: "6d 13h", is_available: true },
+    { name: "projecttoncorporation@gmail.com", plan: "Max 20x", used_5h: 0, remaining_5h: 100, reset_5h: "1m", used_weekly: 9, remaining_weekly: 91, reset_weekly: "6d 13h", is_available: true },
+    { name: "trthuhuyen2712@gmail.com", plan: "Max 5x", used_5h: 2, remaining_5h: 98, reset_5h: "2h 38m", used_weekly: 40, remaining_weekly: 60, reset_weekly: "5d 10h", is_available: true }
+  ];
   const contentW = getWidgetContentWidth("large", hPadding);
 
-  // --- 1. HEADER CHÍNH ---
-  const row1 = w.addStack();
-  row1.layoutHorizontally();
-  row1.centerAlignContent();
+  // --- 1. WIDGET HEADER (APPLE MINIMALIST) ---
+  const headerRow = w.addStack();
+  headerRow.layoutHorizontally();
+  headerRow.centerAlignContent();
 
-  const titleStack = row1.addStack();
+  const titleStack = headerRow.addStack();
   titleStack.layoutHorizontally();
   titleStack.centerAlignContent();
-  titleStack.spacing = 5;
+  titleStack.spacing = 6;
 
   const icon = titleStack.addImage(getClaudeIcon());
-  icon.imageSize = new Size(15, 15);
+  icon.imageSize = new Size(16, 16);
   icon.tintColor = TOKENS.orangeFill;
 
   const title = titleStack.addText("Claude");
   title.font = Font.boldSystemFont(16);
   title.textColor = TOKENS.textPrimary;
 
-  row1.addSpacer();
+  const subTitle = titleStack.addText("· Pool Quota");
+  subTitle.font = Font.systemFont(13);
+  subTitle.textColor = TOKENS.textSecondary;
 
-  const emailStack = row1.addStack();
-  emailStack.layoutHorizontally();
-  emailStack.centerAlignContent();
-  emailStack.spacing = 4;
+  headerRow.addSpacer();
 
-  const star = emailStack.addText("★ #1");
-  star.font = Font.boldSystemFont(11);
-  star.textColor = TOKENS.orangeFill;
-
-  const email = emailStack.addText(acc0.name);
-  email.font = Font.systemFont(11.5);
-  email.textColor = TOKENS.textSecondary;
-  email.lineLimit = 1;
-
-  w.addSpacer(2);
-
-  const row2 = w.addStack();
-  row2.layoutHorizontally();
-  row2.centerAlignContent();
-
-  const agoText = formatAgoText(data.time);
-  const syncTxt = row2.addText(agoText);
-  syncTxt.font = Font.systemFont(10);
-  syncTxt.textColor = TOKENS.textSecondary;
-
-  row2.addSpacer();
-
-  const planTxt = row2.addText(`Gói ${acc0.plan || "Max 20x"}`);
-  planTxt.font = Font.systemFont(10.5);
-  planTxt.textColor = TOKENS.textSecondary;
-
-  w.addSpacer(5);
-
-  // Hairline Divider
-  const div1 = w.addStack();
-  div1.size = new Size(0, 0.5);
-  div1.backgroundColor = TOKENS.cardBorder;
-
-  w.addSpacer(6);
-
-  // --- 2. QUOTA TÀI KHOẢN #1 (ĐANG ƯU TIÊN SỐ 1) ---
-  const reset5hFormatted = formatResetWithEst(acc0.reset_5h);
-  const resetWkFormatted = formatResetWithEst(acc0.reset_weekly);
-
-  // Phiên 5h
-  const p5Head = w.addStack();
-  p5Head.layoutHorizontally();
-  p5Head.centerAlignContent();
-
-  const p5Title = p5Head.addText(`Phiên 5h: ${acc0.used_5h}% đã dùng`);
-  p5Title.font = Font.boldSystemFont(12);
-  p5Title.textColor = TOKENS.textPrimary;
-
-  p5Head.addSpacer();
-
-  const p5Reset = p5Head.addText(reset5hFormatted);
-  p5Reset.font = Font.systemFont(10);
-  p5Reset.textColor = TOKENS.textSecondary;
-
-  w.addSpacer(3);
-
-  const bar5 = drawSegmentedBar(contentW, 5, acc0.used_5h, TOKENS.orangeFill, acc0.remaining_5h);
-  const v5 = w.addImage(bar5);
-  v5.imageSize = new Size(contentW, 5);
-  v5.leftAlignImage();
-
-  w.addSpacer(2);
-
-  const sub5 = w.addText(`${acc0.remaining_5h}% dự trữ nhịp độ`);
-  sub5.font = Font.systemFont(9);
-  sub5.textColor = TOKENS.textMuted;
-
-  w.addSpacer(5);
-
-  // Hàng tuần
-  const pWkHead = w.addStack();
-  pWkHead.layoutHorizontally();
-  pWkHead.centerAlignContent();
-
-  const pWkTitle = pWkHead.addText(`Hàng tuần: ${acc0.used_weekly}% đã dùng`);
-  pWkTitle.font = Font.boldSystemFont(12);
-  pWkTitle.textColor = TOKENS.textPrimary;
-
-  pWkHead.addSpacer();
-
-  const pWkReset = pWkHead.addText(resetWkFormatted);
-  pWkReset.font = Font.systemFont(10);
-  pWkReset.textColor = TOKENS.textSecondary;
-
-  w.addSpacer(3);
-
-  const barWk = drawSegmentedBar(contentW, 5, acc0.used_weekly, TOKENS.orangeFill);
-  const vWk = w.addImage(barWk);
-  vWk.imageSize = new Size(contentW, 5);
-  vWk.leftAlignImage();
+  const agoText = formatAgoText(data.time).replace("Cập nhật lúc ", "");
+  const syncTxt = headerRow.addText(agoText);
+  syncTxt.font = Font.systemFont(10.5);
+  syncTxt.textColor = TOKENS.textMuted;
 
   w.addSpacer(7);
 
   // Hairline Divider
-  const div2 = w.addStack();
-  div2.size = new Size(0, 0.5);
-  div2.backgroundColor = TOKENS.cardBorder;
+  const headerDiv = w.addStack();
+  headerDiv.size = new Size(0, 0.5);
+  headerDiv.backgroundColor = TOKENS.cardBorder;
 
-  w.addSpacer(6);
+  w.addSpacer(9);
 
-  // --- 3. SECTION: POOL ACCOUNTS (2 TÀI KHOẢN CÒN LẠI) ---
-  const poolHead = w.addStack();
-  poolHead.layoutHorizontally();
-  poolHead.centerAlignContent();
+  // --- 2. HIỂN THỊ CẢ 3 TÀI KHOẢN (ĐỒNG BỘ 100% CODEXBAR & ORBITER) ---
+  const displayAccounts = accounts.slice(0, 3);
 
-  const poolTitle = poolHead.addText("Pool Accounts (Dự phòng)");
-  poolTitle.font = Font.boldSystemFont(11.5);
-  poolTitle.textColor = TOKENS.textSecondary;
+  displayAccounts.forEach((acc, idx) => {
+    const isFirst = idx === 0;
+    const realNum = idx + 1;
 
-  poolHead.addSpacer();
+    // --- A. ACCOUNT HEADER ROW ---
+    const accHead = w.addStack();
+    accHead.layoutHorizontally();
+    accHead.centerAlignContent();
 
-  const poolHint = poolHead.addText("▲▼ Chạm để đổi ưu tiên");
-  poolHint.font = Font.systemFont(10);
-  poolHint.textColor = TOKENS.textMuted;
+    // Priority badge + Email + Plan
+    const idBadge = accHead.addText(isFirst ? "★ #1 " : `#${realNum} `);
+    idBadge.font = Font.boldSystemFont(12);
+    idBadge.textColor = isFirst ? TOKENS.orangeFill : TOKENS.textSecondary;
 
-  w.addSpacer(5);
+    const emailTxt = accHead.addText(acc.name);
+    emailTxt.font = Font.boldSystemFont(12);
+    emailTxt.textColor = TOKENS.textPrimary;
+    emailTxt.lineLimit = 1;
 
-  const remainingAccounts = accounts.slice(1);
-  const cardPadH = 9;
-  const cardContentW = contentW - (cardPadH * 2);
+    accHead.addSpacer(5);
 
-  if (remainingAccounts.length === 0) {
-    const emptyStack = w.addStack();
-    const emptyTxt = emptyStack.addText("Không có tài khoản dự phòng nào trong Pool.");
-    emptyTxt.font = Font.systemFont(11);
-    emptyTxt.textColor = TOKENS.textMuted;
-  }
+    const planTxt = accHead.addText(`· ${acc.plan || "Max"}`);
+    planTxt.font = Font.systemFont(10);
+    planTxt.textColor = TOKENS.textMuted;
 
-  remainingAccounts.slice(0, 2).forEach((acc, idx) => {
-    const realIdx = idx + 2; // #2, #3
-    const card = w.addStack();
-    card.layoutVertically();
-    card.backgroundColor = new Color("#FFFFFF", 0.04);
-    card.cornerRadius = 8;
-    card.setPadding(6, cardPadH, 6, cardPadH);
+    accHead.addSpacer();
 
-    // Row 1: STT + Tên tài khoản + Gói + Trạng thái
-    const r1 = card.addStack();
-    r1.layoutHorizontally();
-    r1.centerAlignContent();
-
-    const idxTxt = r1.addText(`#${realIdx} `);
-    idxTxt.font = Font.boldSystemFont(11);
-    idxTxt.textColor = TOKENS.orangeFill;
-
-    const nameTxt = r1.addText(acc.name);
-    nameTxt.font = Font.boldSystemFont(11);
-    nameTxt.textColor = TOKENS.textPrimary;
-    nameTxt.lineLimit = 1;
-
-    r1.addSpacer(4);
-
-    const planBadge = r1.addText(`· ${acc.plan || "Max"}`);
-    planBadge.font = Font.systemFont(9.5);
-    planBadge.textColor = TOKENS.textMuted;
-
-    r1.addSpacer();
-
-    // Trạng thái (Online/Khả dụng, 429, Hết hạn)
-    const statusStack = r1.addStack();
+    // Status Badge (Apple pill style)
+    const statusStack = accHead.addStack();
     statusStack.layoutHorizontally();
     statusStack.centerAlignContent();
-    statusStack.spacing = 3;
+    statusStack.spacing = 3.5;
 
     if (acc.is_probe_error) {
-      const warnTxt = statusStack.addText("⚠️ 429 API");
-      warnTxt.font = Font.boldSystemFont(9.5);
-      warnTxt.textColor = new Color("#FF9500");
+      const s = statusStack.addText("⚠️ 429 API");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = new Color("#FF9500");
     } else if (acc.is_available === false) {
-      const errTxt = statusStack.addText("⛔ Hết hạn");
-      errTxt.font = Font.boldSystemFont(9.5);
-      errTxt.textColor = new Color("#FF3B30");
+      const s = statusStack.addText("⛔ Hết hạn");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = new Color("#FF3B30");
+    } else if (isFirst) {
+      const dot = statusStack.addText("●");
+      dot.font = Font.systemFont(8);
+      dot.textColor = TOKENS.greenPace;
+      const s = statusStack.addText("Đang dùng");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = TOKENS.greenPace;
     } else {
       const dot = statusStack.addText("●");
       dot.font = Font.systemFont(8);
-      dot.textColor = new Color("#34C759");
-      const okTxt = statusStack.addText("Khả dụng");
-      okTxt.font = Font.systemFont(9.5);
-      okTxt.textColor = new Color("#34C759");
+      dot.textColor = TOKENS.greenPace;
+      const s = statusStack.addText("Sẵn sàng");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = TOKENS.greenPace;
     }
 
-    card.addSpacer(3);
+    w.addSpacer(4);
 
-    // Row 2: 5h Quota & mini bar
-    const r2 = card.addStack();
-    r2.layoutHorizontally();
-    r2.centerAlignContent();
+    // --- B. METRIC 1: PHIÊN 5H ---
+    const p5Row = w.addStack();
+    p5Row.layoutHorizontally();
+    p5Row.centerAlignContent();
 
-    const u5Txt = r2.addText(`5h: ${acc.used_5h || 0}% đã dùng (còn ${acc.remaining_5h ?? (100 - (acc.used_5h || 0))}%)`);
-    u5Txt.font = Font.systemFont(9.5);
-    u5Txt.textColor = TOKENS.textSecondary;
+    const paceInfo = (isFirst && acc.remaining_5h !== undefined) ? ` · ${acc.remaining_5h}% nhịp độ` : "";
+    const p5Label = p5Row.addText(`5h: ${acc.used_5h ?? 0}% đã dùng${paceInfo}`);
+    p5Label.font = Font.systemFont(10.5);
+    p5Label.textColor = TOKENS.textSecondary;
 
-    r2.addSpacer();
+    p5Row.addSpacer();
 
-    const r5Txt = r2.addText(acc.reset_5h ? `Reset: ${acc.reset_5h}` : "");
-    r5Txt.font = Font.systemFont(9);
-    r5Txt.textColor = TOKENS.textMuted;
+    const r5Est = formatResetWithEst(acc.reset_5h);
+    const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Đặt lại: ${acc.reset_5h}` : ""));
+    p5Reset.font = Font.systemFont(9.5);
+    p5Reset.textColor = TOKENS.textMuted;
 
-    card.addSpacer(2);
+    w.addSpacer(3);
 
-    const bar5Mini = drawSegmentedBar(cardContentW, 3.5, acc.used_5h || 0, TOKENS.orangeFill, acc.remaining_5h);
-    const v5Mini = card.addImage(bar5Mini);
-    v5Mini.imageSize = new Size(cardContentW, 3.5);
-    v5Mini.leftAlignImage();
+    // Progress Bar 5h
+    const bar5 = drawSegmentedBar(contentW, 4.5, acc.used_5h ?? 0, TOKENS.orangeFill, isFirst ? acc.remaining_5h : null);
+    const v5 = w.addImage(bar5);
+    v5.imageSize = new Size(contentW, 4.5);
+    v5.leftAlignImage();
 
-    card.addSpacer(4);
+    w.addSpacer(5);
 
-    // Row 3: Weekly Quota & mini bar
-    const r3 = card.addStack();
-    r3.layoutHorizontally();
-    r3.centerAlignContent();
+    // --- C. METRIC 2: HÀNG TUẦN ---
+    const pWkRow = w.addStack();
+    pWkRow.layoutHorizontally();
+    pWkRow.centerAlignContent();
 
-    const uwTxt = r3.addText(`Tuần: ${acc.used_weekly || 0}% đã dùng (còn ${acc.remaining_weekly ?? (100 - (acc.used_weekly || 0))}%)`);
-    uwTxt.font = Font.systemFont(9.5);
-    uwTxt.textColor = TOKENS.textSecondary;
+    const pWkLabel = pWkRow.addText(`Tuần: ${acc.used_weekly ?? 0}% đã dùng (còn ${acc.remaining_weekly ?? (100 - (acc.used_weekly ?? 0))}%)`);
+    pWkLabel.font = Font.systemFont(10.5);
+    pWkLabel.textColor = TOKENS.textSecondary;
 
-    r3.addSpacer();
+    pWkRow.addSpacer();
 
-    const rwTxt = r3.addText(acc.reset_weekly ? `Reset: ${acc.reset_weekly}` : "");
-    rwTxt.font = Font.systemFont(9);
-    rwTxt.textColor = TOKENS.textMuted;
+    const rWkEst = formatResetWithEst(acc.reset_weekly);
+    const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Đặt lại: ${acc.reset_weekly}` : ""));
+    pWkReset.font = Font.systemFont(9.5);
+    pWkReset.textColor = TOKENS.textMuted;
 
-    card.addSpacer(2);
+    w.addSpacer(3);
 
-    const barWkMini = drawSegmentedBar(cardContentW, 3.5, acc.used_weekly || 0, TOKENS.orangeFill);
-    const vWkMini = card.addImage(barWkMini);
-    vWkMini.imageSize = new Size(cardContentW, 3.5);
-    vWkMini.leftAlignImage();
+    // Progress Bar Tuần
+    const barWk = drawSegmentedBar(contentW, 4.5, acc.used_weekly ?? 0, TOKENS.orangeFill);
+    const vWk = w.addImage(barWk);
+    vWk.imageSize = new Size(contentW, 4.5);
+    vWk.leftAlignImage();
 
-    if (idx < remainingAccounts.length - 1) {
-      w.addSpacer(5);
+    // Divider giữa các tài khoản
+    if (idx < displayAccounts.length - 1) {
+      w.addSpacer(8);
+      const accDiv = w.addStack();
+      accDiv.size = new Size(0, 0.5);
+      accDiv.backgroundColor = TOKENS.cardBorder;
+      w.addSpacer(8);
     }
   });
 
   w.addSpacer();
+
+  // Subtle Footer Hint (Apple Design)
+  const footRow = w.addStack();
+  footRow.layoutHorizontally();
+  footRow.centerAlignContent();
+  footRow.addSpacer();
+  const footTxt = footRow.addText("▲▼ Chạm để chuyển đổi tài khoản ưu tiên #1");
+  footTxt.font = Font.systemFont(9.5);
+  footTxt.textColor = TOKENS.textMuted;
+  footRow.addSpacer();
 }
 
 // ==========================================
