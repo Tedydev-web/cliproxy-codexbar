@@ -683,19 +683,8 @@ async function main() {
   w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
   Script.setWidget(w);
 
-  // Khi bấm vào widget với config là "Run Script":
-  // Tự động reload xong -> gọi App.close() để đưa người dùng trở về ngay màn hình Home Screen!
-  if (config.runsInApp) {
-    if (args.queryParameters && args.queryParameters.preview) {
-      if (family === "small") await w.presentSmall();
-      else if (family === "medium") await w.presentMedium();
-      else await w.presentLarge();
-    } else {
-      try {
-        App.close();
-      } catch (_) {}
-    }
-  }
+  // Khi được gọi từ Shortcuts hoặc tương tác:
+  Script.setShortcutOutput(true);
 }
 
 await main();
