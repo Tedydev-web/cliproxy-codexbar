@@ -486,57 +486,76 @@ struct ClaudeFullCardView: View {
             
             Divider()
             
-            // 5. External Gateways (DeepSeek / Team Proxy) - Sleek & Compact Row
+            // 5. External Gateways (DeepSeek / Team Proxy) - CodexBar Provider Style
             Button(action: {
                 AppDelegate.shared?.openGatewayWindow()
             }) {
                 HStack(spacing: 8) {
-                    Image(systemName: "bolt.horizontal.circle.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
+                    // Official DeepSeek Whale Brand Icon
+                    if let dsImg = loadTemplateIcon(name: "deepseek") {
+                        Image(nsImage: dsImg)
+                            .resizable()
+                            .renderingMode(.original)
+                            .frame(width: 15, height: 15)
+                    } else {
+                        Image(systemName: "circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(red: 77/255, green: 107/255, blue: 254/255))
+                    }
                     
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 4) {
-                            Text("DeepSeek / Team Gateway")
-                                .font(.system(size: 11, weight: .semibold))
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .center, spacing: 5) {
+                            Text("DeepSeek")
+                                .font(.system(size: 11.5, weight: .semibold))
                                 .foregroundStyle(.primary)
                             
+                            Text("Team Gateway")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                            
+                            Spacer(minLength: 4)
+                            
                             if self.state.gwIsActiveNow {
-                                HStack(spacing: 2.5) {
+                                HStack(spacing: 3) {
                                     Circle()
                                         .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
-                                        .frame(width: 5.5, height: 5.5)
+                                        .frame(width: 5, height: 5)
                                     Text("Đang dùng")
                                         .font(.system(size: 8, weight: .bold))
                                         .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
                                 }
-                                .padding(.horizontal, 3.5)
-                                .padding(.vertical, 0.5)
-                                .background(Color(red: 52/255, green: 199/255, blue: 89/255).opacity(0.12))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Color(red: 52/255, green: 199/255, blue: 89/255).opacity(0.14))
                                 .cornerRadius(3)
+                            } else {
+                                Text(self.state.gwLastActiveHuman)
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.tertiary)
                             }
                         }
                         
-                        Text("Dùng: \(self.state.gwSpendFormatted) / \(self.state.gwMaxBudgetFormatted) · \(self.state.gwLastActiveHuman)")
-                            .font(.system(size: 9.5))
-                            .foregroundStyle(.secondary)
+                        // Line 2: Balance & Quick Spend Indicator
+                        HStack(spacing: 4) {
+                            Text("Đã dùng \(self.state.gwSpendFormatted)")
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(Color(red: 77/255, green: 107/255, blue: 254/255))
+                            Text("· Hạn mức: \(self.state.gwMaxBudgetFormatted)")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     
                     Spacer()
                     
-                    HStack(spacing: 2) {
-                        Text("Lệnh")
-                            .font(.system(size: 9.5, weight: .medium))
-                            .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.tertiary)
-                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(.tertiary)
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
-                .background(Color(white: 0.15).opacity(0.3))
-                .cornerRadius(5)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .background(Color(white: 0.14).opacity(0.5))
+                .cornerRadius(6)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1186,15 +1205,24 @@ let ICON_CLAUDE_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IAr
 
 let ICON_AGY_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAJxsHGAAACaUlEQVRYCe2XwUtVQRTGfSphQmBqIRhtkmgjESL4SjCIQMKIai2Em6BlC2lfEQiiixYtIvoHWuXahS7ColVGkVAthAjUTSqo4Os3oL7HuWdmzni5DwQHPt6dc77vO+fOXObe19BwPI7YCpTy9lupVAbwuAKawBcwXyqVdvmt76CRHvAZyPGdgGuwfoOCl8CK7KRmvs51uS4dUagFfK0p7rtcJtFeeFMUGfd1oMSnCm2Igq1gTSnsC22R6EppqjGFDHcUnE7QnID7MIGfRuVuF3xLEYj/Jpf7eMl0iumFQNFY6mrG0BNI2bJ7Hg9L+L6F5DgpDd22mio8s9a0t+xHG0VWgHs9HHZc5JWyFBNbV+gmRnmacX0Mx5pxeWtDJrNIQZOHdcuWKdYdKRhLb0JoZ9u2QsToCvH89GKQtxnXQysYchehEW0I8YjHwH3zvAXXwRnQCdx58xLsAG34vDSuHmOFPiin3gYx7zNBbgCsKrqfehVjFMNzYFcxvhuzQDMIdhRtX0zrzWP2WDF84xWIBNrnin5C0OxTzBaF4V/m5rc9XPcx90N4/GHebO9ij4nomjBy07FUIzS3FB/zu+2gHibvhdFH5qZz68CkenMzwuuT5ATniPuFwTbzy0FRIIn2PPgnPG0vXERNQP69eRqoZ0rh+Ug09Iu5OyzDA9IzIZxjnv4QKmXweSe8Xyu0agjyAyH4xryjysh3hZf7kyAP2ieqK8QyqD3I3LadVck5gnieArNgf7iDN3vqE5zeYzjCK3AyR92gFO9m8ALsL8BkRkCyDdwBPZlkQQFqdYMboLCbL6j1Y9vqCvwHoDyc53bTRvcAAAAASUVORK5CYII="
 
+// Official DeepSeek Whale Brand Icon from steipete/CodexBar
+let ICON_DEEPSEEK_B64 = "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"
+
 func loadTemplateIcon(name: String) -> NSImage? {
     if let img = NSImage(contentsOfFile: "/tmp/icon-\(name).png") {
         img.isTemplate = true
         img.size = NSSize(width: 16, height: 16)
         return img
     }
-    let b64 = name.contains("claude") ? ICON_CLAUDE_B64 : ICON_AGY_B64
+    let b64: String
+    if name.contains("deepseek") {
+        b64 = ICON_DEEPSEEK_B64
+    } else if name.contains("claude") {
+        b64 = ICON_CLAUDE_B64
+    } else {
+        b64 = ICON_AGY_B64
+    }
     if let data = Data(base64Encoded: b64), let img = NSImage(data: data) {
-        img.isTemplate = true
         img.size = NSSize(width: 16, height: 16)
         return img
     }
