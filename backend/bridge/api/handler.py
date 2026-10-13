@@ -9,6 +9,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     claude_provider = None
     agy_provider = None
     keeper_provider = None
+    gateway_provider = None
 
     def send_json(self, status_code, data):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -21,7 +22,11 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/v1/pool-status"):
             accounts = self.claude_provider.get_pool_status()
-            self.send_json(200, {"accounts": accounts})
+            gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else None
+            self.send_json(200, {"accounts": accounts, "gateway": gw_info})
+        elif self.path.startswith("/v1/gateway-telemetry"):
+            gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else {}
+            self.send_json(200, gw_info)
         elif self.path.startswith("/v1/antigravity-quota"):
             data = self.agy_provider.get_quota()
             if data:
@@ -36,7 +41,8 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         else:
             # Default fallback for CodexBar clients
             accounts = self.claude_provider.get_pool_status()
-            self.send_json(200, {"accounts": accounts})
+            gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else None
+            self.send_json(200, {"accounts": accounts, "gateway": gw_info})
 
     def do_POST(self):
         content_length = int(self.headers.get("Content-Length", 0))

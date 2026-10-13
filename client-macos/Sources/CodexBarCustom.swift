@@ -336,6 +336,14 @@ struct PoolAccountItem: Identifiable {
     }
 }
 
+// Gateway Command Data Model
+struct GatewayCommandItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let description: String
+    let command: String
+}
+
 // MARK: - Claude Full Card View
 struct ClaudeFullCardView: View {
     @ObservedObject var state: QuotaState
@@ -472,6 +480,63 @@ struct ClaudeFullCardView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+            
+            // 5. External Gateways (DeepSeek / Team Proxy) - Sleek & Compact Row
+            Button(action: {
+                AppDelegate.shared?.openGatewayWindow()
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.horizontal.circle.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
+                    
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 4) {
+                            Text("DeepSeek / Team Gateway")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            
+                            if self.state.gwIsActiveNow {
+                                HStack(spacing: 2.5) {
+                                    Circle()
+                                        .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
+                                        .frame(width: 5.5, height: 5.5)
+                                    Text("Đang dùng")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                                }
+                                .padding(.horizontal, 3.5)
+                                .padding(.vertical, 0.5)
+                                .background(Color(red: 52/255, green: 199/255, blue: 89/255).opacity(0.12))
+                                .cornerRadius(3)
+                            }
+                        }
+                        
+                        Text("Dùng: \(self.state.gwSpendFormatted) / \(self.state.gwMaxBudgetFormatted) · \(self.state.gwLastActiveHuman)")
+                            .font(.system(size: 9.5))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 2) {
+                        Text("Lệnh")
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 6)
+                .background(Color(white: 0.15).opacity(0.3))
+                .cornerRadius(5)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -844,6 +909,18 @@ class QuotaState: ObservableObject {
     @Published var keeperBackupCount: Int = 34
     @Published var keeperLogs: [String] = []
     
+    // Gateway / DeepSeek Usage Telemetry
+    @Published var gwEnabled: Bool = true
+    @Published var gwProviderName: String = "LiteLLM / DeepSeek Gateway"
+    @Published var gwBaseUrl: String = "https://luong-30005.motcaigido.xyz"
+    @Published var gwKeyAlias: String = "HieuDat"
+    @Published var gwSpendFormatted: String = "$0.00786"
+    @Published var gwMaxBudgetFormatted: String = "$50.00"
+    @Published var gwSpendPercent: Double = 0.02
+    @Published var gwIsActiveNow: Bool = false
+    @Published var gwLastActiveHuman: String = "Chưa hoạt động"
+    @Published var gwQuickCommands: [GatewayCommandItem] = []
+    
     // Default refresh: 60s (1 phút)
     @Published var lastQuotaFetchDate: Date = Date()
     @Published var lastQuotaFetchAgoText: String = "Vừa xong"
@@ -1067,6 +1144,35 @@ class QuotaState: ObservableObject {
                         }
                         self.claudePaceReserve = firstActive.remaining5h
                     }
+                    
+                    // Parse Gateway Telemetry
+                    if let gw = json["gateway"] as? [String: Any] {
+                        self.gwEnabled = gw["enabled"] as? Bool ?? true
+                        self.gwProviderName = gw["provider_name"] as? String ?? self.gwProviderName
+                        self.gwBaseUrl = gw["base_url"] as? String ?? self.gwBaseUrl
+                        self.gwKeyAlias = gw["key_alias"] as? String ?? self.gwKeyAlias
+                        self.gwSpendFormatted = gw["spend_formatted"] as? String ?? self.gwSpendFormatted
+                        self.gwMaxBudgetFormatted = gw["max_budget_formatted"] as? String ?? self.gwMaxBudgetFormatted
+                        if let sp = gw["spend_percent"] as? Double {
+                            self.gwSpendPercent = sp
+                        } else if let sp = gw["spend_percent"] as? Int {
+                            self.gwSpendPercent = Double(sp)
+                        }
+                        self.gwIsActiveNow = gw["is_active_now"] as? Bool ?? false
+                        self.gwLastActiveHuman = gw["last_active_human"] as? String ?? self.gwLastActiveHuman
+                        
+                        if let cmds = gw["quick_commands"] as? [[String: Any]] {
+                            var parsedCmds: [GatewayCommandItem] = []
+                            for c in cmds {
+                                let t = c["title"] as? String ?? ""
+                                let d = c["description"] as? String ?? ""
+                                let cmd = c["command"] as? String ?? ""
+                                parsedCmds.append(GatewayCommandItem(title: t, description: d, command: cmd))
+                            }
+                            self.gwQuickCommands = parsedCmds
+                        }
+                    }
+                    
                     self.lastQuotaFetchDate = Date()
                     self.updateAgoText()
                     self.onUpdate?()
@@ -1230,6 +1336,203 @@ struct TokenKeeperDetailView: View {
     }
 }
 
+// MARK: - External Gateway & DeepSeek Detail Window View
+struct GatewayDetailView: View {
+    @ObservedObject var state: QuotaState
+    @State private var copiedCommand: String? = nil
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack(spacing: 12) {
+                Image(systemName: "bolt.horizontal.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(self.state.gwProviderName)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        if self.state.gwIsActiveNow {
+                            HStack(spacing: 3) {
+                                Circle()
+                                    .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
+                                    .frame(width: 6, height: 6)
+                                Text("Đang sử dụng")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                            }
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1.5)
+                            .background(Color(red: 52/255, green: 199/255, blue: 89/255).opacity(0.12))
+                            .cornerRadius(4)
+                        }
+                    }
+                    Text("Giám sát API Usage Spend & Quản lý lệnh chạy mô hình DeepSeek")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                
+                Button(action: {
+                    self.state.fetchData()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                        Text("Làm mới")
+                    }
+                    .font(.caption)
+                }
+            }
+            
+            Divider()
+            
+            // Spend Metrics Card
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Thông số Chi phí & Ngân sách")
+                    .font(.headline)
+                
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Đã tiêu thụ:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(self.state.gwSpendFormatted)
+                            .font(.system(size: 20, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color(red: 90/255, green: 130/255, blue: 255/255))
+                    }
+                    .frame(minWidth: 120, alignment: .leading)
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Hạn mức tối đa:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(self.state.gwMaxBudgetFormatted)
+                            .font(.system(size: 20, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.primary)
+                    }
+                    .frame(minWidth: 120, alignment: .leading)
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Hoạt động gần nhất:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(self.state.gwLastActiveHuman)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(self.state.gwIsActiveNow ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.primary)
+                    }
+                    Spacer()
+                }
+                .padding(10)
+                .background(Color(white: 0.14))
+                .cornerRadius(6)
+                
+                // Progress Bar
+                VStack(alignment: .leading, spacing: 4) {
+                    UsageProgressBar(
+                        percent: max(0.5, self.state.gwSpendPercent),
+                        tint: Color(red: 90/255, green: 130/255, blue: 255/255)
+                    )
+                    HStack {
+                        Text("Đã dùng \(String(format: "%.3f", self.state.gwSpendPercent))% ngân sách tháng")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("Key Alias: \(self.state.gwKeyAlias) · \(self.state.gwBaseUrl)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // Quick Commands Section (1-Click Copy)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Lệnh chạy sẵn (1-Click Sao chép vào Terminal):")
+                        .font(.headline)
+                    Spacer()
+                    if let copied = copiedCommand {
+                        HStack(spacing: 3) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                            Text("Đã sao chép: \(copied)")
+                                .font(.caption2.bold())
+                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
+                        }
+                    }
+                }
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(self.state.gwQuickCommands) { cmdItem in
+                            HStack(alignment: .center, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(cmdItem.title)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                    Text(cmdItem.description)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                    Text(cmdItem.command)
+                                        .font(.system(size: 10.5, design: .monospaced))
+                                        .foregroundStyle(Color(white: 0.85))
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(Color.black.opacity(0.35))
+                                        .cornerRadius(3)
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(cmdItem.command, forType: .string)
+                                    self.copiedCommand = cmdItem.title
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                                        if self.copiedCommand == cmdItem.title {
+                                            self.copiedCommand = nil
+                                        }
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: self.copiedCommand == cmdItem.title ? "checkmark" : "doc.on.doc")
+                                        Text(self.copiedCommand == cmdItem.title ? "Đã chép" : "Sao chép")
+                                    }
+                                    .font(.system(size: 11, weight: .medium))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(self.copiedCommand == cmdItem.title ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.accentColor)
+                            }
+                            .padding(8)
+                            .background(Color(white: 0.12))
+                            .cornerRadius(6)
+                        }
+                    }
+                    .padding(2)
+                }
+                .frame(height: 190)
+            }
+            
+            Spacer()
+            
+            HStack {
+                Spacer()
+                Button("Đóng") {
+                    AppDelegate.shared?.gatewayWindow?.close()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(18)
+        .frame(width: 580, height: 530)
+    }
+}
+
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static var shared: AppDelegate?
@@ -1241,6 +1544,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var timer: Timer?
     var settingsWindow: NSWindow?
     var keeperWindow: NSWindow?
+    var gatewayWindow: NSWindow?
     
     func menuWillOpen(_ menu: NSMenu) {
         state.updateAgoText()
@@ -1426,6 +1730,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.keeperWindow = window
+    }
+
+    func openGatewayWindow() {
+        if let win = gatewayWindow {
+            win.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        let hosting = NSHostingView(rootView: GatewayDetailView(state: state))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 580, height: 530),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.center()
+        window.title = "External Gateway & DeepSeek - Chi phí & Lệnh chạy"
+        window.contentView = hosting
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.gatewayWindow = window
     }
 
     func openSettingsWindow() {
