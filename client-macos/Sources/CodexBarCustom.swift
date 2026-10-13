@@ -774,7 +774,7 @@ struct SettingsView: View {
             Divider()
             
             VStack(alignment: .leading, spacing: 14) {
-                Toggle("Làm mới quota ngay khi mở Menu (Refresh on Open)", isOn: Binding(
+                Toggle("Làm mới ngay khi mở Menu (Refresh on Open)", isOn: Binding(
                     get: { self.state.refreshOnOpen },
                     set: { newVal in
                         self.state.refreshOnOpen = newVal
@@ -783,25 +783,7 @@ struct SettingsView: View {
                 ))
                 .font(.headline)
                 
-                Text("Tự động gửi yêu cầu kiểm tra dữ liệu quota mới nhất mỗi khi bạn click vào biểu tượng trên Menubar.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 14) {
-                Toggle("Hiển thị chi phí DeepSeek Gateway trên Menubar", isOn: Binding(
-                    get: { self.state.showGatewaySpendOnMenubar },
-                    set: { newVal in
-                        self.state.showGatewaySpendOnMenubar = newVal
-                        UserDefaults.standard.set(newVal, forKey: "show_gateway_spend_on_menubar")
-                        self.state.onUpdate?()
-                    }
-                ))
-                .font(.headline)
-                
-                Text("Hiển thị thông số chi phí đã tiêu thụ (vd: $0.00786) kèm theo Quota 5h và 7d trên thanh Menubar macOS.")
+                Text("Tự động gửi yêu cầu kiểm tra dữ liệu quota & thông số phần cứng Ubuntu mới nhất mỗi khi bạn click vào biểu tượng trên Menubar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -809,17 +791,16 @@ struct SettingsView: View {
             Divider()
             
             VStack(alignment: .leading, spacing: 10) {
-                Text("Tần suất làm mới dữ liệu:")
+                Text("Tần suất tự động làm mới Quota AI:")
                     .font(.headline)
                 
-                Picker("Tần suất", selection: Binding(
+                Picker("Tần suất Quota", selection: Binding(
                     get: { self.state.refreshInterval },
                     set: { newVal in
                         self.state.refreshInterval = newVal
                         self.onSave()
                     }
                 )) {
-                    Text("1 giây (Cực nhanh)").tag(1)
                     Text("15 giây (Nhanh)").tag(15)
                     Text("30 giây (Chuẩn)").tag(30)
                     Text("1 phút (Mặc định)").tag(60)
@@ -827,8 +808,33 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.radioGroup)
                 .padding(.leading, 8)
+            }
+            
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Tần suất cập nhật Giám sát Hệ thống (CPU / RAM / Ports):")
+                    .font(.headline)
                 
-                Text("Gợi ý: Mặc định 1 phút (60s) là tối ưu nhất cho hiệu năng và hạn mức API.")
+                Picker("Tần suất Ubuntu Hub", selection: Binding(
+                    get: { self.state.telemetryInterval },
+                    set: { newVal in
+                        self.state.telemetryInterval = newVal
+                        self.onSave()
+                    }
+                )) {
+                    Text("1 giây (Real-time như btop)").tag(1)
+                    Text("3 giây (Rất nhanh)").tag(3)
+                    Text("5 giây (Chuẩn)").tag(5)
+                    Text("15 giây").tag(15)
+                    Text("30 giây").tag(30)
+                    Text("1 phút").tag(60)
+                    Text("5 phút (Tiết kiệm pin)").tag(300)
+                }
+                .pickerStyle(.radioGroup)
+                .padding(.leading, 8)
+                
+                Text("Gợi ý: Đặt 1s – 3s để theo dõi thông số CPU và RAM của máy Ubuntu tương tự như btop.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -941,7 +947,8 @@ class QuotaState: ObservableObject {
     @Published var bridgeHost: String = UserDefaults.standard.string(forKey: "quota_bridge_host") ?? "http://100.127.1.234:8318"
     @Published var refreshOnOpen: Bool = UserDefaults.standard.bool(forKey: "quota_refresh_on_open")
     @Published var refreshInterval: Int = UserDefaults.standard.integer(forKey: "quota_refresh_interval") == 0 ? 60 : UserDefaults.standard.integer(forKey: "quota_refresh_interval")
-    @Published var showGatewaySpendOnMenubar: Bool = UserDefaults.standard.object(forKey: "show_gateway_spend_on_menubar") == nil ? false : UserDefaults.standard.bool(forKey: "show_gateway_spend_on_menubar")
+    @Published var telemetryInterval: Int = UserDefaults.standard.integer(forKey: "ubuntu_telemetry_interval") == 0 ? 3 : UserDefaults.standard.integer(forKey: "ubuntu_telemetry_interval")
+    @Published var showGatewaySpendOnMenubar: Bool = false
     
     var baseUrl: String {
         let host = bridgeHost.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -952,6 +959,7 @@ class QuotaState: ObservableObject {
     
     func saveInterval() {
         UserDefaults.standard.set(refreshInterval, forKey: "quota_refresh_interval")
+        UserDefaults.standard.set(telemetryInterval, forKey: "ubuntu_telemetry_interval")
         UserDefaults.standard.set(bridgeHost, forKey: "quota_bridge_host")
         AppDelegate.shared?.updateTimer()
     }
@@ -2473,6 +2481,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     let state = QuotaState()
     var timer: Timer?
+    var telemetryTimer: Timer?
     var settingsWindow: NSWindow?
     var keeperWindow: NSWindow?
     var gatewayWindow: NSWindow?
@@ -2564,9 +2573,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 btn.imagePosition = .imageLeading
             }
             var title = " 5h \(state.claude5h)% · W \(state.claude7d)%"
-            if state.showGatewaySpendOnMenubar && !state.gwSpendFormatted.isEmpty {
-                title += " · \(state.gwSpendFormatted)"
-            }
             btn.title = title
         }
         let claudeMenu = NSMenu()
@@ -2649,9 +2655,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     btn.imagePosition = .imageLeading
                 }
                 var title = " 5h \(self.state.claude5h)% · W \(self.state.claude7d)%"
-                if self.state.showGatewaySpendOnMenubar && !self.state.gwSpendFormatted.isEmpty {
-                    title += " · \(self.state.gwSpendFormatted)"
-                }
                 btn.title = title
             }
             if let agyBtn = self.agyItem.button {
@@ -2684,10 +2687,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     
     func updateTimer() {
+        // 1. Quota timer
         timer?.invalidate()
         let interval = Double(state.refreshInterval)
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.state.fetchData()
+        }
+        
+        // 2. Continuous Telemetry Timer (for Menubar C % · M % · P real-time updates)
+        telemetryTimer?.invalidate()
+        let tInterval = Double(state.telemetryInterval)
+        telemetryTimer = Timer.scheduledTimer(withTimeInterval: tInterval, repeats: true) { [weak self] _ in
+            self?.state.fetchSystemData()
         }
     }
     

@@ -18,31 +18,82 @@ class SystemProvider:
         # Store dynamically launched quick tunnels: {tunnel_id: {"port": int, "url": str, "pid": int, "started_at": str}}
         self.active_quick_tunnels = {}
         self.lock = threading.Lock()
+        
+        # Continuous background metric cache matching btop/htop precision
+        self.latest_metrics = {}
+        self.sampler_thread = threading.Thread(target=self._metrics_sampler_loop, daemon=True)
+        self.sampler_thread.start()
+
+    def _metrics_sampler_loop(self):
+        """Continuous background metrics collector that calculates CPU delta accurately without blocking API calls."""
+        # Warmup psutil cpu
+        psutil.cpu_percent(interval=None)
+        while True:
+            try:
+                # 1. CPU sampling (0.5s window matching top/btop refresh sampling)
+                cpu = psutil.cpu_percent(interval=0.5)
+                
+                # 2. Memory (btop calculation: used = total - available)
+                mem = psutil.virtual_memory()
+                ram_total_gb = mem.total / (1024**3)
+                ram_used_gb = (mem.total - mem.available) / (1024**3)
+                ram_percent = (ram_used_gb / ram_total_gb) * 100.0 if ram_total_gb > 0 else 0.0
+                
+                # 3. Disk
+                disk = psutil.disk_usage('/')
+                
+                # 4. Load average & Uptime
+                load = os.getloadavg()
+                uptime_seconds = int(time.time() - psutil.boot_time())
+                hours = uptime_seconds // 3600
+                days = hours // 24
+                rem_hours = hours % 24
+                uptime_str = f"{days}d {rem_hours}h" if days > 0 else f"{hours}h {(uptime_seconds % 3600) // 60}m"
+                
+                with self.lock:
+                    self.latest_metrics = {
+                        "cpu_percent": round(cpu, 1),
+                        "cpu_count": psutil.cpu_count(),
+                        "load_avg": [round(x, 2) for x in load],
+                        "ram_total_gb": round(ram_total_gb, 1),
+                        "ram_used_gb": round(ram_used_gb, 1),
+                        "ram_percent": round(ram_percent, 1),
+                        "disk_total_gb": round(disk.total / (1024**3), 1),
+                        "disk_used_gb": round(disk.used / (1024**3), 1),
+                        "disk_percent": round(disk.percent, 1),
+                        "uptime": uptime_str
+                    }
+            except Exception:
+                time.sleep(1)
 
     def get_system_metrics(self):
-        """Fetch real-time CPU, RAM, Disk and Host uptime."""
+        """Fetch real-time CPU, RAM, Disk and Host uptime from latest cache."""
+        with self.lock:
+            if self.latest_metrics:
+                return self.latest_metrics.copy()
+        
+        # Fallback if sampler just started
         try:
             mem = psutil.virtual_memory()
             disk = psutil.disk_usage('/')
-            cpu = psutil.cpu_percent(interval=0.1)
+            cpu = psutil.cpu_percent(interval=None)
             load = os.getloadavg()
             uptime_seconds = int(time.time() - psutil.boot_time())
-            
             hours = uptime_seconds // 3600
             days = hours // 24
             rem_hours = hours % 24
-            if days > 0:
-                uptime_str = f"{days}d {rem_hours}h"
-            else:
-                uptime_str = f"{hours}h {(uptime_seconds % 3600) // 60}m"
+            uptime_str = f"{days}d {rem_hours}h" if days > 0 else f"{hours}h {(uptime_seconds % 3600) // 60}m"
+            ram_total_gb = mem.total / (1024**3)
+            ram_used_gb = (mem.total - mem.available) / (1024**3)
+            ram_percent = (ram_used_gb / ram_total_gb) * 100.0 if ram_total_gb > 0 else 0.0
 
             return {
                 "cpu_percent": round(cpu, 1),
                 "cpu_count": psutil.cpu_count(),
                 "load_avg": [round(x, 2) for x in load],
-                "ram_total_gb": round(mem.total / (1024**3), 1),
-                "ram_used_gb": round(mem.used / (1024**3), 1),
-                "ram_percent": round(mem.percent, 1),
+                "ram_total_gb": round(ram_total_gb, 1),
+                "ram_used_gb": round(ram_used_gb, 1),
+                "ram_percent": round(ram_percent, 1),
                 "disk_total_gb": round(disk.total / (1024**3), 1),
                 "disk_used_gb": round(disk.used / (1024**3), 1),
                 "disk_percent": round(disk.percent, 1),
