@@ -2,507 +2,391 @@
 // These must be at the very top of the file. Do not edit.
 // icon-color: purple; icon-glyph: server;
 /**
- * CodexBar & CLIProxy Quota / Telemetry Widget for iOS
- * Refined Apple Design System (Dark Glassmorphism & High-Legibility Layout)
- * Supports: Small, Medium, Large
+ * CodexBar iOS Widget - Minimal Apple Design
+ * Chạy ổn định trên Scriptable iOS
  */
 
-// ==========================================
-// 1. CẤU HÌNH & KẾT NỐI
-// ==========================================
 const CONFIG = {
-  HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
+  HOST: "100.127.1.234",
   PORT: "8318",
-  TIMEOUT_SECONDS: 4,
-  REFRESH_INTERVAL_MINUTES: 10,
-  CACHE_KEY: "codexbar_ios_v3"
+  TIMEOUT: 4,
+  REFRESH_MIN: 10,
+  CACHE_KEY: "codexbar_stable_v4"
 };
 
-const URLS = {
-  POOL: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/pool-status`,
-  TELEMETRY: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/system-telemetry`
-};
+const URL_POOL = `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/pool-status`;
+const URL_SYS = `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/system-telemetry`;
 
-// ==========================================
-// 2. DESIGN TOKENS (Apple Dark Palette)
-// ==========================================
-const THEME = {
-  bgStart: new Color("#1C1C1E"),
-  bgEnd: new Color("#0A0A0C"),
-  cardBg: new Color("#2C2C2E", 0.65),
-  hairline: new Color("#FFFFFF", 0.12),
-  
-  // Apple Dynamic Labels
-  textPrimary: new Color("#FFFFFF", 0.95),
-  textSecondary: new Color("#EBEBF5", 0.65),
-  textTertiary: new Color("#EBEBF5", 0.40),
-  
-  // Apple Accents
-  green: new Color("#30D158"),
-  orange: new Color("#FF9F0A"),
-  blue: new Color("#0A84FF"),
-  red: new Color("#FF453A"),
-  teal: new Color("#64D2FF"),
-  trackGray: new Color("#3A3A3C", 0.7)
-};
+// Màu chuẩn Apple
+const C_BG_TOP = new Color("#1C1C1E");
+const C_BG_BTM = new Color("#0C0C0E");
+const C_CARD = new Color("#2C2C2E", 0.7);
 
-// ==========================================
-// 3. FETCH & CACHE DỮ LIỆU
-// ==========================================
-async function loadData() {
+const C_TXT_PRIMARY = new Color("#FFFFFF", 0.95);
+const C_TXT_MUTED = new Color("#8E8E93");
+const C_GREEN = new Color("#30D158");
+const C_ORANGE = new Color("#FF9F0A");
+const C_BLUE = new Color("#0A84FF");
+const C_RED = new Color("#FF453A");
+const C_TEAL = new Color("#64D2FF");
+
+async function fetchData() {
   const fm = FileManager.local();
-  const cacheFile = fm.joinPath(fm.documentsDirectory(), `${CONFIG.CACHE_KEY}.json`);
-
-  let cached = null;
-  if (fm.fileExists(cacheFile)) {
-    try {
-      cached = JSON.parse(fm.readString(cacheFile));
-    } catch (_) {}
+  const path = fm.joinPath(fm.documentsDirectory(), `${CONFIG.CACHE_KEY}.json`);
+  let cache = null;
+  if (fm.fileExists(path)) {
+    try { cache = JSON.parse(fm.readString(path)); } catch (_) {}
   }
 
-  const fetchJson = async (url) => {
+  const req = async (u) => {
     try {
-      const r = new Request(url);
-      r.timeoutInterval = CONFIG.TIMEOUT_SECONDS;
+      const r = new Request(u);
+      r.timeoutInterval = CONFIG.TIMEOUT;
       return await r.loadJSON();
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   };
 
-  const [pool, sys] = await Promise.all([
-    fetchJson(URLS.POOL),
-    fetchJson(URLS.TELEMETRY)
-  ]);
-
+  const [pool, sys] = await Promise.all([req(URL_POOL), req(URL_SYS)]);
   if (pool || sys) {
     const data = {
-      pool: pool || (cached ? cached.pool : null),
-      sys: sys || (cached ? cached.sys : null),
+      pool: pool || cache?.pool,
+      sys: sys || cache?.sys,
       time: Date.now(),
       online: true
     };
-    try { fm.writeString(cacheFile, JSON.stringify(data)); } catch (_) {}
+    try { fm.writeString(path, JSON.stringify(data)); } catch (_) {}
     return data;
   }
 
-  if (cached) {
-    cached.online = false;
-    return cached;
+  if (cache) {
+    cache.online = false;
+    return cache;
   }
-
   return { pool: null, sys: null, time: null, online: false };
 }
 
-// ==========================================
-// 4. TIỆN ÍCH VẼ CAPSULE PROGRESS BAR
-// ==========================================
-function createProgressBar(width, height, percent, color) {
-  const dc = new DrawContext();
-  dc.size = new Size(width, height);
-  dc.opaque = false;
-  dc.respectScreenScale = true;
-
-  const r = height / 2;
-  const p = Math.max(0, Math.min(100, percent));
-  const fillW = Math.max(height, (width * p) / 100);
-
-  // Background Track
-  const track = new Path();
-  track.addRoundedRect(new Rect(0, 0, width, height), r, r);
-  dc.addPath(track);
-  dc.setFillColor(THEME.trackGray);
-  dc.fillPath();
-
-  // Active Fill
-  if (p > 0) {
-    const fill = new Path();
-    fill.addRoundedRect(new Rect(0, 0, fillW, height), r, r);
-    dc.addPath(fill);
-    dc.setFillColor(color);
-    dc.fillPath();
-  }
-
-  return dc.getImage();
-}
-
 function getQuotaColor(pct) {
-  if (pct > 40) return THEME.green;
-  if (pct > 15) return THEME.orange;
-  return THEME.red;
+  if (pct > 40) return C_GREEN;
+  if (pct > 15) return C_ORANGE;
+  return C_RED;
 }
 
-// ==========================================
-// 5. CÁC LAYOUT WIDGET (SMALL, MEDIUM, LARGE)
-// ==========================================
-
-/**
- * SMALL (2x2): Tinh gọn, rõ ràng, tập trung vào Account #1 & Metrics chính
- */
-function renderSmall(w, d) {
-  w.setPadding(14, 14, 14, 14);
-
-  // Header
-  const h = w.addStack();
-  h.layoutHorizontally();
-  h.centerAlignContent();
-  const t = h.addText("CODEXBAR");
-  t.font = Font.boldSystemFont(10);
-  t.textColor = THEME.textTertiary;
-  h.addSpacer();
-  const st = h.addText(d.online ? "●" : "○");
-  st.font = Font.systemFont(10);
-  st.textColor = d.online ? THEME.green : THEME.red;
-
-  w.addSpacer(8);
-
-  // Metric Pill (CPU & RAM)
-  const m = d.sys?.metrics;
-  const sysCard = w.addStack();
-  sysCard.layoutHorizontally();
-  sysCard.backgroundColor = THEME.cardBg;
-  sysCard.cornerRadius = 6;
-  sysCard.setPadding(4, 8, 4, 8);
-  
-  const c = sysCard.addText(`CPU ${m ? m.cpu_percent.toFixed(1) : "--"}%`);
-  c.font = Font.semiboldSystemFont(11);
-  c.textColor = THEME.textPrimary;
-  sysCard.addSpacer();
-  const rm = sysCard.addText(`RAM ${m ? m.ram_percent.toFixed(0) : "--"}%`);
-  rm.font = Font.semiboldSystemFont(11);
-  rm.textColor = THEME.teal;
-
-  w.addSpacer(10);
-
-  // Account #1 Focus
-  const acc = d.pool?.accounts?.[0];
-  if (acc) {
-    const name = w.addText(`★ ${acc.name.split("@")[0]}`);
-    name.font = Font.boldSystemFont(12);
-    name.textColor = THEME.orange;
-    name.lineLimit = 1;
-
-    w.addSpacer(4);
-
-    const qRow = w.addStack();
-    qRow.layoutHorizontally();
-    const q5 = qRow.addText(`5h: ${acc.remaining_5h}%`);
-    q5.font = Font.systemFont(10);
-    q5.textColor = getQuotaColor(acc.remaining_5h);
-    qRow.addSpacer();
-    const qWk = qRow.addText(`Wk: ${acc.remaining_weekly}%`);
-    qWk.font = Font.systemFont(10);
-    qWk.textColor = THEME.blue;
-
-    w.addSpacer(4);
-    const bar = createProgressBar(125, 4, acc.remaining_5h, getQuotaColor(acc.remaining_5h));
-    const img = w.addImage(bar);
-    img.imageSize = new Size(125, 4);
-
-    w.addSpacer(3);
-    const rst = w.addText(`Reset trong ${acc.reset_5h || "--"}`);
-    rst.font = Font.systemFont(9);
-    rst.textColor = THEME.textTertiary;
-  }
-}
-
-/**
- * MEDIUM (2x4): Layout Card phân chia rành mạch, hiển thị chuẩn xác
- */
-function renderMedium(w, d) {
+// -------------------------------------------------------------
+// MEDIUM WIDGET (Kích thước chữ nhật ngang mặc định)
+// -------------------------------------------------------------
+function buildMedium(w, data) {
   w.setPadding(14, 16, 14, 16);
 
-  // 1. Header Row
+  // 1. HEADER ROW
   const h = w.addStack();
   h.layoutHorizontally();
   h.centerAlignContent();
 
-  const title = h.addText("CODEXBAR");
+  const title = h.addText("⚡ CODEXBAR");
   title.font = Font.boldSystemFont(11);
-  title.textColor = THEME.textSecondary;
+  title.textColor = C_TXT_PRIMARY;
 
   h.addSpacer(6);
 
-  const dot = h.addText(d.online ? "● ACTIVE" : "○ OFFLINE");
-  dot.font = Font.systemFont(9);
-  dot.textColor = d.online ? THEME.green : THEME.red;
+  const status = h.addText(data.online ? "● ON" : "○ OFF");
+  status.font = Font.systemFont(10);
+  status.textColor = data.online ? C_GREEN : C_RED;
 
   h.addSpacer();
 
-  const timeStr = d.time ? new Date(d.time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "--:--";
-  const sync = h.addText(`Sync ${timeStr}`);
-  sync.font = Font.systemFont(10);
-  sync.textColor = THEME.textTertiary;
+  const timeStr = data.time ? new Date(data.time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "--:--";
+  const syncTxt = h.addText(`Sync ${timeStr}`);
+  syncTxt.font = Font.systemFont(10);
+  syncTxt.textColor = C_TXT_MUTED;
 
   w.addSpacer(10);
 
-  // 2. Main Row: Left (Host Telemetry) & Right (Claude Pool #1)
-  const main = w.addStack();
-  main.layoutHorizontally();
-  main.spacing = 10;
+  // 2. DUAL CARDS ROW
+  const row = w.addStack();
+  row.layoutHorizontally();
+  row.spacing = 10;
 
-  // --- CARD TRÁI: TELEMETRY (CPU / RAM / UPTIME) ---
-  const m = d.sys?.metrics;
-  const leftCard = main.addStack();
-  leftCard.backgroundColor = THEME.cardBg;
-  leftCard.cornerRadius = 10;
-  leftCard.setPadding(8, 12, 8, 12);
-  leftCard.size = new Size(130, 95);
+  const m = data.sys?.metrics;
+  const acc1 = data.pool?.accounts?.[0];
+  const acc2 = data.pool?.accounts?.[1];
 
-  const lHead = leftCard.addStack();
-  lHead.layoutHorizontally();
-  const lTitle = lHead.addText("UBUNTU");
-  lTitle.font = Font.boldSystemFont(10);
-  lTitle.textColor = THEME.textTertiary;
-  lHead.addSpacer();
-  const upVal = lHead.addText(m?.uptime || "--");
-  upVal.font = Font.systemFont(9);
-  upVal.textColor = THEME.textTertiary;
+  // CARD 1: HOST TELEMETRY
+  const card1 = row.addStack();
+  card1.backgroundColor = C_CARD;
+  card1.cornerRadius = 10;
+  card1.setPadding(10, 12, 10, 12);
 
-  leftCard.addSpacer(6);
+  const c1Top = card1.addStack();
+  c1Top.layoutHorizontally();
+  const c1T = c1Top.addText("UBUNTU");
+  c1T.font = Font.boldSystemFont(10);
+  c1T.textColor = C_TXT_MUTED;
+  c1Top.addSpacer();
+  const upT = c1Top.addText(m?.uptime || "11d");
+  upT.font = Font.systemFont(9);
+  upT.textColor = C_TXT_MUTED;
 
-  // CPU Gauge
-  const cpuRow = leftCard.addStack();
+  card1.addSpacer(6);
+
+  const cpuRow = card1.addStack();
   cpuRow.layoutHorizontally();
-  const cLbl = cpuRow.addText("CPU");
-  cLbl.font = Font.systemFont(11);
-  cLbl.textColor = THEME.textSecondary;
+  const cpuL = cpuRow.addText("CPU");
+  cpuL.font = Font.systemFont(12);
+  cpuL.textColor = C_TXT_MUTED;
   cpuRow.addSpacer();
-  const cVal = cpuRow.addText(`${m ? m.cpu_percent.toFixed(1) : "--"}%`);
-  cVal.font = Font.boldSystemFont(11);
-  cVal.textColor = THEME.textPrimary;
+  const cpuV = cpuRow.addText(`${m ? m.cpu_percent.toFixed(1) : "--"}%`);
+  cpuV.font = Font.boldSystemFont(13);
+  cpuV.textColor = C_TXT_PRIMARY;
 
-  leftCard.addSpacer(3);
-  const cpuBar = createProgressBar(106, 3, m?.cpu_percent || 0, THEME.textPrimary);
-  const cpuBarImg = leftCard.addImage(cpuBar);
-  cpuBarImg.imageSize = new Size(106, 3);
+  card1.addSpacer(4);
 
-  leftCard.addSpacer(6);
-
-  // RAM Gauge
-  const ramRow = leftCard.addStack();
+  const ramRow = card1.addStack();
   ramRow.layoutHorizontally();
-  const rLbl = ramRow.addText("RAM");
-  rLbl.font = Font.systemFont(11);
-  rLbl.textColor = THEME.textSecondary;
+  const ramL = ramRow.addText("RAM");
+  ramL.font = Font.systemFont(12);
+  ramL.textColor = C_TXT_MUTED;
   ramRow.addSpacer();
-  const rVal = ramRow.addText(`${m ? m.ram_percent.toFixed(0) : "--"}%`);
-  rVal.font = Font.boldSystemFont(11);
-  rVal.textColor = THEME.teal;
+  const ramV = ramRow.addText(`${m ? m.ram_percent.toFixed(0) : "--"}%`);
+  ramV.font = Font.boldSystemFont(13);
+  ramV.textColor = C_TEAL;
 
-  leftCard.addSpacer(3);
-  const ramBar = createProgressBar(106, 3, m?.ram_percent || 0, THEME.teal);
-  const ramBarImg = leftCard.addImage(ramBar);
-  ramBarImg.imageSize = new Size(106, 3);
-
-  // --- CARD PHẢI: TÀI KHOẢN CLAUDE ACTIVE #1 & #2 ---
-  const rightCard = main.addStack();
-  rightCard.backgroundColor = THEME.cardBg;
-  rightCard.cornerRadius = 10;
-  rightCard.setPadding(8, 12, 8, 12);
-
-  const accounts = d.pool?.accounts || [];
-  const acc1 = accounts[0];
-  const acc2 = accounts[1];
+  // CARD 2: CLAUDE QUOTA
+  const card2 = row.addStack();
+  card2.backgroundColor = C_CARD;
+  card2.cornerRadius = 10;
+  card2.setPadding(10, 12, 10, 12);
 
   if (acc1) {
-    // Row 1: Account Name & Badge
-    const a1Row = rightCard.addStack();
+    const a1Row = card2.addStack();
     a1Row.layoutHorizontally();
-    a1Row.centerAlignContent();
     const a1Name = a1Row.addText(`★ ${acc1.name.split("@")[0]}`);
     a1Name.font = Font.boldSystemFont(11);
-    a1Name.textColor = THEME.orange;
+    a1Name.textColor = C_ORANGE;
     a1Name.lineLimit = 1;
     a1Row.addSpacer();
-    const a1Badge = a1Row.addText(acc1.plan || "Max");
-    a1Badge.font = Font.systemFont(9);
-    a1Badge.textColor = THEME.textTertiary;
+    const a1Plan = a1Row.addText(acc1.plan || "Max 20x");
+    a1Plan.font = Font.systemFont(9);
+    a1Plan.textColor = C_TXT_MUTED;
 
-    rightCard.addSpacer(4);
+    card2.addSpacer(6);
 
-    // Quota details
-    const q1Row = rightCard.addStack();
+    const q1Row = card2.addStack();
     q1Row.layoutHorizontally();
-    const q5Txt = q1Row.addText(`5h: ${acc1.remaining_5h}%`);
-    q5Txt.font = Font.semiboldSystemFont(10);
-    q5Txt.textColor = getQuotaColor(acc1.remaining_5h);
+    const q1Val = q1Row.addText(`5h: ${acc1.remaining_5h}%`);
+    q1Val.font = Font.boldSystemFont(12);
+    q1Val.textColor = getQuotaColor(acc1.remaining_5h);
     q1Row.addSpacer();
-    const rst5Txt = q1Row.addText(acc1.reset_5h || "");
-    rst5Txt.font = Font.systemFont(9);
-    rst5Txt.textColor = THEME.textTertiary;
+    const q1Reset = q1Row.addText(`Reset ${acc1.reset_5h || ""}`);
+    q1Reset.font = Font.systemFont(10);
+    q1Reset.textColor = C_TXT_MUTED;
 
-    rightCard.addSpacer(3);
-    const b1 = createProgressBar(160, 4, acc1.remaining_5h, getQuotaColor(acc1.remaining_5h));
-    const b1Img = rightCard.addImage(b1);
-    b1Img.imageSize = new Size(160, 4);
+    card2.addSpacer(4);
 
-    rightCard.addSpacer(6);
-
-    // Weekly or Account 2 preview
+    const q2Row = card2.addStack();
+    q2Row.layoutHorizontally();
+    const q2Val = q2Row.addText(`Wk: ${acc1.remaining_weekly}%`);
+    q2Val.font = Font.semiboldSystemFont(11);
+    q2Val.textColor = C_BLUE;
+    q2Row.addSpacer();
     if (acc2) {
-      const a2Row = rightCard.addStack();
-      a2Row.layoutHorizontally();
-      const a2Name = a2Row.addText(`2. ${acc2.name.split("@")[0]}`);
-      a2Name.font = Font.mediumSystemFont(10);
-      a2Name.textColor = THEME.textSecondary;
-      a2Name.lineLimit = 1;
-      a2Row.addSpacer();
-      const a2Q = a2Row.addText(`5h: ${acc2.remaining_5h}% • Wk: ${acc2.remaining_weekly}%`);
-      a2Q.font = Font.systemFont(9);
-      a2Q.textColor = THEME.blue;
+      const a2Hint = q2Row.addText(`#2: ${acc2.remaining_5h}% (5h)`);
+      a2Hint.font = Font.systemFont(9);
+      a2Hint.textColor = C_TXT_MUTED;
     } else {
-      const wRow = rightCard.addStack();
-      wRow.layoutHorizontally();
-      const wTxt = wRow.addText(`Weekly: ${acc1.remaining_weekly}%`);
-      wTxt.font = Font.systemFont(10);
-      wTxt.textColor = THEME.blue;
-      wRow.addSpacer();
-      const wRst = wRow.addText(acc1.reset_weekly || "");
-      wRst.font = Font.systemFont(9);
-      wRst.textColor = THEME.textTertiary;
+      const q2Reset = q2Row.addText(`Reset ${acc1.reset_weekly || ""}`);
+      q2Reset.font = Font.systemFont(9);
+      q2Reset.textColor = C_TXT_MUTED;
     }
   } else {
-    const empty = rightCard.addText("Chưa có dữ liệu Quota");
+    const empty = card2.addText("Chưa có dữ liệu Quota");
     empty.font = Font.systemFont(11);
-    empty.textColor = THEME.textTertiary;
+    empty.textColor = C_TXT_MUTED;
   }
 }
 
-/**
- * LARGE (4x4): Trung tâm điều khiển toàn diện
- */
-function renderLarge(w, d) {
-  w.setPadding(16, 16, 16, 16);
+// -------------------------------------------------------------
+// SMALL WIDGET (2x2)
+// -------------------------------------------------------------
+function buildSmall(w, data) {
+  w.setPadding(12, 12, 12, 12);
+  const m = data.sys?.metrics;
+  const acc = data.pool?.accounts?.[0];
 
-  // 1. Header
   const h = w.addStack();
   h.layoutHorizontally();
-  h.centerAlignContent();
+  const t = h.addText("CODEXBAR");
+  t.font = Font.boldSystemFont(10);
+  t.textColor = C_TXT_MUTED;
+  h.addSpacer();
+  const st = h.addText(data.online ? "●" : "○");
+  st.textColor = data.online ? C_GREEN : C_RED;
+  st.font = Font.systemFont(10);
+
+  w.addSpacer(8);
+
+  const sys = w.addStack();
+  sys.layoutHorizontally();
+  sys.backgroundColor = C_CARD;
+  sys.cornerRadius = 6;
+  sys.setPadding(4, 6, 4, 6);
+  const cT = sys.addText(`CPU ${m ? m.cpu_percent.toFixed(1) : "--"}%`);
+  cT.font = Font.boldSystemFont(10);
+  cT.textColor = C_TXT_PRIMARY;
+  sys.addSpacer();
+  const rT = sys.addText(`RAM ${m ? m.ram_percent.toFixed(0) : "--"}%`);
+  rT.font = Font.boldSystemFont(10);
+  rT.textColor = C_TEAL;
+
+  w.addSpacer(8);
+
+  if (acc) {
+    const n = w.addText(`★ ${acc.name.split("@")[0]}`);
+    n.font = Font.boldSystemFont(11);
+    n.textColor = C_ORANGE;
+    n.lineLimit = 1;
+
+    w.addSpacer(3);
+
+    const q5 = w.addText(`5h: ${acc.remaining_5h}% (${acc.reset_5h})`);
+    q5.font = Font.systemFont(11);
+    q5.textColor = getQuotaColor(acc.remaining_5h);
+
+    w.addSpacer(2);
+
+    const qw = w.addText(`Wk: ${acc.remaining_weekly}% (${acc.reset_weekly})`);
+    qw.font = Font.systemFont(10);
+    qw.textColor = C_BLUE;
+  }
+}
+
+// -------------------------------------------------------------
+// LARGE WIDGET (4x4)
+// -------------------------------------------------------------
+function buildLarge(w, data) {
+  w.setPadding(16, 16, 16, 16);
+  const m = data.sys?.metrics;
+  const accounts = data.pool?.accounts?.slice(0, 3) || [];
+
+  const h = w.addStack();
+  h.layoutHorizontally();
   const t = h.addText("CODEXBAR COMMAND");
   t.font = Font.boldSystemFont(12);
-  t.textColor = THEME.textSecondary;
+  t.textColor = C_TXT_PRIMARY;
   h.addSpacer();
-  const st = h.addText(d.online ? "● SYSTEM ONLINE" : "○ OFFLINE");
+  const st = h.addText(data.online ? "● ACTIVE" : "○ OFFLINE");
+  st.textColor = data.online ? C_GREEN : C_RED;
   st.font = Font.boldSystemFont(10);
-  st.textColor = d.online ? THEME.green : THEME.red;
 
   w.addSpacer(12);
 
-  // 2. Triple Metric Cards (CPU, RAM, DISK)
-  const m = d.sys?.metrics;
-  const gRow = w.addStack();
-  gRow.layoutHorizontally();
-  gRow.spacing = 8;
-
-  const makeCard = (title, val, sub, color) => {
-    const c = gRow.addStack();
-    c.backgroundColor = THEME.cardBg;
+  // Gauges
+  const g = w.addStack();
+  g.layoutHorizontally();
+  g.spacing = 8;
+  const addG = (label, val, sub, col) => {
+    const c = g.addStack();
+    c.backgroundColor = C_CARD;
     c.cornerRadius = 8;
-    c.setPadding(8, 10, 8, 10);
-    const ttl = c.addText(title);
-    ttl.font = Font.systemFont(9);
-    ttl.textColor = THEME.textTertiary;
+    c.setPadding(8, 8, 8, 8);
+    const lb = c.addText(label);
+    lb.font = Font.systemFont(9);
+    lb.textColor = C_TXT_MUTED;
     c.addSpacer(2);
     const v = c.addText(val);
-    v.font = Font.boldSystemFont(15);
-    v.textColor = color;
+    v.font = Font.boldSystemFont(14);
+    v.textColor = col;
     c.addSpacer(2);
-    const s = c.addText(sub);
-    s.font = Font.systemFont(8);
-    s.textColor = THEME.textSecondary;
+    const sb = c.addText(sub);
+    sb.font = Font.systemFont(8);
+    sb.textColor = C_TXT_MUTED;
   };
 
-  makeCard("CPU", `${m ? m.cpu_percent.toFixed(1) : "--"}%`, `${m?.cpu_count || 12} Cores`, THEME.textPrimary);
-  makeCard("RAM", `${m ? m.ram_percent.toFixed(0) : "--"}%`, `${m?.ram_used_gb || "--"}GB`, THEME.teal);
-  makeCard("DISK", `${m ? m.disk_percent.toFixed(0) : "--"}%`, `${m?.disk_free_gb || "--"}GB Free`, THEME.orange);
+  addG("CPU", `${m ? m.cpu_percent.toFixed(1) : "--"}%`, `${m?.cpu_count || 12}C`, C_TXT_PRIMARY);
+  addG("RAM", `${m ? m.ram_percent.toFixed(0) : "--"}%`, `${m?.ram_used_gb || "--"}G`, C_TEAL);
+  addG("DISK", `${m ? m.disk_percent.toFixed(0) : "--"}%`, `${m?.disk_free_gb || "--"}G Free`, C_ORANGE);
 
   w.addSpacer(12);
 
-  // 3. Pool Account List
-  const pHeader = w.addStack();
-  pHeader.layoutHorizontally();
-  const pTitle = pHeader.addText("CLAUDE QUOTA POOL");
-  pTitle.font = Font.semiboldSystemFont(10);
-  pTitle.textColor = THEME.textTertiary;
-  pHeader.addSpacer();
-  const ports = pHeader.addText(`${d.sys?.ports?.length || 0} Ports Active`);
-  ports.font = Font.systemFont(9);
-  ports.textColor = THEME.blue;
+  const accH = w.addStack();
+  accH.layoutHorizontally();
+  const ahT = accH.addText("CLAUDE QUOTA POOL");
+  ahT.font = Font.boldSystemFont(10);
+  ahT.textColor = C_TXT_MUTED;
+  accH.addSpacer();
+  const pCount = accH.addText(`${data.sys?.ports?.length || 0} Ports`);
+  pCount.font = Font.systemFont(9);
+  pCount.textColor = C_BLUE;
 
   w.addSpacer(6);
 
-  const accounts = d.pool?.accounts?.slice(0, 3) || [];
   accounts.forEach((acc, idx) => {
-    const card = w.addStack();
-    card.backgroundColor = THEME.cardBg;
-    card.cornerRadius = 8;
-    card.setPadding(8, 10, 8, 10);
+    const row = w.addStack();
+    row.backgroundColor = C_CARD;
+    row.cornerRadius = 8;
+    row.setPadding(8, 10, 8, 10);
 
-    const r1 = card.addStack();
-    r1.layoutHorizontally();
-    const nm = r1.addText(`${idx === 0 ? "★ " : `#${idx+1} `}${acc.name.split("@")[0]}`);
+    const left = row.addStack();
+    const nm = left.addText(`${idx === 0 ? "★ " : `#${idx+1} `}${acc.name.split("@")[0]}`);
     nm.font = Font.boldSystemFont(11);
-    nm.textColor = idx === 0 ? THEME.orange : THEME.textPrimary;
-    r1.addSpacer();
-    const pl = r1.addText(`${acc.plan || "Max"} • 5h: ${acc.remaining_5h}% (${acc.reset_5h})`);
-    pl.font = Font.systemFont(9);
-    pl.textColor = getQuotaColor(acc.remaining_5h);
+    nm.textColor = idx === 0 ? C_ORANGE : C_TXT_PRIMARY;
+    nm.lineLimit = 1;
 
-    card.addSpacer(4);
-    const b = createProgressBar(295, 4, acc.remaining_5h, getQuotaColor(acc.remaining_5h));
-    const bView = card.addImage(b);
-    bView.imageSize = new Size(295, 4);
+    row.addSpacer();
+
+    const right = row.addStack();
+    right.layoutHorizontally();
+    const q5 = right.addText(`5h: ${acc.remaining_5h}% `);
+    q5.font = Font.semiboldSystemFont(10);
+    q5.textColor = getQuotaColor(acc.remaining_5h);
+
+    const qw = right.addText(`Wk: ${acc.remaining_weekly}%`);
+    qw.font = Font.semiboldSystemFont(10);
+    qw.textColor = C_BLUE;
 
     w.addSpacer(6);
   });
 
   w.addSpacer();
-  const foot = w.addStack();
-  foot.layoutHorizontally();
-  const up = foot.addText(`Uptime: ${m?.uptime || "--"}`);
+  const f = w.addStack();
+  f.layoutHorizontally();
+  const up = f.addText(`Uptime: ${m?.uptime || "--"}`);
   up.font = Font.systemFont(9);
-  up.textColor = THEME.textTertiary;
-  foot.addSpacer();
-  const sync = foot.addText(`Cập nhật: ${d.time ? new Date(d.time).toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"}) : "--"}`);
-  sync.font = Font.systemFont(9);
-  sync.textColor = THEME.textTertiary;
+  up.textColor = C_TXT_MUTED;
+  f.addSpacer();
+  const s = f.addText(`Sync: ${data.time ? new Date(data.time).toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"}) : "--"}`);
+  s.font = Font.systemFont(9);
+  s.textColor = C_TXT_MUTED;
 }
 
-// ==========================================
-// 6. MAIN CONTROLLER
-// ==========================================
+// -------------------------------------------------------------
+// MAIN ENTRY
+// -------------------------------------------------------------
 async function main() {
-  const widget = new ListWidget();
-  
-  // Background Gradient
+  const w = new ListWidget();
   const grad = new LinearGradient();
   grad.locations = [0.0, 1.0];
-  grad.colors = [THEME.bgStart, THEME.bgEnd];
-  widget.backgroundGradient = grad;
+  grad.colors = [C_BG_TOP, C_BG_BTM];
+  w.backgroundGradient = grad;
 
-  const data = await loadData();
+  const data = await fetchData();
   const family = config.widgetFamily || "medium";
 
   if (family === "small") {
-    renderSmall(widget, data);
+    buildSmall(w, data);
   } else if (family === "large") {
-    renderLarge(widget, data);
+    buildLarge(w, data);
   } else {
-    renderMedium(widget, data);
+    buildMedium(w, data);
   }
 
-  // Refresh schedule 10 mins
-  widget.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_INTERVAL_MINUTES * 60 * 1000);
-  return widget;
+  w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
+  return w;
 }
 
-const widget = await main();
-
+const w = await main();
 if (config.runsInWidget) {
-  Script.setWidget(widget);
+  Script.setWidget(w);
 } else {
-  widget.presentMedium();
+  w.presentMedium();
 }
-
 Script.complete();
