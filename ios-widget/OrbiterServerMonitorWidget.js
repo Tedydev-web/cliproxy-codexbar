@@ -241,7 +241,7 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(2);
 
-  // 2. SUB-HEADER: Uptime & Trạng thái Online
+  // 2. SUB-HEADER: Uptime & Trạng thái Online + Live Relative Time
   const row2 = w.addStack();
   row2.layoutHorizontally();
   row2.centerAlignContent();
@@ -255,15 +255,21 @@ function buildMediumWidget(w, data) {
   const statusStack = row2.addStack();
   statusStack.layoutHorizontally();
   statusStack.centerAlignContent();
-  statusStack.spacing = 4;
+  statusStack.spacing = 3;
 
   const dot = statusStack.addText("●");
-  dot.font = Font.systemFont(9);
+  dot.font = Font.systemFont(8);
   dot.textColor = isOnline ? TOKENS.greenOnline : TOKENS.redAlert;
 
-  const statusTxt = statusStack.addText(isOnline ? "Online" : "Offline");
-  statusTxt.font = Font.systemFont(11);
+  const statusTxt = statusStack.addText(isOnline ? "Online · " : "Off · ");
+  statusTxt.font = Font.systemFont(10.5);
   statusTxt.textColor = isOnline ? TOKENS.greenOnline : TOKENS.redAlert;
+
+  const d = new Date(data.fetched_at || Date.now());
+  const rel = statusStack.addDate(d);
+  rel.applyRelativeStyle();
+  rel.font = Font.systemFont(10);
+  rel.textColor = TOKENS.textMuted;
 
   w.addSpacer(6);
 
@@ -513,8 +519,8 @@ async function main() {
   const widget = new ListWidget();
   widget.backgroundColor = TOKENS.bg;
 
-  // Lên lịch làm mới tối ưu: 2 phút
-  widget.refreshAfterDate = new Date(Date.now() + 120 * 1000);
+  // Lên lịch làm mới sớm nhất: 1 phút (hoặc khi vuốt tới trang chứa widget)
+  widget.refreshAfterDate = new Date(Date.now() + 60 * 1000);
 
   const family = config.widgetFamily || "medium";
 

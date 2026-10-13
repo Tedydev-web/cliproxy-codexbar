@@ -13,7 +13,7 @@ const CONFIG = {
   HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
   PORT: "8318",
   TIMEOUT: 4,
-  REFRESH_MIN: 2, // Chu kỳ refresh đề xuất cho iOS (2 phút)
+  REFRESH_MIN: 1, // Chu kỳ refresh đề xuất cho iOS sớm nhất (1 phút)
   CACHE_KEY: "orbiter_agy_gemini_v11"
 };
 
@@ -58,28 +58,24 @@ function getAgyIcon() {
   return sym.image;
 }
 
-// ==========================================
-// TIME FORMATTERS (1:1 VỚI SWIFT ORBITERMENUBAR)
-// ==========================================
-function formatAgoText(timestamp) {
-  if (!timestamp) return "Vừa xong";
-  const now = Date.now();
-  const deltaSec = Math.max(0, Math.floor((now - timestamp) / 1000));
-  const timeStr = new Date(timestamp).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function addSyncTimeElement(stack, timestamp) {
+  const d = new Date(timestamp || Date.now());
+  const pad = (n) => String(n).padStart(2, "0");
+  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
-  let relStr = "Vừa xong";
-  if (deltaSec < 15) {
-    relStr = "Vừa xong";
-  } else if (deltaSec < 60) {
-    relStr = `${deltaSec}s trước`;
-  } else if (deltaSec < 3600) {
-    relStr = `${Math.floor(deltaSec / 60)}m trước`;
-  } else if (deltaSec < 86400) {
-    relStr = `${Math.floor(deltaSec / 3600)}h trước`;
-  } else {
-    relStr = "1d trước";
-  }
-  return `Cập nhật lúc ${timeStr} · ${relStr}`;
+  const syncStack = stack.addStack();
+  syncStack.layoutHorizontally();
+  syncStack.centerAlignContent();
+  syncStack.spacing = 3;
+
+  const t = syncStack.addText(`${timeStr} · `);
+  t.font = Font.systemFont(10);
+  t.textColor = TOKENS.textMuted;
+
+  const rel = syncStack.addDate(d);
+  rel.applyRelativeStyle();
+  rel.font = Font.systemFont(10);
+  rel.textColor = TOKENS.textMuted;
 }
 
 function formatResetWithEst(raw) {
@@ -272,11 +268,8 @@ function buildMediumWidget(w, data) {
   row2.layoutHorizontally();
   row2.centerAlignContent();
 
-  // Dòng cập nhật chuẩn macOS: "Cập nhật lúc HH:mm:ss · Xs trước"
-  const agoText = formatAgoText(data.time);
-  const syncTxt = row2.addText(agoText);
-  syncTxt.font = Font.systemFont(10.5);
-  syncTxt.textColor = TOKENS.textSecondary;
+  // Mốc thời gian đồng bộ và relative live date cập nhật tự động
+  addSyncTimeElement(row2, data.time);
 
   row2.addSpacer();
 
