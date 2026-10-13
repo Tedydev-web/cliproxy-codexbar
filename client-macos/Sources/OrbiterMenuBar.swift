@@ -2537,62 +2537,6 @@ struct UbuntuServerQuickMenuView: View {
                     }
                 }
             }
-            
-            Divider()
-            
-            // 4. Quick Services & Tunnels Overview Row (Clickable -> Opens Hub Window)
-            Button(action: {
-                AppDelegate.shared?.openSystemManagerWindow()
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "server.rack")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 14, height: 14)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text("Bảng điều khiển chi tiết")
-                                .font(.system(size: 11.5, weight: .medium))
-                                .foregroundStyle(.primary)
-                            
-                            Spacer()
-                            
-                            Text("Mở Hub Window")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.tertiary)
-                        }
-                        
-                        HStack(spacing: 6) {
-                            Text("CLIProxy")
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(.secondary)
-                            Text("·")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            Text("Herdr")
-                                .font(.system(size: 9.5))
-                                .foregroundStyle(.secondary)
-                            Text("·")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                            Text("\(self.state.sysTunnels.count) Tunnels")
-                                .font(.system(size: 9.5, weight: .medium))
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8.5, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)
