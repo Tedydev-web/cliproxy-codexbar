@@ -10,7 +10,7 @@ MACOS_HOSTS=(
     "tedydev@100.127.1.235"  # iMac
 )
 
-echo "=== CLIProxy CodexBar Multi-Machine Sync Tool ==="
+echo "=== Orbiter Menubar Multi-Machine Sync Tool ==="
 
 # 1. Đồng bộ Backend trên máy hiện tại (Ubuntu Host)
 echo "--------------------------------------------------"

@@ -12,22 +12,23 @@ else
     mkdir -p "${BIN_DIR}"
 fi
 
-BIN_TARGET="${BIN_DIR}/CodexBarCustom"
-PLIST_TARGET="${HOME}/Library/LaunchAgents/com.tedydev.codexbarcustom.plist"
+BIN_TARGET="${BIN_DIR}/OrbiterMenuBar"
+PLIST_TARGET="${HOME}/Library/LaunchAgents/com.tedydev.orbitermenubar.plist"
 
-echo "=== Cài đặt CodexBarCustom trên macOS ==="
+echo "=== Cài đặt OrbiterMenuBar trên macOS ==="
 
 # 1. Biên dịch
 "${SCRIPT_DIR}/build.sh"
 
 # 2. Dừng tiến trình cũ nếu đang chạy
-echo "[1/4] Dừng tiến trình CodexBarCustom cũ (nếu có)..."
+echo "[1/4] Dừng tiến trình OrbiterMenuBar cũ (nếu có)..."
+pkill -f OrbiterMenuBar || true
 pkill -f CodexBarCustom || true
 sleep 1
 
 # 3. Cài đặt file nhị phân & Icon Resources
 echo "[2/4] Cài đặt file thực thi vào ${BIN_TARGET}..."
-cp "${SCRIPT_DIR}/build/CodexBarCustom" "${BIN_TARGET}"
+cp "${SCRIPT_DIR}/build/OrbiterMenuBar" "${BIN_TARGET}"
 chmod +x "${BIN_TARGET}"
 if [ -d "${SCRIPT_DIR}/Resources" ]; then
     cp -f "${SCRIPT_DIR}/Resources/icon-claude.png" /tmp/icon-claude.png 2>/dev/null || true
@@ -43,7 +44,7 @@ cat <<EOF > "${PLIST_TARGET}"
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.tedydev.codexbarcustom</string>
+    <string>com.tedydev.orbitermenubar</string>
     <key>ProgramArguments</key>
     <array>
         <string>${BIN_TARGET}</string>
@@ -53,9 +54,9 @@ cat <<EOF > "${PLIST_TARGET}"
     <key>KeepAlive</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>/tmp/CodexBarCustom.err.log</string>
+    <string>/tmp/OrbiterMenuBar.err.log</string>
     <key>StandardOutPath</key>
-    <string>/tmp/CodexBarCustom.out.log</string>
+    <string>/tmp/OrbiterMenuBar.out.log</string>
 </dict>
 </plist>
 EOF
@@ -63,15 +64,15 @@ launchctl unload "${PLIST_TARGET}" 2>/dev/null || true
 launchctl load "${PLIST_TARGET}"
 
 # 5. Khởi động ứng dụng
-echo "[4/4] Khởi động CodexBarCustom..."
+echo "[4/4] Khởi động OrbiterMenuBar..."
 sleep 1
-if pgrep -f CodexBarCustom >/dev/null; then
-    echo "✅ CodexBarCustom đã cài đặt và đang chạy thành công trên Menu Bar!"
+if pgrep -f OrbiterMenuBar >/dev/null; then
+    echo "✅ OrbiterMenuBar đã cài đặt và đang chạy thành công trên Menu Bar!"
 else
     nohup "${BIN_TARGET}" >/dev/null 2>&1 &
     sleep 1
-    if pgrep -f CodexBarCustom >/dev/null; then
-        echo "✅ CodexBarCustom đã cài đặt và đang chạy thành công trên Menu Bar!"
+    if pgrep -f OrbiterMenuBar >/dev/null; then
+        echo "✅ OrbiterMenuBar đã cài đặt và đang chạy thành công trên Menu Bar!"
     else
         echo "⚠️ Ứng dụng đã cài đặt nhưng chưa khởi động được. Hãy chạy thử: ${BIN_TARGET}"
     fi

@@ -813,10 +813,10 @@ struct SettingsView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Cài đặt CodexBar Custom")
+                    Text("Cài đặt Orbiter Menubar")
                         .font(.title3)
                         .fontWeight(.bold)
-                    Text("Tùy chỉnh tần suất cập nhật Quota & Telemetry")
+                    Text("Tùy chỉnh tần suất cập nhật Quota AI & Server Telemetry")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -2957,7 +2957,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         window.minSize = NSSize(width: 480, height: 480)
         window.center()
-        window.title = "Cài đặt CodexBar Custom"
+        window.title = "Cài đặt Orbiter Menubar"
         window.contentView = hosting
         window.isReleasedWhenClosed = false
         window.level = .floating

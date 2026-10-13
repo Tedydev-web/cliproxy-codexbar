@@ -1,10 +1,10 @@
 {
-  "name": "cliproxy-codexbar",
+  "name": "orbiter-menubar",
   "version": "2.0.0",
-  "description": "Production-grade Quota & Session Monitor for CLIProxy and macOS Menu Bar",
+  "description": "Production-grade Quota & Session Monitor for AI Providers and macOS Menu Bar",
   "main": "backend/bridge/main.py",
   "bin": {
-    "cliproxy-codexbar": "./install.sh"
+    "orbiter-menubar": "./install.sh"
   },
   "scripts": {
     "sync": "./sync-all.sh",

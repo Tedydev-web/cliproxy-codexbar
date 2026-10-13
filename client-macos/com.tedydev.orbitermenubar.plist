@@ -3,18 +3,18 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.tedydev.codexbarcustom</string>
+    <string>com.tedydev.orbitermenubar</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/CodexBarCustom</string>
+        <string>/usr/local/bin/OrbiterMenuBar</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>/tmp/CodexBarCustom.err.log</string>
+    <string>/tmp/OrbiterMenuBar.err.log</string>
     <key>StandardOutPath</key>
-    <string>/tmp/CodexBarCustom.out.log</string>
+    <string>/tmp/OrbiterMenuBar.out.log</string>
 </dict>
 </plist>

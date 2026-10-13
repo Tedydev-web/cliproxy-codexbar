@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 #
-# One-line installer for CLIProxy CodexBar System
+# One-line installer for Orbiter Menubar System
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Tedydev-web/cliproxy-codexbar/main/install.sh | bash
 #
 set -euo pipefail
 
 OS="$(uname -s)"
-echo "=== CLIProxy CodexBar Installer (Detected OS: ${OS}) ==="
+echo "=== Orbiter Menubar Installer (Detected OS: ${OS}) ==="
 
 if [ "${OS}" = "Darwin" ]; then
     echo ">> Cài đặt Client cho macOS..."
-    TMP_DIR="/tmp/cliproxy-codexbar-install"
+    TMP_DIR="/tmp/orbiter-menubar-install"
     rm -rf "${TMP_DIR}"
     git clone --depth 1 https://github.com/Tedydev-web/cliproxy-codexbar.git "${TMP_DIR}"
     cd "${TMP_DIR}/client-macos"
     ./install-client.sh
-    echo "🎉 Cài đặt CodexBar Custom trên macOS thành công!"
+    echo "🎉 Cài đặt Orbiter Menubar trên macOS thành công!"
 elif [ "${OS}" = "Linux" ]; then
     echo ">> Cài đặt Backend Quota Bridge trên Linux..."
     TMP_DIR="/tmp/cliproxy-codexbar-install"
