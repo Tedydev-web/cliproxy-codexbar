@@ -1156,6 +1156,8 @@ class QuotaState: ObservableObject {
         URLSession.shared.dataTask(with: req) { data, _, _ in
             DispatchQueue.main.async {
                 self.switchingMessage = "Đã cập nhật thứ tự selector!"
+                // Re-fetch to synchronize active account metrics with backend
+                self.fetchData()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     self.switchingMessage = ""
                 }
@@ -1172,6 +1174,19 @@ class QuotaState: ObservableObject {
         let moved = accounts.remove(at: fromIndex)
         accounts.insert(moved, at: toIndex)
         self.claudeAccounts = accounts
+        
+        // If the top account changed, immediately update claudeEmail to follow the new #1 priority
+        if let topAcc = accounts.first {
+            self.claudeEmail = topAcc.email
+            self.claudePlan = topAcc.plan
+            self.claude5h = topAcc.used5h
+            self.claude7d = topAcc.usedWeekly
+            self.claude5hReset = topAcc.reset5h.isEmpty ? "Đầy đủ" : topAcc.reset5h
+            self.claude7dReset = topAcc.resetWeekly
+            self.claudePaceReserve = topAcc.remaining5h
+            self.onUpdate?()
+        }
+        
         self.saveOrder()
     }
 
@@ -1319,16 +1334,8 @@ class QuotaState: ObservableObject {
                     }
                     self.claudeAccounts = parsedList
                     
-                    // Always default to the #1 priority account in the pool order unless already set
-                    let targetAccount: PoolAccountItem?
-                    if !self.claudeEmail.isEmpty, let matched = parsedList.first(where: { $0.email == self.claudeEmail }) {
-                        targetAccount = matched
-                    } else if let topAccount = parsedList.first {
-                        targetAccount = topAccount
-                        self.claudeEmail = topAccount.email
-                    } else {
-                        targetAccount = nil
-                    }
+                    // The #1 account in the pool order is ALWAYS the active account (selector drain order)
+                    let targetAccount = parsedList.first
                     
                     if let current = targetAccount {
                         self.claudeEmail = current.email
