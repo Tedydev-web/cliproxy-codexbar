@@ -1047,7 +1047,7 @@ struct SettingsView: View {
 
 // MARK: - State Management with Remote Priority Switching
 class QuotaState: ObservableObject {
-    @Published var claudeEmail = "trthuhuyen2712@gmail.com"
+    @Published var claudeEmail = ""
     @Published var claudePlan = "Max 5x"
     @Published var claude5h = 11
     @Published var claude7d = 26
@@ -1319,7 +1319,19 @@ class QuotaState: ObservableObject {
                     }
                     self.claudeAccounts = parsedList
                     
-                    if let current = parsedList.first(where: { $0.email == self.claudeEmail }) {
+                    // Always default to the #1 priority account in the pool order unless already set
+                    let targetAccount: PoolAccountItem?
+                    if !self.claudeEmail.isEmpty, let matched = parsedList.first(where: { $0.email == self.claudeEmail }) {
+                        targetAccount = matched
+                    } else if let topAccount = parsedList.first {
+                        targetAccount = topAccount
+                        self.claudeEmail = topAccount.email
+                    } else {
+                        targetAccount = nil
+                    }
+                    
+                    if let current = targetAccount {
+                        self.claudeEmail = current.email
                         self.claudePlan = current.plan
                         self.claude5h = current.used5h
                         self.claude7d = current.usedWeekly
@@ -1331,19 +1343,6 @@ class QuotaState: ObservableObject {
                             self.claude7dReset = current.resetWeekly
                         }
                         self.claudePaceReserve = current.remaining5h
-                    } else if let firstActive = parsedList.first(where: { $0.isAvailable }) {
-                        self.claudeEmail = firstActive.email
-                        self.claudePlan = firstActive.plan
-                        self.claude5h = firstActive.used5h
-                        self.claude7d = firstActive.usedWeekly
-                        if firstActive.isProbeError {
-                            self.claude5hReset = "Tạm nghẽn 429"
-                            self.claude7dReset = "Tạm nghẽn 429"
-                        } else {
-                            self.claude5hReset = firstActive.reset5h.isEmpty ? "Đầy đủ" : firstActive.reset5h
-                            self.claude7dReset = firstActive.resetWeekly
-                        }
-                        self.claudePaceReserve = firstActive.remaining5h
                     }
                     
                     // Parse Gateway Telemetry
