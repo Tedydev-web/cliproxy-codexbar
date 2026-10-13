@@ -2410,13 +2410,23 @@ struct SystemManagerView: View {
 // MARK: - Dedicated Ubuntu Server Quick Menu View (Exact 1:1 CodexBar Pattern)
 struct UbuntuServerQuickMenuView: View {
     @ObservedObject var state: QuotaState
+    @State private var searchText: String = ""
     
     var activeDevPorts: [PortInfo] {
         // Priority to actual user dev servers (non-internal, dev ports)
         let primary = state.sysPorts.filter { !$0.isInternal && $0.port != 8317 && $0.port != 8318 }
-        if !primary.isEmpty { return primary }
-        // Fallback to non-IDE internal
-        return state.sysPorts.filter { !$0.isInternal }
+        let base = !primary.isEmpty ? primary : state.sysPorts.filter { !$0.isInternal }
+        
+        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        if q.isEmpty {
+            return base
+        }
+        return base.filter { p in
+            String(p.port).contains(q) ||
+            p.process.lowercased().contains(q) ||
+            p.project.lowercased().contains(q) ||
+            p.cwd.lowercased().contains(q)
+        }
     }
     
     var body: some View {
@@ -2482,63 +2492,96 @@ struct UbuntuServerQuickMenuView: View {
             
             Divider()
             
-            // 3. Quick Dev Ports & Kill (Clean CodexBar list)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Cổng Dev Đang Mở (Quick Kill)")
+            // 3. Quick Dev Ports & Search (Minimalist Apple Design)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .center) {
+                    Text("Cổng Dev Đang Mở")
                         .font(.footnote)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(self.activeDevPorts.count) cổng hoạt động")
+                    Text("\(self.activeDevPorts.count) cổng")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
                 
+                // Minimalist Apple-Design Search Bar
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary.opacity(0.8))
+                    TextField("Tìm port, tiến trình, dự án...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4.5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.primary.opacity(0.035))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                )
+                
                 if self.activeDevPorts.isEmpty {
-                    Text("Không có tiến trình dev nào đang chiếm cổng.")
+                    Text(searchText.isEmpty ? "Không có tiến trình dev nào đang chiếm cổng." : "Không tìm thấy port nào khớp với từ khóa.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 6)
                 } else {
-                    ForEach(Array(self.activeDevPorts.prefix(6))) { p in
-                        HStack(alignment: .center, spacing: 8) {
-                            Text(":\(p.displayPort)")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundStyle(Color.accentColor)
-                                .frame(width: 58, alignment: .leading)
+                    VStack(spacing: 0) {
+                        ForEach(Array(self.activeDevPorts.prefix(8).enumerated()), id: \.element.id) { idx, p in
+                            if idx > 0 {
+                                Divider()
+                                    .opacity(0.2)
+                                    .padding(.vertical, 2)
+                            }
                             
-                            VStack(alignment: .leading, spacing: 1.5) {
-                                Text(p.process)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(1)
+                            HStack(alignment: .center, spacing: 8) {
+                                Text(":\(p.displayPort)")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 58, alignment: .leading)
                                 
-                                Text(!p.project.isEmpty ? p.project : (!p.cwd.isEmpty ? p.cwd : "-"))
-                                    .font(.system(size: 9.5, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            
-                            Spacer()
-                            
-                            Button(action: {
-                                self.state.killPort(port: p.port, pid: p.pid)
-                            }) {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 11.5))
-                                        .foregroundStyle(Color.red.opacity(0.85))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(p.process)
+                                        .font(.system(size: 11.5, weight: .medium))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                    
+                                    Text(!p.project.isEmpty ? p.project : (!p.cwd.isEmpty ? p.cwd : "-"))
+                                        .font(.system(size: 9.5, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
                                 }
+                                
+                                Spacer(minLength: 6)
+                                
+                                Button(action: {
+                                    self.state.killPort(port: p.port, pid: p.pid)
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 12.5))
+                                        .foregroundStyle(Color.red.opacity(0.8))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Dừng tiến trình trên cổng :\(p.displayPort)")
                             }
-                            .buttonStyle(.plain)
-                            .help("Dừng tiến trình trên cổng :\(p.port)")
+                            .padding(.vertical, 3)
+                            .padding(.horizontal, 4)
+                            .contentShape(Rectangle())
                         }
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.04))
-                        .cornerRadius(5)
                     }
                 }
             }
