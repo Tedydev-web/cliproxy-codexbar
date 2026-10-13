@@ -24,20 +24,22 @@ const URLS = {
 };
 
 // ==========================================
-// DESIGN TOKENS (CODEXBAR MACOS 1:1)
+// DESIGN TOKENS (CODEXBAR MACOS 1:1 - APPLE DYNAMIC LIGHT/DARK)
 // ==========================================
 const TOKENS = {
-  bgTop: new Color("#161A1D"),
-  bgBtm: new Color("#0E1114"),
-  cardBorder: new Color("#FFFFFF", 0.08),
+  bgTop: Color.dynamic(new Color("#F8FAFC"), new Color("#161A1D")),
+  bgBtm: Color.dynamic(new Color("#EEF2F6"), new Color("#0E1114")),
+  cardBorder: Color.dynamic(new Color("#000000", 0.08), new Color("#FFFFFF", 0.08)),
 
-  textPrimary: new Color("#FFFFFF", 0.95),
-  textSecondary: new Color("#9CA3AF"),
-  textMuted: new Color("#6B7280"),
+  textPrimary: Color.dynamic(new Color("#0F172A"), new Color("#FFFFFF", 0.95)),
+  textSecondary: Color.dynamic(new Color("#475569"), new Color("#9CA3AF")),
+  textMuted: Color.dynamic(new Color("#94A3B8"), new Color("#6B7280")),
 
   orangeFill: new Color("#F97316"),   // Cam Claude
-  trackGray: new Color("#272D34"),    // Rãnh segmented bar
-  greenPace: new Color("#22C55E")     // Vạch nhịp độ an toàn
+  trackGray: Color.dynamic(new Color("#E2E8F0"), new Color("#272D34")),    // Rãnh segmented bar thích ứng Dark/Light
+  greenPace: new Color("#22C55E"),    // Vạch nhịp độ an toàn / Online
+  amberWarn: new Color("#F59E0B"),    // Cảnh báo 429
+  redAlert: new Color("#EF4444")      // Hết hạn / Lỗi
 };
 
 // Official Claude Sparkle Brand Logo Icon (Base64 PNG Template)
@@ -486,14 +488,30 @@ function buildLargeWidget(w, data) {
     const isFirst = idx === 0;
     const realNum = idx + 1;
 
+    // Container cho từng tài khoản (Hỗ trợ chạm trực tiếp để chuyển đổi ưu tiên #1)
+    const accStack = w.addStack();
+    accStack.layoutVertically();
+    accStack.url = "scriptable:///run?scriptName=" + encodeURIComponent(Script.name()) + "&action=switch&email=" + encodeURIComponent(acc.email);
+
     // --- A. ACCOUNT HEADER ROW ---
-    const accHead = w.addStack();
+    const accHead = accStack.addStack();
     accHead.layoutHorizontally();
     accHead.centerAlignContent();
 
-    // Priority badge + Email + Plan
-    const idBadge = accHead.addText(isFirst ? "★ #1 " : `#${realNum} `);
-    idBadge.font = Font.boldSystemFont(12);
+    // Priority badge (SF Symbol star cho #1)
+    if (isFirst) {
+      try {
+        const starSym = SFSymbol.named("star.fill");
+        starSym.applyFont(Font.systemFont(11));
+        const starImg = accHead.addImage(starSym.image);
+        starImg.imageSize = new Size(11, 11);
+        starImg.tintColor = TOKENS.orangeFill;
+        accHead.addSpacer(3);
+      } catch (_) {}
+    }
+
+    const idBadge = accHead.addText(isFirst ? "#1 " : `#${realNum} `);
+    idBadge.font = Font.boldMonospacedSystemFont(12);
     idBadge.textColor = isFirst ? TOKENS.orangeFill : TOKENS.textSecondary;
 
     const emailTxt = accHead.addText(acc.name);
@@ -509,40 +527,51 @@ function buildLargeWidget(w, data) {
 
     accHead.addSpacer();
 
-    // Status Badge (Apple pill style)
+    // Status Badge (SF Symbol)
     const statusStack = accHead.addStack();
     statusStack.layoutHorizontally();
     statusStack.centerAlignContent();
-    statusStack.spacing = 3.5;
+    statusStack.spacing = 3;
 
     if (acc.is_probe_error) {
-      const s = statusStack.addText("⚠️ 429 API");
-      s.font = Font.boldSystemFont(10);
-      s.textColor = new Color("#FF9500");
+      try {
+        const warnSym = SFSymbol.named("exclamationmark.triangle.fill");
+        warnSym.applyFont(Font.systemFont(9));
+        const warnImg = statusStack.addImage(warnSym.image);
+        warnImg.imageSize = new Size(10, 10);
+        warnImg.tintColor = TOKENS.amberWarn;
+      } catch (_) {}
+      const s = statusStack.addText("429 API");
+      s.font = Font.boldSystemFont(9.5);
+      s.textColor = TOKENS.amberWarn;
     } else if (acc.is_available === false) {
-      const s = statusStack.addText("⛔ Hết hạn");
-      s.font = Font.boldSystemFont(10);
-      s.textColor = new Color("#FF3B30");
-    } else if (isFirst) {
-      const dot = statusStack.addText("●");
-      dot.font = Font.systemFont(8);
-      dot.textColor = TOKENS.greenPace;
-      const s = statusStack.addText("Đang dùng");
-      s.font = Font.boldSystemFont(10);
-      s.textColor = TOKENS.greenPace;
+      try {
+        const errSym = SFSymbol.named("xmark.circle.fill");
+        errSym.applyFont(Font.systemFont(9));
+        const errImg = statusStack.addImage(errSym.image);
+        errImg.imageSize = new Size(10, 10);
+        errImg.tintColor = TOKENS.redAlert;
+      } catch (_) {}
+      const s = statusStack.addText("Hết hạn");
+      s.font = Font.boldSystemFont(9.5);
+      s.textColor = TOKENS.redAlert;
     } else {
-      const dot = statusStack.addText("●");
-      dot.font = Font.systemFont(8);
-      dot.textColor = TOKENS.greenPace;
-      const s = statusStack.addText("Sẵn sàng");
-      s.font = Font.boldSystemFont(10);
+      try {
+        const okSym = SFSymbol.named("checkmark.circle.fill");
+        okSym.applyFont(Font.systemFont(8.5));
+        const okImg = statusStack.addImage(okSym.image);
+        okImg.imageSize = new Size(9.5, 9.5);
+        okImg.tintColor = TOKENS.greenPace;
+      } catch (_) {}
+      const s = statusStack.addText(isFirst ? "Đang dùng" : "Sẵn sàng");
+      s.font = Font.boldSystemFont(9.5);
       s.textColor = TOKENS.greenPace;
     }
 
-    w.addSpacer(4);
+    accStack.addSpacer(4);
 
     // --- B. METRIC 1: PHIÊN 5H ---
-    const p5Row = w.addStack();
+    const p5Row = accStack.addStack();
     p5Row.layoutHorizontally();
     p5Row.centerAlignContent();
 
@@ -553,23 +582,32 @@ function buildLargeWidget(w, data) {
 
     p5Row.addSpacer();
 
+    try {
+      const clockSym = SFSymbol.named("clock");
+      clockSym.applyFont(Font.systemFont(8.5));
+      const clockImg = p5Row.addImage(clockSym.image);
+      clockImg.imageSize = new Size(8.5, 8.5);
+      clockImg.tintColor = TOKENS.textMuted;
+      p5Row.addSpacer(2.5);
+    } catch (_) {}
+
     const r5Est = formatResetWithEst(acc.reset_5h);
     const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Đặt lại: ${acc.reset_5h}` : ""));
     p5Reset.font = Font.systemFont(9.5);
     p5Reset.textColor = TOKENS.textMuted;
 
-    w.addSpacer(3);
+    accStack.addSpacer(3);
 
     // Progress Bar 5h
     const bar5 = drawSegmentedBar(contentW, 4.5, acc.used_5h ?? 0, TOKENS.orangeFill, isFirst ? acc.remaining_5h : null);
-    const v5 = w.addImage(bar5);
+    const v5 = accStack.addImage(bar5);
     v5.imageSize = new Size(contentW, 4.5);
     v5.leftAlignImage();
 
-    w.addSpacer(5);
+    accStack.addSpacer(5);
 
     // --- C. METRIC 2: HÀNG TUẦN ---
-    const pWkRow = w.addStack();
+    const pWkRow = accStack.addStack();
     pWkRow.layoutHorizontally();
     pWkRow.centerAlignContent();
 
@@ -579,16 +617,25 @@ function buildLargeWidget(w, data) {
 
     pWkRow.addSpacer();
 
+    try {
+      const clockSym = SFSymbol.named("clock");
+      clockSym.applyFont(Font.systemFont(8.5));
+      const clockImg = pWkRow.addImage(clockSym.image);
+      clockImg.imageSize = new Size(8.5, 8.5);
+      clockImg.tintColor = TOKENS.textMuted;
+      pWkRow.addSpacer(2.5);
+    } catch (_) {}
+
     const rWkEst = formatResetWithEst(acc.reset_weekly);
     const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Đặt lại: ${acc.reset_weekly}` : ""));
     pWkReset.font = Font.systemFont(9.5);
     pWkReset.textColor = TOKENS.textMuted;
 
-    w.addSpacer(3);
+    accStack.addSpacer(3);
 
     // Progress Bar Tuần
     const barWk = drawSegmentedBar(contentW, 4.5, acc.used_weekly ?? 0, TOKENS.orangeFill);
-    const vWk = w.addImage(barWk);
+    const vWk = accStack.addImage(barWk);
     vWk.imageSize = new Size(contentW, 4.5);
     vWk.leftAlignImage();
 
@@ -604,12 +651,22 @@ function buildLargeWidget(w, data) {
 
   w.addSpacer();
 
-  // Subtle Footer Hint (Apple Design)
+  // Subtle Footer Hint (SF Symbol + Apple Design)
   const footRow = w.addStack();
   footRow.layoutHorizontally();
   footRow.centerAlignContent();
+  footRow.spacing = 3.5;
   footRow.addSpacer();
-  const footTxt = footRow.addText("▲▼ Chạm để chuyển đổi tài khoản ưu tiên #1");
+
+  try {
+    const arrowSym = SFSymbol.named("arrow.up.arrow.down");
+    arrowSym.applyFont(Font.systemFont(8.5));
+    const arrowImg = footRow.addImage(arrowSym.image);
+    arrowImg.imageSize = new Size(9, 9);
+    arrowImg.tintColor = TOKENS.textMuted;
+  } catch (_) {}
+
+  const footTxt = footRow.addText("Chạm vào tài khoản để chuyển đổi ưu tiên #1");
   footTxt.font = Font.systemFont(9.5);
   footTxt.textColor = TOKENS.textMuted;
   footRow.addSpacer();
@@ -658,6 +715,24 @@ async function showInteractiveSwitcher(data) {
 // MAIN ENTRY
 // ==========================================
 async function main() {
+  // 1. Xử lý chạm trực tiếp (Native deep-link chuyển tài khoản khi bấm vào hàng tài khoản trên Home Screen)
+  if (args.queryParameters && args.queryParameters.action === "switch" && args.queryParameters.email) {
+    const targetEmail = args.queryParameters.email;
+    try {
+      const req = new Request(URLS.SET_PRIORITY);
+      req.method = "POST";
+      req.headers = { "Content-Type": "application/json" };
+      req.body = JSON.stringify({ email: targetEmail });
+      req.timeoutInterval = 4;
+      await req.loadJSON();
+
+      const notif = new Notification();
+      notif.title = "⚡ CodexBar - Claude";
+      notif.body = `Đã chuyển ${targetEmail.split("@")[0]} lên ưu tiên số #1 (Drain First).`;
+      notif.schedule();
+    } catch (_) {}
+  }
+
   const data = await fetchPoolData();
 
   if (config.runsInWidget) {
@@ -681,7 +756,10 @@ async function main() {
     w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
     Script.setWidget(w);
   } else {
-    await showInteractiveSwitcher(data);
+    // Nếu vừa bấm chuyển từ widget thì không cần bung popup chọn lại nữa
+    if (!args.queryParameters || args.queryParameters.action !== "switch") {
+      await showInteractiveSwitcher(data);
+    }
     const updatedData = await fetchPoolData();
 
     const w = new ListWidget();
@@ -690,16 +768,16 @@ async function main() {
     grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
     w.backgroundGradient = grad;
 
-    const family = config.widgetFamily || "medium";
+    const family = config.widgetFamily || "large";
     if (family === "small") {
       buildSmallWidget(w, updatedData);
       await w.presentSmall();
-    } else if (family === "large") {
-      buildLargeWidget(w, updatedData);
-      await w.presentLarge();
-    } else {
+    } else if (family === "medium") {
       buildMediumWidget(w, updatedData);
       await w.presentMedium();
+    } else {
+      buildLargeWidget(w, updatedData);
+      await w.presentLarge();
     }
   }
 }
