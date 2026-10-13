@@ -684,24 +684,10 @@ async function main() {
   Script.setWidget(w);
 
   // Khi bấm vào widget với config là "Run Script":
-  // Tự động cập nhật xong widget, rung nhẹ xác nhận và đóng app ngay để quay về Home Screen!
   if (config.runsInApp) {
-    if (args.queryParameters && args.queryParameters.preview) {
-      if (family === "small") await w.presentSmall();
-      else if (family === "medium") await w.presentMedium();
-      else await w.presentLarge();
-    } else {
-      // Haptic rung nhẹ báo hiệu đã reload thành công
-      try {
-        const notif = new Notification();
-        notif.title = "⚡ CodexBar Claude";
-        notif.body = `Đã làm mới Quota thành công lúc ${new Date().toLocaleTimeString()}!`;
-        notif.schedule();
-      } catch (_) {}
-
-      // Tự động thoát Scriptable quay về màn hình chính
-      Safari.open("shortcuts://");
-    }
+    if (family === "small") await w.presentSmall();
+    else if (family === "medium") await w.presentMedium();
+    else await w.presentLarge();
   }
 }
 
