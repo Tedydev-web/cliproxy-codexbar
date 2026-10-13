@@ -13,10 +13,10 @@ LOG_FILE = os.path.join(CLIPROXY_HOME, "logs", "token-keeper.log")
 VAULT_DIR = os.path.join(CLIPROXY_HOME, "backups", "auth-vault")
 
 # Network & Ports
-MGMT_HOST = "127.0.0.1"
-MGMT_PORT = 8317
-MGMT_SECRET = "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY"
-BRIDGE_PORT = 8318
+MGMT_HOST = os.environ.get("CLIPROXY_HOST", "127.0.0.1")
+MGMT_PORT = int(os.environ.get("CLIPROXY_MGMT_PORT", 8317))
+MGMT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET", "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY")
+BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", 8318))
 
 # Cache & Probe Policies
 PROBE_CACHE_SEC = 60

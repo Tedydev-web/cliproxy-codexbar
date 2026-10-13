@@ -1,4 +1,25 @@
-__pycache__/
-*.pyc
-.DS_Store
+# Build outputs
 build/
+dist/
+*.dmg
+*.app
+*.exe
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Logs & temp
+*.log
+/tmp/

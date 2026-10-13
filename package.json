@@ -1,0 +1,25 @@
+{
+  "name": "cliproxy-codexbar",
+  "version": "2.0.0",
+  "description": "Production-grade Quota & Session Monitor for CLIProxy and macOS Menu Bar",
+  "main": "backend/bridge/main.py",
+  "bin": {
+    "cliproxy-codexbar": "./install.sh"
+  },
+  "scripts": {
+    "sync": "./sync-all.sh",
+    "package:dmg": "cd client-macos && ./package-dmg.sh",
+    "install:client": "cd client-macos && ./install-client.sh"
+  },
+  "keywords": [
+    "cliproxy",
+    "codexbar",
+    "claude",
+    "antigravity",
+    "oauth",
+    "quota-monitor",
+    "macos-menubar"
+  ],
+  "author": "Hieu Dat (Tedydev)",
+  "license": "MIT"
+}
