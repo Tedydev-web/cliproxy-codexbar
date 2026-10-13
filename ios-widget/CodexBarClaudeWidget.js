@@ -24,19 +24,19 @@ const URLS = {
 };
 
 // ==========================================
-// DESIGN TOKENS (CODEXBAR MACOS 1:1 - APPLE DYNAMIC LIGHT/DARK)
+// DESIGN TOKENS (CODEXBAR MACOS 1:1 - APPLE DARK THEME)
 // ==========================================
 const TOKENS = {
-  bgTop: Color.dynamic(new Color("#F8FAFC"), new Color("#161A1D")),
-  bgBtm: Color.dynamic(new Color("#EEF2F6"), new Color("#0E1114")),
-  cardBorder: Color.dynamic(new Color("#000000", 0.08), new Color("#FFFFFF", 0.08)),
+  bgTop: new Color("#161A1D"),
+  bgBtm: new Color("#0E1114"),
+  cardBorder: new Color("#FFFFFF", 0.08),
 
-  textPrimary: Color.dynamic(new Color("#0F172A"), new Color("#FFFFFF", 0.95)),
-  textSecondary: Color.dynamic(new Color("#475569"), new Color("#9CA3AF")),
-  textMuted: Color.dynamic(new Color("#94A3B8"), new Color("#6B7280")),
+  textPrimary: new Color("#FFFFFF", 0.95),
+  textSecondary: new Color("#9CA3AF"),
+  textMuted: new Color("#6B7280"),
 
   orangeFill: new Color("#F97316"),   // Cam Claude
-  trackGray: Color.dynamic(new Color("#E2E8F0"), new Color("#272D34")),    // Rãnh segmented bar thích ứng Dark/Light
+  trackGray: new Color("#272D34"),    // Rãnh segmented bar đồng bộ Orbiter macOS
   greenPace: new Color("#22C55E"),    // Vạch nhịp độ an toàn / Online
   amberWarn: new Color("#F59E0B"),    // Cảnh báo 429
   redAlert: new Color("#EF4444")      // Hết hạn / Lỗi
@@ -68,15 +68,15 @@ function addSyncTimeElement(stack, timestamp) {
   const syncStack = stack.addStack();
   syncStack.layoutHorizontally();
   syncStack.centerAlignContent();
-  syncStack.spacing = 3;
+  syncStack.spacing = 1.5;
 
-  const t = syncStack.addText(`${timeStr} · `);
-  t.font = Font.systemFont(10);
+  const t = syncStack.addText(`Cập nhật lúc ${timeStr} · `);
+  t.font = Font.systemFont(10.5);
   t.textColor = TOKENS.textMuted;
 
   const rel = syncStack.addDate(d);
   rel.applyRelativeStyle();
-  rel.font = Font.systemFont(10);
+  rel.font = Font.systemFont(10.5);
   rel.textColor = TOKENS.textMuted;
 }
 
@@ -435,8 +435,8 @@ function buildSmallWidget(w, data) {
 // LARGE WIDGET (4X4): APPLE DESIGN & CODEXBAR PATTERN (THOÁNG ĐẠT, KHÔNG CARD HÓA)
 // ==========================================
 function buildLargeWidget(w, data) {
-  const hPadding = 14;
-  w.setPadding(14, hPadding, 12, hPadding);
+  const hPadding = 15;
+  w.setPadding(15, hPadding, 14, hPadding);
 
   const rawAccounts = data.pool?.accounts || [];
   const accounts = rawAccounts.length > 0 ? rawAccounts : [
@@ -446,7 +446,7 @@ function buildLargeWidget(w, data) {
   ];
   const contentW = getWidgetContentWidth("large", hPadding);
 
-  // --- 1. WIDGET HEADER (APPLE MINIMALIST) ---
+  // --- 1. WIDGET HEADER (APPLE HIG & CODEXBAR 1:1) ---
   const headerRow = w.addStack();
   headerRow.layoutHorizontally();
   headerRow.centerAlignContent();
@@ -472,14 +472,14 @@ function buildLargeWidget(w, data) {
 
   addSyncTimeElement(headerRow, data.time);
 
-  w.addSpacer(7);
+  w.addSpacer(8);
 
   // Hairline Divider
   const headerDiv = w.addStack();
   headerDiv.size = new Size(0, 0.5);
   headerDiv.backgroundColor = TOKENS.cardBorder;
 
-  w.addSpacer(9);
+  w.addSpacer(10);
 
   // --- 2. HIỂN THỊ CẢ 3 TÀI KHOẢN (ĐỒNG BỘ 100% CODEXBAR & ORBITER) ---
   const displayAccounts = accounts.slice(0, 3);
@@ -502,27 +502,27 @@ function buildLargeWidget(w, data) {
     if (isFirst) {
       try {
         const starSym = SFSymbol.named("star.fill");
-        starSym.applyFont(Font.systemFont(11));
+        starSym.applyFont(Font.systemFont(11.5));
         const starImg = accHead.addImage(starSym.image);
-        starImg.imageSize = new Size(11, 11);
+        starImg.imageSize = new Size(11.5, 11.5);
         starImg.tintColor = TOKENS.orangeFill;
-        accHead.addSpacer(3);
+        accHead.addSpacer(3.5);
       } catch (_) {}
     }
 
     const idBadge = accHead.addText(isFirst ? "#1 " : `#${realNum} `);
-    idBadge.font = Font.boldMonospacedSystemFont(12);
+    idBadge.font = Font.boldMonospacedSystemFont(12.5);
     idBadge.textColor = isFirst ? TOKENS.orangeFill : TOKENS.textSecondary;
 
     const emailTxt = accHead.addText(acc.name);
-    emailTxt.font = Font.boldSystemFont(12);
+    emailTxt.font = Font.boldSystemFont(12.5);
     emailTxt.textColor = TOKENS.textPrimary;
     emailTxt.lineLimit = 1;
 
-    accHead.addSpacer(5);
+    accHead.addSpacer(6);
 
-    const planTxt = accHead.addText(`· ${acc.plan || "Max"}`);
-    planTxt.font = Font.systemFont(10);
+    const planTxt = accHead.addText(`· Gói ${acc.plan || "Max 20x"}`);
+    planTxt.font = Font.systemFont(11);
     planTxt.textColor = TOKENS.textMuted;
 
     accHead.addSpacer();
@@ -531,121 +531,129 @@ function buildLargeWidget(w, data) {
     const statusStack = accHead.addStack();
     statusStack.layoutHorizontally();
     statusStack.centerAlignContent();
-    statusStack.spacing = 3;
+    statusStack.spacing = 3.5;
 
     if (acc.is_probe_error) {
       try {
         const warnSym = SFSymbol.named("exclamationmark.triangle.fill");
-        warnSym.applyFont(Font.systemFont(9));
+        warnSym.applyFont(Font.systemFont(10));
         const warnImg = statusStack.addImage(warnSym.image);
-        warnImg.imageSize = new Size(10, 10);
+        warnImg.imageSize = new Size(10.5, 10.5);
         warnImg.tintColor = TOKENS.amberWarn;
       } catch (_) {}
       const s = statusStack.addText("429 API");
-      s.font = Font.boldSystemFont(9.5);
+      s.font = Font.boldSystemFont(10.5);
       s.textColor = TOKENS.amberWarn;
     } else if (acc.is_available === false) {
       try {
         const errSym = SFSymbol.named("xmark.circle.fill");
-        errSym.applyFont(Font.systemFont(9));
+        errSym.applyFont(Font.systemFont(10));
         const errImg = statusStack.addImage(errSym.image);
-        errImg.imageSize = new Size(10, 10);
+        errImg.imageSize = new Size(10.5, 10.5);
         errImg.tintColor = TOKENS.redAlert;
       } catch (_) {}
       const s = statusStack.addText("Hết hạn");
-      s.font = Font.boldSystemFont(9.5);
+      s.font = Font.boldSystemFont(10.5);
       s.textColor = TOKENS.redAlert;
     } else {
       try {
         const okSym = SFSymbol.named("checkmark.circle.fill");
-        okSym.applyFont(Font.systemFont(8.5));
+        okSym.applyFont(Font.systemFont(9.5));
         const okImg = statusStack.addImage(okSym.image);
-        okImg.imageSize = new Size(9.5, 9.5);
+        okImg.imageSize = new Size(10, 10);
         okImg.tintColor = TOKENS.greenPace;
       } catch (_) {}
       const s = statusStack.addText(isFirst ? "Đang dùng" : "Sẵn sàng");
-      s.font = Font.boldSystemFont(9.5);
+      s.font = Font.boldSystemFont(10.5);
       s.textColor = TOKENS.greenPace;
     }
 
-    accStack.addSpacer(4);
+    accStack.addSpacer(5);
 
     // --- B. METRIC 1: PHIÊN 5H ---
     const p5Row = accStack.addStack();
     p5Row.layoutHorizontally();
     p5Row.centerAlignContent();
 
-    const paceInfo = (isFirst && acc.remaining_5h !== undefined) ? ` · ${acc.remaining_5h}% nhịp độ` : "";
-    const p5Label = p5Row.addText(`5h: ${acc.used_5h ?? 0}% đã dùng${paceInfo}`);
-    p5Label.font = Font.systemFont(10.5);
-    p5Label.textColor = TOKENS.textSecondary;
+    const p5Label = p5Row.addText(`Phiên 5h: ${acc.used_5h ?? 0}% đã dùng`);
+    p5Label.font = Font.boldSystemFont(11.5);
+    p5Label.textColor = TOKENS.textPrimary;
 
     p5Row.addSpacer();
 
     try {
       const clockSym = SFSymbol.named("clock");
-      clockSym.applyFont(Font.systemFont(8.5));
+      clockSym.applyFont(Font.systemFont(9));
       const clockImg = p5Row.addImage(clockSym.image);
-      clockImg.imageSize = new Size(8.5, 8.5);
+      clockImg.imageSize = new Size(9, 9);
       clockImg.tintColor = TOKENS.textMuted;
       p5Row.addSpacer(2.5);
     } catch (_) {}
 
     const r5Est = formatResetWithEst(acc.reset_5h);
     const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Đặt lại: ${acc.reset_5h}` : ""));
-    p5Reset.font = Font.systemFont(9.5);
-    p5Reset.textColor = TOKENS.textMuted;
+    p5Reset.font = Font.systemFont(10);
+    p5Reset.textColor = TOKENS.textSecondary;
 
-    accStack.addSpacer(3);
+    accStack.addSpacer(3.5);
 
-    // Progress Bar 5h
-    const bar5 = drawSegmentedBar(contentW, 4.5, acc.used_5h ?? 0, TOKENS.orangeFill, isFirst ? acc.remaining_5h : null);
+    // Progress Bar 5h (Full width)
+    const bar5 = drawSegmentedBar(contentW, 5, acc.used_5h ?? 0, TOKENS.orangeFill, isFirst ? acc.remaining_5h : null);
     const v5 = accStack.addImage(bar5);
-    v5.imageSize = new Size(contentW, 4.5);
+    v5.imageSize = new Size(contentW, 5);
     v5.leftAlignImage();
 
-    accStack.addSpacer(5);
+    // Dòng pace phụ cho tài khoản đang dùng #1 (đồng bộ 100% Orbiter macOS: "99% dự trữ nhịp độ")
+    if (isFirst && acc.remaining_5h !== undefined && acc.remaining_5h !== null) {
+      accStack.addSpacer(2.5);
+      const paceSub = accStack.addText(`${acc.remaining_5h}% dự trữ nhịp độ`);
+      paceSub.font = Font.systemFont(9.5);
+      paceSub.textColor = TOKENS.textMuted;
+      accStack.addSpacer(4);
+    } else {
+      accStack.addSpacer(5.5);
+    }
 
     // --- C. METRIC 2: HÀNG TUẦN ---
     const pWkRow = accStack.addStack();
     pWkRow.layoutHorizontally();
     pWkRow.centerAlignContent();
 
-    const pWkLabel = pWkRow.addText(`Tuần: ${acc.used_weekly ?? 0}% đã dùng (còn ${acc.remaining_weekly ?? (100 - (acc.used_weekly ?? 0))}%)`);
-    pWkLabel.font = Font.systemFont(10.5);
-    pWkLabel.textColor = TOKENS.textSecondary;
+    const pWkLabel = pWkRow.addText(`Hàng tuần: ${acc.used_weekly ?? 0}% đã dùng (còn ${acc.remaining_weekly ?? (100 - (acc.used_weekly ?? 0))}%)`);
+    pWkLabel.font = Font.boldSystemFont(11.5);
+    pWkLabel.textColor = TOKENS.textPrimary;
 
     pWkRow.addSpacer();
 
     try {
       const clockSym = SFSymbol.named("clock");
-      clockSym.applyFont(Font.systemFont(8.5));
+      clockSym.applyFont(Font.systemFont(9));
       const clockImg = pWkRow.addImage(clockSym.image);
-      clockImg.imageSize = new Size(8.5, 8.5);
+      clockImg.imageSize = new Size(9, 9);
       clockImg.tintColor = TOKENS.textMuted;
       pWkRow.addSpacer(2.5);
     } catch (_) {}
 
     const rWkEst = formatResetWithEst(acc.reset_weekly);
     const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Đặt lại: ${acc.reset_weekly}` : ""));
-    pWkReset.font = Font.systemFont(9.5);
-    pWkReset.textColor = TOKENS.textMuted;
+    pWkReset.font = Font.systemFont(10);
+    pWkReset.textColor = TOKENS.textSecondary;
 
-    accStack.addSpacer(3);
+    accStack.addSpacer(3.5);
 
-    // Progress Bar Tuần
-    const barWk = drawSegmentedBar(contentW, 4.5, acc.used_weekly ?? 0, TOKENS.orangeFill);
+    // Progress Bar Tuần (Full width)
+    const barWk = drawSegmentedBar(contentW, 5, acc.used_weekly ?? 0, TOKENS.orangeFill);
     const vWk = accStack.addImage(barWk);
-    vWk.imageSize = new Size(contentW, 4.5);
+    vWk.imageSize = new Size(contentW, 5);
     vWk.leftAlignImage();
 
     // Divider giữa các tài khoản
     if (idx < displayAccounts.length - 1) {
-      w.addSpacer(8);
+      w.addSpacer(10);
       const accDiv = w.addStack();
       accDiv.size = new Size(0, 0.5);
       accDiv.backgroundColor = TOKENS.cardBorder;
-      w.addSpacer(8);
+      w.addSpacer(10);
     }
   });
 
@@ -655,19 +663,19 @@ function buildLargeWidget(w, data) {
   const footRow = w.addStack();
   footRow.layoutHorizontally();
   footRow.centerAlignContent();
-  footRow.spacing = 3.5;
+  footRow.spacing = 4;
   footRow.addSpacer();
 
   try {
     const arrowSym = SFSymbol.named("arrow.up.arrow.down");
-    arrowSym.applyFont(Font.systemFont(8.5));
+    arrowSym.applyFont(Font.systemFont(9));
     const arrowImg = footRow.addImage(arrowSym.image);
-    arrowImg.imageSize = new Size(9, 9);
+    arrowImg.imageSize = new Size(9.5, 9.5);
     arrowImg.tintColor = TOKENS.textMuted;
   } catch (_) {}
 
   const footTxt = footRow.addText("Chạm vào tài khoản để chuyển đổi ưu tiên #1");
-  footTxt.font = Font.systemFont(9.5);
+  footTxt.font = Font.systemFont(10);
   footTxt.textColor = TOKENS.textMuted;
   footRow.addSpacer();
 }
