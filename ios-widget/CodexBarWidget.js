@@ -283,7 +283,6 @@ function buildMediumWidget(widget, data) {
 
   // --- CỘT TRÁI: TELEMETRY (Width: 120) ---
   const leftCol = bodyStack.addStack();
-  leftCol.layoutVertical();
   leftCol.size = new Size(120, 0);
 
   const m = data.sys?.metrics;
@@ -341,7 +340,6 @@ function buildMediumWidget(widget, data) {
 
   // --- CỘT PHẢI: POOL ACCOUNTS (Flex Width) ---
   const rightCol = bodyStack.addStack();
-  rightCol.layoutVertical();
 
   const accounts = data.pool?.accounts?.slice(0, 2) || [];
   if (accounts.length === 0) {
@@ -351,7 +349,6 @@ function buildMediumWidget(widget, data) {
   } else {
     accounts.forEach((acc, idx) => {
       const accStack = rightCol.addStack();
-      accStack.layoutVertical();
 
       // Row Name
       const nameRow = accStack.addStack();
@@ -437,7 +434,6 @@ function buildLargeWidget(widget, data) {
 
   const addCard = (parent, label, value, subtext, color) => {
     const card = parent.addStack();
-    card.layoutVertical();
     card.backgroundColor = THEME.cardBg;
     card.cornerRadius = 8;
     card.setPadding(8, 8, 8, 8);
@@ -486,7 +482,6 @@ function buildLargeWidget(widget, data) {
   const accounts = data.pool?.accounts?.slice(0, 3) || [];
   accounts.forEach((acc, idx) => {
     const accBox = widget.addStack();
-    accBox.layoutVertical();
     accBox.backgroundColor = THEME.cardBg;
     accBox.cornerRadius = 8;
     accBox.setPadding(8, 10, 8, 10);
