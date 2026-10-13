@@ -1,11 +1,11 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
-// icon-color: purple; icon-glyph: brain;
+// icon-color: teal; icon-glyph: brain;
 /**
- * Orbiter iOS Widget - Antigravity (AGY) Quota
- * 100% Matching Pattern & Style of AntigravityFullCardView in Orbiter Menubar
+ * Orbiter iOS Widget - Antigravity (AGY) Gemini Models Quota
+ * 100% Matching Pattern & Style of AntigravityFullCardView (GEMINI MODELS) in Orbiter Menubar
  * Supports Medium (2x4) & Small (2x2) Widget Families
- * Full-width Segmented Progress Bars (Không bị hụt lề phải)
+ * Full-width Segmented Progress Bars (Teal Green cho 5h & Amber Yellow cho Tuần)
  * Tối ưu Pin & Hiệu năng: 5 phút refresh & On-demand caching
  */
 
@@ -14,7 +14,7 @@ const CONFIG = {
   PORT: "8318",
   TIMEOUT: 4,
   REFRESH_MIN: 5,
-  CACHE_KEY: "orbiter_agy_v9"
+  CACHE_KEY: "orbiter_agy_gemini_v10"
 };
 
 const URLS = {
@@ -22,7 +22,7 @@ const URLS = {
 };
 
 // ==========================================
-// DESIGN TOKENS (ANTIGRAVITY MENUBAR 1:1)
+// DESIGN TOKENS (ANTIGRAVITY MACOS 1:1)
 // ==========================================
 const TOKENS = {
   bgTop: new Color("#161A1D"),
@@ -33,8 +33,9 @@ const TOKENS = {
   textSecondary: new Color("#9CA3AF"),
   textMuted: new Color("#6B7280"),
 
-  geminiTeal: new Color("#00C389"),    // Teal Green của Gemini
-  claudePurple: new Color("#8B5CF6"),  // Purple của Claude/GPT Models
+  // Màu sắc chính xác từ OrbiterMenuBar.swift cho Gemini Models:
+  geminiTeal: new Color("#00C389"),    // Teal Green (5h)
+  geminiAmber: new Color("#F5C542"),   // Amber Yellow (Tuần)
   trackGray: new Color("#272D34"),     // Rãnh segmented bar
   greenPace: new Color("#22C55E")      // Vạch nhịp độ an toàn
 };
@@ -71,7 +72,7 @@ async function fetchAgyData() {
 // ==========================================
 // DRAWING: FULL-WIDTH SEGMENTED BAR (3 ĐOẠN)
 // ==========================================
-function drawSegmentedBar(width, height, usedPct, fillColor) {
+function drawSegmentedBar(width, height, percent, fillColor, showPace) {
   const dc = new DrawContext();
   dc.size = new Size(width, height);
   dc.opaque = false;
@@ -93,7 +94,7 @@ function drawSegmentedBar(width, height, usedPct, fillColor) {
   }
 
   // 2. Điểm lấp đầy (Fill)
-  const clamped = Math.max(0, Math.min(100, usedPct));
+  const clamped = Math.max(0, Math.min(100, percent));
   const totalFillW = (width * clamped) / 100;
   let remain = totalFillW;
 
@@ -109,20 +110,22 @@ function drawSegmentedBar(width, height, usedPct, fillColor) {
     remain -= segW;
   }
 
-  // 3. Hairline Pace Indicator (Green tick)
-  const markerW = 2.5;
-  const markerX = width - segW + (segW * 0.7);
-  const mp = new Path();
-  mp.addRoundedRect(new Rect(markerX, 0, markerW, height), 1, 1);
-  dc.addPath(mp);
-  dc.setFillColor(TOKENS.greenPace);
-  dc.fillPath();
+  // 3. Hairline Pace Indicator (Optional)
+  if (showPace) {
+    const markerW = 2.5;
+    const markerX = width - segW + (segW * 0.7);
+    const mp = new Path();
+    mp.addRoundedRect(new Rect(markerX, 0, markerW, height), 1, 1);
+    dc.addPath(mp);
+    dc.setFillColor(TOKENS.greenPace);
+    dc.fillPath();
+  }
 
   return dc.getImage();
 }
 
 // ==========================================
-// MEDIUM WIDGET (FULL WIDTH 330PT)
+// MEDIUM WIDGET (FULL WIDTH 330PT, 1:1 ORBITER)
 // ==========================================
 function buildMediumWidget(w, data) {
   w.setPadding(14, 14, 14, 14);
@@ -130,15 +133,21 @@ function buildMediumWidget(w, data) {
   const agy = data.agy || {
     email: "hieudat2310.bh@gmail.com",
     tier: "Pro",
-    gemini: { five_hour_remaining: 100, five_hour_refresh: "4h 59m" },
-    claude_gpt: { weekly_remaining: 43, weekly_refresh: "2d 15h" }
+    gemini: {
+      five_hour_remaining: 96,
+      five_hour_refresh: "4h 44m",
+      weekly_remaining: 32,
+      weekly_refresh: "2d 2h"
+    }
   };
 
-  const gemUsed = 100 - (agy.gemini?.five_hour_remaining || 100);
-  const gemReset = agy.gemini?.five_hour_refresh || "4h 59m";
+  const g5Rem = agy.gemini?.five_hour_remaining ?? 96;
+  const g5Used = 100 - g5Rem;
+  const g5Reset = agy.gemini?.five_hour_refresh || "4h 44m";
 
-  const claudeUsed = 100 - (agy.claude_gpt?.weekly_remaining || 43);
-  const claudeReset = agy.claude_gpt?.weekly_refresh || "2d 15h";
+  const gWkRem = agy.gemini?.weekly_remaining ?? 32;
+  const gWkUsed = 100 - gWkRem;
+  const gWkReset = agy.gemini?.weekly_refresh || "2d 2h";
 
   // Header Line 1: Antigravity & Email
   const row1 = w.addStack();
@@ -158,14 +167,13 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(2);
 
-  // Header Line 2: Sync text & Tier
+  // Header Line 2: Section Title & Tier
   const row2 = w.addStack();
   row2.layoutHorizontally();
 
-  const timeStr = data.time ? new Date(data.time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "Vừa xong";
-  const syncTxt = row2.addText(`Cập nhật lúc ${timeStr}`);
-  syncTxt.font = Font.systemFont(10);
-  syncTxt.textColor = TOKENS.textMuted;
+  const sectionTitle = row2.addText("GEMINI MODELS (Flash, Pro)");
+  sectionTitle.font = Font.semiboldSystemFont(10.5);
+  sectionTitle.textColor = TOKENS.textMuted;
 
   row2.addSpacer();
 
@@ -182,57 +190,63 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(8);
 
-  // GROUP 1: GEMINI MODELS (5H QUOTA)
-  const gHead = w.addStack();
-  gHead.layoutHorizontally();
-  gHead.centerAlignContent();
+  // METRIC 1: GIỚI HẠN 5H CÒN LẠI (TEAL GREEN)
+  const g5Head = w.addStack();
+  g5Head.layoutHorizontally();
+  g5Head.centerAlignContent();
 
-  const gTitle = gHead.addText(`Gemini 5h: ${gemUsed}% đã dùng`);
-  gTitle.font = Font.boldSystemFont(13);
-  gTitle.textColor = TOKENS.textPrimary;
+  const g5Title = g5Head.addText(`Giới hạn 5h còn lại: ${g5Rem}%`);
+  g5Title.font = Font.boldSystemFont(13);
+  g5Title.textColor = TOKENS.textPrimary;
 
-  gHead.addSpacer();
+  g5Head.addSpacer();
 
-  const gReset = gHead.addText(`Đặt lại sau ${gemReset}`);
-  gReset.font = Font.systemFont(11);
-  gReset.textColor = TOKENS.textSecondary;
+  const g5Rst = g5Head.addText(`Đặt lại sau ${g5Reset}`);
+  g5Rst.font = Font.systemFont(11);
+  g5Rst.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
-  // Thanh tiến trình Gemini (Full-width 330pt)
-  const gBar = drawSegmentedBar(330, 5.5, gemUsed, TOKENS.geminiTeal);
-  const gView = w.addImage(gBar);
-  gView.imageSize = new Size(330, 5.5);
+  // Thanh tiến trình 5h (Teal Green, 330pt)
+  const bar5 = drawSegmentedBar(330, 5.5, g5Rem, TOKENS.geminiTeal, false);
+  const v5 = w.addImage(bar5);
+  v5.imageSize = new Size(330, 5.5);
 
   w.addSpacer(3);
 
-  const gSub = w.addText(`${100 - gemUsed}% nhịp độ Flash & Pro`);
-  gSub.font = Font.systemFont(9.5);
-  gSub.textColor = TOKENS.textMuted;
+  const sub5 = w.addText(`Đã dùng ${g5Used}%`);
+  sub5.font = Font.systemFont(9.5);
+  sub5.textColor = TOKENS.textMuted;
 
   w.addSpacer(8);
 
-  // GROUP 2: CLAUDE & GPT MODELS (WEEKLY QUOTA)
-  const cHead = w.addStack();
-  cHead.layoutHorizontally();
-  cHead.centerAlignContent();
+  // METRIC 2: GIỚI HẠN TUẦN CÒN LẠI (AMBER YELLOW)
+  const gWkHead = w.addStack();
+  gWkHead.layoutHorizontally();
+  gWkHead.centerAlignContent();
 
-  const cTitle = cHead.addText(`Claude/GPT: ${claudeUsed}% đã dùng`);
-  cTitle.font = Font.boldSystemFont(13);
-  cTitle.textColor = TOKENS.textPrimary;
+  const gWkTitle = gWkHead.addText(`Giới hạn tuần còn lại: ${gWkRem}%`);
+  gWkTitle.font = Font.boldSystemFont(13);
+  gWkTitle.textColor = TOKENS.textPrimary;
 
-  cHead.addSpacer();
+  gWkHead.addSpacer();
 
-  const cReset = cHead.addText(`Đặt lại sau ${claudeReset}`);
-  cReset.font = Font.systemFont(11);
-  cReset.textColor = TOKENS.textSecondary;
+  const gWkRst = gWkHead.addText(`Đặt lại sau ${gWkReset}`);
+  gWkRst.font = Font.systemFont(11);
+  gWkRst.textColor = TOKENS.textSecondary;
 
   w.addSpacer(4);
 
-  // Thanh tiến trình Claude/GPT (Full-width 330pt)
-  const cBar = drawSegmentedBar(330, 5.5, claudeUsed, TOKENS.claudePurple);
-  const cView = w.addImage(cBar);
-  cView.imageSize = new Size(330, 5.5);
+  // Thanh tiến trình Tuần (Amber Yellow, 330pt)
+  const barWk = drawSegmentedBar(330, 5.5, gWkRem, TOKENS.geminiAmber, false);
+  const vWk = w.addImage(barWk);
+  vWk.imageSize = new Size(330, 5.5);
+
+  w.addSpacer(3);
+
+  const subWk = w.addText(`Đã dùng ${gWkUsed}%`);
+  subWk.font = Font.systemFont(9.5);
+  subWk.textColor = TOKENS.textMuted;
 }
 
 // ==========================================
@@ -241,13 +255,13 @@ function buildMediumWidget(w, data) {
 function buildSmallWidget(w, data) {
   w.setPadding(12, 12, 12, 12);
   const agy = data.agy || {};
-  const gemUsed = 100 - (agy.gemini?.five_hour_remaining || 100);
-  const claudeUsed = 100 - (agy.claude_gpt?.weekly_remaining || 43);
+  const g5Rem = agy.gemini?.five_hour_remaining ?? 96;
+  const gWkRem = agy.gemini?.weekly_remaining ?? 32;
 
   const h = w.addStack();
   h.layoutHorizontally();
   h.centerAlignContent();
-  const t = h.addText("AGY");
+  const t = h.addText("Gemini");
   t.font = Font.boldSystemFont(14);
   t.textColor = TOKENS.textPrimary;
   h.addSpacer();
@@ -257,39 +271,39 @@ function buildSmallWidget(w, data) {
 
   w.addSpacer(6);
 
-  // Gemini
-  const gHead = w.addStack();
-  gHead.layoutHorizontally();
-  const uG = gHead.addText(`Gemini: ${gemUsed}% dùng`);
-  uG.font = Font.boldSystemFont(11);
-  uG.textColor = TOKENS.textPrimary;
-  gHead.addSpacer();
-  const rg = gHead.addText(agy.gemini?.five_hour_refresh || "");
-  rg.font = Font.systemFont(9);
-  rg.textColor = TOKENS.textMuted;
+  // 5h Quota (Teal Green)
+  const u5Head = w.addStack();
+  u5Head.layoutHorizontally();
+  const u5 = u5Head.addText(`5h: còn ${g5Rem}%`);
+  u5.font = Font.boldSystemFont(11);
+  u5.textColor = TOKENS.textPrimary;
+  u5Head.addSpacer();
+  const r5 = u5Head.addText(agy.gemini?.five_hour_refresh || "");
+  r5.font = Font.systemFont(9);
+  r5.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const bg = drawSegmentedBar(132, 4.5, gemUsed, TOKENS.geminiTeal);
-  const vg = w.addImage(bg);
-  vg.imageSize = new Size(132, 4.5);
+  const b5 = drawSegmentedBar(132, 4.5, g5Rem, TOKENS.geminiTeal, false);
+  const v5 = w.addImage(b5);
+  v5.imageSize = new Size(132, 4.5);
 
   w.addSpacer(8);
 
-  // Claude
-  const cHead = w.addStack();
-  cHead.layoutHorizontally();
-  const uC = cHead.addText(`Claude: ${claudeUsed}% dùng`);
-  uC.font = Font.boldSystemFont(11);
-  uC.textColor = TOKENS.textPrimary;
-  cHead.addSpacer();
-  const rc = cHead.addText(agy.claude_gpt?.weekly_refresh || "");
-  rc.font = Font.systemFont(9);
-  rc.textColor = TOKENS.textMuted;
+  // Weekly Quota (Amber Yellow)
+  const uwHead = w.addStack();
+  uwHead.layoutHorizontally();
+  const uw = uwHead.addText(`Tuần: còn ${gWkRem}%`);
+  uw.font = Font.boldSystemFont(11);
+  uw.textColor = TOKENS.textPrimary;
+  uwHead.addSpacer();
+  const rw = uwHead.addText(agy.gemini?.weekly_refresh || "");
+  rw.font = Font.systemFont(9);
+  rw.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const bc = drawSegmentedBar(132, 4.5, claudeUsed, TOKENS.claudePurple);
-  const vc = w.addImage(bc);
-  vc.imageSize = new Size(132, 4.5);
+  const bw = drawSegmentedBar(132, 4.5, gWkRem, TOKENS.geminiAmber, false);
+  const vw = w.addImage(bw);
+  vw.imageSize = new Size(132, 4.5);
 }
 
 // ==========================================
