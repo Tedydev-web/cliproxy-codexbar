@@ -357,6 +357,11 @@ struct PortInfo: Identifiable {
     let isDocker: Bool
     let project: String
     let isInternal: Bool
+    
+    // Explicit format as raw integer string without locale thousands separator (avoid 30.071 or 30,071)
+    var displayPort: String {
+        return String(format: "%d", port)
+    }
 }
 
 struct ServiceInfo: Identifiable {
@@ -2065,7 +2070,7 @@ struct SystemManagerView: View {
                                 ForEach(filteredPorts) { p in
                                     HStack(alignment: .center, spacing: 12) {
                                         // Port Badge
-                                        Text(":\(p.port)")
+                                        Text(":\(p.displayPort)")
                                             .font(.system(size: 13.5, weight: .bold, design: .monospaced))
                                             .foregroundStyle(Color.accentColor)
                                             .frame(width: 68, alignment: .leading)
@@ -2500,27 +2505,33 @@ struct UbuntuServerQuickMenuView: View {
                         .foregroundStyle(.tertiary)
                 }
                 
-                // Integrated Compact Search Field
+                // Minimalist Sleek Search Field
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.tertiary)
                     TextField("Tìm port, tiến trình, dự án...", text: $searchText)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 11.5))
+                        .font(.system(size: 11))
                     if !searchText.isEmpty {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.tertiary)
                         }
                         .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 4.5)
-                .background(Color.primary.opacity(0.05))
-                .cornerRadius(6)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.primary.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                )
                 
                 if self.activeDevPorts.isEmpty {
                     Text(searchText.isEmpty ? "Không có tiến trình dev nào đang chiếm cổng." : "Không tìm thấy port nào khớp với từ khóa.")
@@ -2532,12 +2543,12 @@ struct UbuntuServerQuickMenuView: View {
                         ForEach(Array(self.activeDevPorts.prefix(8).enumerated()), id: \.element.id) { idx, p in
                             if idx > 0 {
                                 Divider()
-                                    .opacity(0.35)
+                                    .opacity(0.25)
                                     .padding(.vertical, 2)
                             }
                             
                             HStack(alignment: .center, spacing: 10) {
-                                Text(":\(p.port)")
+                                Text(":\(p.displayPort)")
                                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                                     .foregroundStyle(Color.accentColor)
                                     .frame(width: 56, alignment: .leading)
