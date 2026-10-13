@@ -684,10 +684,17 @@ async function main() {
   Script.setWidget(w);
 
   // Khi bấm vào widget với config là "Run Script":
+  // Tự động reload xong -> gọi App.close() để đưa người dùng trở về ngay màn hình Home Screen!
   if (config.runsInApp) {
-    if (family === "small") await w.presentSmall();
-    else if (family === "medium") await w.presentMedium();
-    else await w.presentLarge();
+    if (args.queryParameters && args.queryParameters.preview) {
+      if (family === "small") await w.presentSmall();
+      else if (family === "medium") await w.presentMedium();
+      else await w.presentLarge();
+    } else {
+      try {
+        App.close();
+      } catch (_) {}
+    }
   }
 }
 
