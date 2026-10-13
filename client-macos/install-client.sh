@@ -25,10 +25,14 @@ echo "[1/4] Dừng tiến trình CodexBarCustom cũ (nếu có)..."
 pkill -f CodexBarCustom || true
 sleep 1
 
-# 3. Cài đặt file nhị phân
+# 3. Cài đặt file nhị phân & Icon Resources
 echo "[2/4] Cài đặt file thực thi vào ${BIN_TARGET}..."
 cp "${SCRIPT_DIR}/build/CodexBarCustom" "${BIN_TARGET}"
 chmod +x "${BIN_TARGET}"
+if [ -d "${SCRIPT_DIR}/Resources" ]; then
+    cp -f "${SCRIPT_DIR}/Resources/icon-claude.png" /tmp/icon-claude.png 2>/dev/null || true
+    cp -f "${SCRIPT_DIR}/Resources/icon-antigravity.png" /tmp/icon-antigravity.png 2>/dev/null || true
+fi
 
 # 4. Cấu hình tự khởi động cùng máy qua LaunchAgent
 echo "[3/4] Cấu hình LaunchAgent tự khởi động cùng macOS..."
