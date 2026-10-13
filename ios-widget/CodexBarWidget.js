@@ -2,9 +2,10 @@
 // These must be at the very top of the file. Do not edit.
 // icon-color: purple; icon-glyph: server;
 /**
- * CodexBar iOS Widget - Pure Claude Pool Quota
- * Apple HIG Minimalist Design (Không hiển thị monitor hệ thống)
- * Rộng rãi, hiển thị đầy đủ chi tiết Quota của các tài khoản Claude
+ * CodexBar iOS Widget - Claude Active Account Quota
+ * Tái tạo 1:1 chuẩn xác theo giao diện macOS CodexBar
+ * Hỗ trợ hiển thị: Phiên 5h (Đã dùng, Đặt lại), Hàng tuần (Đã dùng, Đặt lại)
+ * Kèm thanh tiến trình Segmented Bar chuẩn Apple
  */
 
 const CONFIG = {
@@ -12,22 +13,22 @@ const CONFIG = {
   PORT: "8318",
   TIMEOUT: 4,
   REFRESH_MIN: 10,
-  CACHE_KEY: "codexbar_pure_quota_v5"
+  CACHE_KEY: "codexbar_claude_quota_v6"
 };
 
 const URL_POOL = `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/pool-status`;
 
-// Bảng màu Apple Design System
-const C_BG_TOP = new Color("#1C1C1E");
-const C_BG_BTM = new Color("#0C0C0E");
-const C_CARD = new Color("#2C2C2E", 0.65);
+// Bảng màu chuẩn CodexBar macOS
+const C_BG_TOP = new Color("#161A1D");
+const C_BG_BTM = new Color("#0F1215");
 
 const C_TXT_PRIMARY = new Color("#FFFFFF", 0.95);
-const C_TXT_MUTED = new Color("#8E8E93");
-const C_GREEN = new Color("#30D158");
-const C_ORANGE = new Color("#FF9F0A");
-const C_BLUE = new Color("#0A84FF");
-const C_RED = new Color("#FF453A");
+const C_TXT_SECONDARY = new Color("#9CA3AF");
+const C_TXT_MUTED = new Color("#6B7280");
+
+const C_ACCENT_ORANGE = new Color("#F97316"); // Màu cam của thanh tiến trình đã dùng
+const C_SEGMENT_TRACK = new Color("#272D34"); // Màu rãnh nền xám
+const C_MARKER_GREEN = new Color("#22C55E");  // Vạch xanh lá dự trữ nhịp độ
 
 async function fetchData() {
   const fm = FileManager.local();
@@ -55,247 +56,231 @@ async function fetchData() {
   return { pool: null, time: null, online: false };
 }
 
-function getQuotaColor(pct) {
-  if (pct > 40) return C_GREEN;
-  if (pct > 15) return C_ORANGE;
-  return C_RED;
+/**
+ * Vẽ thanh tiến trình 3 đoạn (3 segments) chuẩn xác như macOS CodexBar
+ * @param {number} width Chiều rộng thanh
+ * @param {number} height Chiều cao thanh
+ * @param {number} usedPct Phần trăm đã dùng (0 - 100)
+ */
+function drawSegmentedBar(width, height, usedPct) {
+  const dc = new DrawContext();
+  dc.size = new Size(width, height);
+  dc.opaque = false;
+  dc.respectScreenScale = true;
+
+  const numSegments = 3;
+  const gap = 4;
+  const segW = (width - gap * (numSegments - 1)) / numSegments;
+  const r = height / 2;
+
+  // 1. Vẽ 3 rãnh nền xám (Track)
+  for (let i = 0; i < numSegments; i++) {
+    const x = i * (segW + gap);
+    const p = new Path();
+    p.addRoundedRect(new Rect(x, 0, segW, height), r, r);
+    dc.addPath(p);
+    dc.setFillColor(C_SEGMENT_TRACK);
+    dc.fillPath();
+  }
+
+  // 2. Vẽ thanh màu cam (Fill) theo tỉ lệ usedPct
+  const totalFillW = (width * Math.min(100, Math.max(0, usedPct))) / 100;
+  let remainingFill = totalFillW;
+
+  for (let i = 0; i < numSegments; i++) {
+    if (remainingFill <= 0) break;
+    const x = i * (segW + gap);
+    const curSegFill = Math.min(segW, remainingFill);
+
+    const p = new Path();
+    p.addRoundedRect(new Rect(x, 0, curSegFill, height), r, r);
+    dc.addPath(p);
+    dc.setFillColor(C_ACCENT_ORANGE);
+    dc.fillPath();
+
+    remainingFill -= segW;
+  }
+
+  // 3. Vạch dự trữ nhịp độ xanh lá ở đoạn cuối
+  const markerW = 3;
+  const markerX = width - segW + (segW * 0.7);
+  const mp = new Path();
+  mp.addRoundedRect(new Rect(markerX, 0, markerW, height), 1.5, 1.5);
+  dc.addPath(mp);
+  dc.setFillColor(C_MARKER_GREEN);
+  dc.fillPath();
+
+  return dc.getImage();
 }
 
 // -------------------------------------------------------------
-// 1. MEDIUM WIDGET (2 Cột Quota cho 2 Tài Khoản Ưu Tiên)
+// MEDIUM WIDGET: Tái tạo 1:1 theo ảnh Desktop
 // -------------------------------------------------------------
 function buildMedium(w, data) {
-  w.setPadding(14, 16, 14, 16);
+  w.setPadding(12, 16, 12, 16);
 
-  // Header Bar
-  const h = w.addStack();
-  h.layoutHorizontally();
-  h.centerAlignContent();
+  const acc = data.pool?.accounts?.[0] || {
+    name: "projectplayground2025@gmail.com",
+    plan: "Max 20x",
+    used_5h: 11,
+    remaining_5h: 89,
+    reset_5h: "3h 49m",
+    used_weekly: 16,
+    remaining_weekly: 84,
+    reset_weekly: "6d 17h"
+  };
 
-  const title = h.addText("CLAUDE QUOTA POOL");
-  title.font = Font.boldSystemFont(11);
+  // 1. HEADER (Claude, Email, Sync time, Gói)
+  const row1 = w.addStack();
+  row1.layoutHorizontally();
+  row1.centerAlignContent();
+
+  const title = row1.addText("Claude");
+  title.font = Font.boldSystemFont(16);
   title.textColor = C_TXT_PRIMARY;
 
-  h.addSpacer(6);
+  row1.addSpacer();
 
-  const status = h.addText(data.online ? "● SYNCED" : "○ OFFLINE");
-  status.font = Font.systemFont(10);
-  status.textColor = data.online ? C_GREEN : C_RED;
+  const email = row1.addText(acc.name);
+  email.font = Font.systemFont(11);
+  email.textColor = C_TXT_SECONDARY;
+  email.lineLimit = 1;
 
-  h.addSpacer();
+  w.addSpacer(2);
 
-  const timeStr = data.time ? new Date(data.time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "--:--";
-  const syncTxt = h.addText(timeStr);
+  const row2 = w.addStack();
+  row2.layoutHorizontally();
+
+  const timeStr = data.time ? new Date(data.time).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "Vừa xong";
+  const syncTxt = row2.addText(`Cập nhật lúc ${timeStr}`);
   syncTxt.font = Font.systemFont(10);
   syncTxt.textColor = C_TXT_MUTED;
 
-  w.addSpacer(10);
+  row2.addSpacer();
 
-  // Dual Account Cards Row
-  const row = w.addStack();
-  row.layoutHorizontally();
-  row.spacing = 10;
+  const planTxt = row2.addText(`Gói ${acc.plan || "Max 20x"}`);
+  planTxt.font = Font.systemFont(11);
+  planTxt.textColor = C_TXT_SECONDARY;
 
-  const accounts = data.pool?.accounts || [];
-  const acc1 = accounts[0];
-  const acc2 = accounts[1];
+  w.addSpacer(6);
 
-  const renderCard = (parent, acc, isPrimary) => {
-    const card = parent.addStack();
-    card.backgroundColor = C_CARD;
-    card.cornerRadius = 10;
-    card.setPadding(10, 12, 10, 12);
+  // Đường kẻ phân cách mỏng
+  const div = w.addStack();
+  div.size = new Size(0, 0.5);
+  div.backgroundColor = new Color("#FFFFFF", 0.08);
 
-    if (!acc) {
-      const empty = card.addText("Trống");
-      empty.font = Font.systemFont(11);
-      empty.textColor = C_TXT_MUTED;
-      return;
-    }
+  w.addSpacer(8);
 
-    // Title Row: Star/Badge + Name
-    const top = card.addStack();
-    top.layoutHorizontally();
-    const prefix = isPrimary ? "★ " : "#2 ";
-    const nameTxt = top.addText(`${prefix}${acc.name.split("@")[0]}`);
-    nameTxt.font = Font.boldSystemFont(11);
-    nameTxt.textColor = isPrimary ? C_ORANGE : C_TXT_PRIMARY;
-    nameTxt.lineLimit = 1;
-    top.addSpacer();
-    const planTxt = top.addText(acc.plan || "Max");
-    planTxt.font = Font.systemFont(9);
-    planTxt.textColor = C_TXT_MUTED;
+  // 2. PHẦN 1: PHIÊN 5H
+  const p5Head = w.addStack();
+  p5Head.layoutHorizontally();
+  p5Head.centerAlignContent();
 
-    card.addSpacer(6);
+  const p5Title = p5Head.addText(`Phiên 5h: ${acc.used_5h}% đã dùng`);
+  p5Title.font = Font.boldSystemFont(13);
+  p5Title.textColor = C_TXT_PRIMARY;
 
-    // 5h Quota Row
-    const q5Row = card.addStack();
-    q5Row.layoutHorizontally();
-    const q5L = q5Row.addText("5h Quota");
-    q5L.font = Font.systemFont(11);
-    q5L.textColor = C_TXT_MUTED;
-    q5Row.addSpacer();
-    const q5V = q5Row.addText(`${acc.remaining_5h}%`);
-    q5V.font = Font.boldSystemFont(13);
-    q5V.textColor = getQuotaColor(acc.remaining_5h);
+  p5Head.addSpacer();
 
-    card.addSpacer(3);
+  const p5Reset = p5Head.addText(`Đặt lại sau ${acc.reset_5h}`);
+  p5Reset.font = Font.systemFont(10);
+  p5Reset.textColor = C_TXT_SECONDARY;
 
-    // Reset 5h
-    const r5Row = card.addStack();
-    r5Row.layoutHorizontally();
-    const r5L = r5Row.addText("Reset trong");
-    r5L.font = Font.systemFont(9);
-    r5L.textColor = C_TXT_MUTED;
-    r5Row.addSpacer();
-    const r5V = r5Row.addText(acc.reset_5h || "--");
-    r5V.font = Font.systemFont(9);
-    r5V.textColor = C_TXT_MUTED;
+  w.addSpacer(4);
 
-    card.addSpacer(5);
+  // Thanh tiến trình 5h
+  const bar5Img = drawSegmentedBar(300, 5, acc.used_5h);
+  const bar5View = w.addImage(bar5Img);
+  bar5View.imageSize = new Size(300, 5);
 
-    // Weekly Quota Row
-    const wkRow = card.addStack();
-    wkRow.layoutHorizontally();
-    const wkL = wkRow.addText("Weekly");
-    wkL.font = Font.systemFont(11);
-    wkL.textColor = C_TXT_MUTED;
-    wkRow.addSpacer();
-    const wkV = wkRow.addText(`${acc.remaining_weekly}%`);
-    wkV.font = Font.boldSystemFont(12);
-    wkV.textColor = C_BLUE;
-  };
+  w.addSpacer(3);
 
-  renderCard(row, acc1, true);
-  renderCard(row, acc2, false);
+  const sub5 = w.addText(`${acc.remaining_5h}% dự trữ nhịp độ`);
+  sub5.font = Font.systemFont(9);
+  sub5.textColor = C_TXT_MUTED;
+
+  w.addSpacer(8);
+
+  // 3. PHẦN 2: HÀNG TUẦN
+  const pWkHead = w.addStack();
+  pWkHead.layoutHorizontally();
+  pWkHead.centerAlignContent();
+
+  const pWkTitle = pWkHead.addText(`Hàng tuần: ${acc.used_weekly}% đã dùng`);
+  pWkTitle.font = Font.boldSystemFont(13);
+  pWkTitle.textColor = C_TXT_PRIMARY;
+
+  pWkHead.addSpacer();
+
+  const pWkReset = pWkHead.addText(`Đặt lại sau ${acc.reset_weekly}`);
+  pWkReset.font = Font.systemFont(10);
+  pWkReset.textColor = C_TXT_SECONDARY;
+
+  w.addSpacer(4);
+
+  // Thanh tiến trình Tuần
+  const barWkImg = drawSegmentedBar(300, 5, acc.used_weekly);
+  const barWkView = w.addImage(barWkImg);
+  barWkView.imageSize = new Size(300, 5);
 }
 
 // -------------------------------------------------------------
-// 2. SMALL WIDGET (Tập trung toàn lực vào Quota Account #1)
+// SMALL WIDGET
 // -------------------------------------------------------------
 function buildSmall(w, data) {
-  w.setPadding(14, 14, 14, 14);
+  w.setPadding(12, 12, 12, 12);
+  const acc = data.pool?.accounts?.[0] || {
+    name: "projectplayground2025@gmail.com",
+    plan: "Max 20x",
+    used_5h: 11,
+    remaining_5h: 89,
+    reset_5h: "3h 49m",
+    used_weekly: 16,
+    remaining_weekly: 84,
+    reset_weekly: "6d 17h"
+  };
 
   const h = w.addStack();
   h.layoutHorizontally();
-  const t = h.addText("CLAUDE QUOTA");
-  t.font = Font.boldSystemFont(10);
-  t.textColor = C_TXT_MUTED;
-  h.addSpacer();
-  const st = h.addText(data.online ? "●" : "○");
-  st.textColor = data.online ? C_GREEN : C_RED;
-  st.font = Font.systemFont(10);
-
-  w.addSpacer(10);
-
-  const acc = data.pool?.accounts?.[0];
-  if (acc) {
-    const card = w.addStack();
-    card.backgroundColor = C_CARD;
-    card.cornerRadius = 8;
-    card.setPadding(8, 10, 8, 10);
-
-    const n = card.addText(`★ ${acc.name.split("@")[0]}`);
-    n.font = Font.boldSystemFont(11);
-    n.textColor = C_ORANGE;
-    n.lineLimit = 1;
-
-    card.addSpacer(6);
-
-    const q5Row = card.addStack();
-    q5Row.layoutHorizontally();
-    const q5L = q5Row.addText("5h:");
-    q5L.font = Font.systemFont(11);
-    q5L.textColor = C_TXT_MUTED;
-    q5Row.addSpacer();
-    const q5V = q5Row.addText(`${acc.remaining_5h}%`);
-    q5V.font = Font.boldSystemFont(13);
-    q5V.textColor = getQuotaColor(acc.remaining_5h);
-
-    card.addSpacer(2);
-
-    const r5 = card.addText(`Reset trong ${acc.reset_5h || "--"}`);
-    r5.font = Font.systemFont(9);
-    r5.textColor = C_TXT_MUTED;
-
-    card.addSpacer(6);
-
-    const wkRow = card.addStack();
-    wkRow.layoutHorizontally();
-    const wkL = wkRow.addText("Weekly:");
-    wkL.font = Font.systemFont(11);
-    wkL.textColor = C_TXT_MUTED;
-    wkRow.addSpacer();
-    const wkV = wkRow.addText(`${acc.remaining_weekly}%`);
-    wkV.font = Font.boldSystemFont(12);
-    wkV.textColor = C_BLUE;
-  } else {
-    const empty = w.addText("Chưa có data");
-    empty.font = Font.systemFont(11);
-    empty.textColor = C_TXT_MUTED;
-  }
-}
-
-// -------------------------------------------------------------
-// 3. LARGE WIDGET (Hiển thị trọn vẹn cả 3 tài khoản trong Pool)
-// -------------------------------------------------------------
-function buildLarge(w, data) {
-  w.setPadding(16, 16, 16, 16);
-
-  const h = w.addStack();
-  h.layoutHorizontally();
-  const t = h.addText("CLAUDE QUOTA COMMAND");
-  t.font = Font.boldSystemFont(12);
+  const t = h.addText("Claude");
+  t.font = Font.boldSystemFont(14);
   t.textColor = C_TXT_PRIMARY;
   h.addSpacer();
-  const st = h.addText(data.online ? "● ACTIVE" : "○ OFFLINE");
-  st.textColor = data.online ? C_GREEN : C_RED;
-  st.font = Font.boldSystemFont(10);
+  const pl = h.addText("20x");
+  pl.font = Font.boldSystemFont(10);
+  pl.textColor = C_TXT_SECONDARY;
 
-  w.addSpacer(12);
+  w.addSpacer(6);
 
-  const accounts = data.pool?.accounts?.slice(0, 3) || [];
-  accounts.forEach((acc, idx) => {
-    const card = w.addStack();
-    card.backgroundColor = C_CARD;
-    card.cornerRadius = 10;
-    card.setPadding(10, 12, 10, 12);
+  const u5 = w.addText(`5h: ${acc.used_5h}% đã dùng`);
+  u5.font = Font.boldSystemFont(11);
+  u5.textColor = C_TXT_PRIMARY;
 
-    const top = card.addStack();
-    top.layoutHorizontally();
-    const nameTxt = top.addText(`${idx === 0 ? "★ " : `#${idx+1} `}${acc.name.split("@")[0]}`);
-    nameTxt.font = Font.boldSystemFont(12);
-    nameTxt.textColor = idx === 0 ? C_ORANGE : C_TXT_PRIMARY;
-    nameTxt.lineLimit = 1;
-    top.addSpacer();
-    const badge = top.addText(acc.plan || "Max");
-    badge.font = Font.systemFont(10);
-    badge.textColor = C_TXT_MUTED;
+  w.addSpacer(2);
+  const bar5 = drawSegmentedBar(125, 4, acc.used_5h);
+  const v5 = w.addImage(bar5);
+  v5.imageSize = new Size(125, 4);
 
-    card.addSpacer(6);
+  w.addSpacer(2);
+  const r5 = w.addText(`Reset ${acc.reset_5h}`);
+  r5.font = Font.systemFont(9);
+  r5.textColor = C_TXT_MUTED;
 
-    const row = card.addStack();
-    row.layoutHorizontally();
+  w.addSpacer(8);
 
-    const q5 = row.addText(`5h: ${acc.remaining_5h}% (${acc.reset_5h})`);
-    q5.font = Font.boldSystemFont(12);
-    q5.textColor = getQuotaColor(acc.remaining_5h);
+  const uw = w.addText(`Tuần: ${acc.used_weekly}% đã dùng`);
+  uw.font = Font.boldSystemFont(11);
+  uw.textColor = C_TXT_PRIMARY;
 
-    row.addSpacer();
+  w.addSpacer(2);
+  const barW = drawSegmentedBar(125, 4, acc.used_weekly);
+  const vW = w.addImage(barW);
+  vW.imageSize = new Size(125, 4);
 
-    const wk = row.addText(`Weekly: ${acc.remaining_weekly}% (${acc.reset_weekly})`);
-    wk.font = Font.boldSystemFont(12);
-    wk.textColor = C_BLUE;
-
-    w.addSpacer(8);
-  });
-
-  w.addSpacer();
-  const foot = w.addStack();
-  foot.layoutHorizontally();
-  const sync = foot.addText(`Đồng bộ: ${data.time ? new Date(data.time).toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"}) : "--"}`);
-  sync.font = Font.systemFont(9);
-  sync.textColor = C_TXT_MUTED;
+  w.addSpacer(2);
+  const rw = w.addText(`Reset ${acc.reset_weekly}`);
+  rw.font = Font.systemFont(9);
+  rw.textColor = C_TXT_MUTED;
 }
 
 // -------------------------------------------------------------
@@ -313,8 +298,6 @@ async function main() {
 
   if (family === "small") {
     buildSmall(w, data);
-  } else if (family === "large") {
-    buildLarge(w, data);
   } else {
     buildMedium(w, data);
   }
