@@ -13,7 +13,7 @@ const CONFIG = {
   HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
   PORT: "8318",
   TIMEOUT: 4,
-  REFRESH_MIN: 5,
+  REFRESH_MIN: 2, // Chu kỳ refresh đề xuất cho iOS (2 phút)
   CACHE_KEY: "orbiter_agy_gemini_v10"
 };
 
