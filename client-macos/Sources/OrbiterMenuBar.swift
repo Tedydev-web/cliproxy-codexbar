@@ -2632,13 +2632,14 @@ struct UbuntuServerQuickMenuView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.top, 2)
-            .padding(.bottom, 2)
+            .padding(.top, 3)
+            .padding(.bottom, 6)
         }
         .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .frame(width: 365, alignment: .topLeading)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+        .frame(width: 365)
+        .fixedSize(horizontal: true, vertical: true)
     }
 }
 
@@ -2860,6 +2861,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func showUbuntuPopover(_ sender: NSStatusBarButton) {
         guard let pop = ubuntuPopover else { return }
         state.fetchSystemData()
+        
+        if let vc = pop.contentViewController {
+            vc.view.layoutSubtreeIfNeeded()
+            let fit = vc.view.fittingSize
+            pop.contentSize = NSSize(width: max(365, fit.width), height: max(450, fit.height))
+        }
+        
         pop.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
         
