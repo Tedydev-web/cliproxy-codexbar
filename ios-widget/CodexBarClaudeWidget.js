@@ -446,12 +446,15 @@ function buildLargeWidget(w, data) {
   ];
   const contentW = getWidgetContentWidth("large", hPadding);
 
-  // --- 1. WIDGET HEADER (APPLE HIG & CODEXBAR 1:1) ---
-  const headerRow = w.addStack();
-  headerRow.layoutHorizontally();
-  headerRow.centerAlignContent();
+  // --- 1. WIDGET HEADER (100% ORBITER MENUBAR MACOS DESKTOP) ---
+  const firstAcc = accounts[0] || {};
 
-  const titleStack = headerRow.addStack();
+  // Dòng 1 Header: [Icon] Claude (trái) -------------- [email] (phải)
+  const hRow1 = w.addStack();
+  hRow1.layoutHorizontally();
+  hRow1.centerAlignContent();
+
+  const titleStack = hRow1.addStack();
   titleStack.layoutHorizontally();
   titleStack.centerAlignContent();
   titleStack.spacing = 6;
@@ -464,22 +467,36 @@ function buildLargeWidget(w, data) {
   title.font = Font.boldSystemFont(16);
   title.textColor = TOKENS.textPrimary;
 
-  const subTitle = titleStack.addText("· Pool Quota");
-  subTitle.font = Font.systemFont(13);
-  subTitle.textColor = TOKENS.textSecondary;
+  hRow1.addSpacer();
 
-  headerRow.addSpacer();
+  const hEmail = hRow1.addText(firstAcc.name || "");
+  hEmail.font = Font.systemFont(12);
+  hEmail.textColor = TOKENS.textSecondary;
+  hEmail.lineLimit = 1;
 
-  addSyncTimeElement(headerRow, data.time);
+  w.addSpacer(3);
 
-  w.addSpacer(8);
+  // Dòng 2 Header: Cập nhật lúc HH:mm:ss · Xs trước (trái) ----- Gói Max 20x (phải)
+  const hRow2 = w.addStack();
+  hRow2.layoutHorizontally();
+  hRow2.centerAlignContent();
+
+  addSyncTimeElement(hRow2, data.time);
+
+  hRow2.addSpacer();
+
+  const hPlan = hRow2.addText(`Gói ${firstAcc.plan || "Max 20x"}`);
+  hPlan.font = Font.systemFont(11.5);
+  hPlan.textColor = TOKENS.textSecondary;
+
+  w.addSpacer(7);
 
   // Hairline Divider
   const headerDiv = w.addStack();
   headerDiv.size = new Size(0, 0.5);
   headerDiv.backgroundColor = TOKENS.cardBorder;
 
-  w.addSpacer(10);
+  w.addSpacer(9);
 
   // --- 2. HIỂN THỊ CẢ 3 TÀI KHOẢN (ĐỒNG BỘ 100% CODEXBAR & ORBITER) ---
   const displayAccounts = accounts.slice(0, 3);
@@ -580,15 +597,6 @@ function buildLargeWidget(w, data) {
 
     p5Row.addSpacer();
 
-    try {
-      const clockSym = SFSymbol.named("clock");
-      clockSym.applyFont(Font.systemFont(9));
-      const clockImg = p5Row.addImage(clockSym.image);
-      clockImg.imageSize = new Size(9, 9);
-      clockImg.tintColor = TOKENS.textMuted;
-      p5Row.addSpacer(2.5);
-    } catch (_) {}
-
     const r5Est = formatResetWithEst(acc.reset_5h);
     const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Đặt lại: ${acc.reset_5h}` : ""));
     p5Reset.font = Font.systemFont(10);
@@ -618,20 +626,11 @@ function buildLargeWidget(w, data) {
     pWkRow.layoutHorizontally();
     pWkRow.centerAlignContent();
 
-    const pWkLabel = pWkRow.addText(`Hàng tuần: ${acc.used_weekly ?? 0}% đã dùng (còn ${acc.remaining_weekly ?? (100 - (acc.used_weekly ?? 0))}%)`);
+    const pWkLabel = pWkRow.addText(`Hàng tuần: ${acc.used_weekly ?? 0}% đã dùng`);
     pWkLabel.font = Font.boldSystemFont(11.5);
     pWkLabel.textColor = TOKENS.textPrimary;
 
     pWkRow.addSpacer();
-
-    try {
-      const clockSym = SFSymbol.named("clock");
-      clockSym.applyFont(Font.systemFont(9));
-      const clockImg = pWkRow.addImage(clockSym.image);
-      clockImg.imageSize = new Size(9, 9);
-      clockImg.tintColor = TOKENS.textMuted;
-      pWkRow.addSpacer(2.5);
-    } catch (_) {}
 
     const rWkEst = formatResetWithEst(acc.reset_weekly);
     const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Đặt lại: ${acc.reset_weekly}` : ""));
@@ -648,35 +647,15 @@ function buildLargeWidget(w, data) {
 
     // Divider giữa các tài khoản
     if (idx < displayAccounts.length - 1) {
-      w.addSpacer(10);
+      w.addSpacer(9);
       const accDiv = w.addStack();
       accDiv.size = new Size(0, 0.5);
       accDiv.backgroundColor = TOKENS.cardBorder;
-      w.addSpacer(10);
+      w.addSpacer(9);
     }
   });
 
   w.addSpacer();
-
-  // Subtle Footer Info (SF Symbol + Apple Design)
-  const footRow = w.addStack();
-  footRow.layoutHorizontally();
-  footRow.centerAlignContent();
-  footRow.spacing = 4;
-  footRow.addSpacer();
-
-  try {
-    const checkSym = SFSymbol.named("bolt.shield.fill");
-    checkSym.applyFont(Font.systemFont(9));
-    const checkImg = footRow.addImage(checkSym.image);
-    checkImg.imageSize = new Size(9.5, 9.5);
-    checkImg.tintColor = TOKENS.textMuted;
-  } catch (_) {}
-
-  const footTxt = footRow.addText("CodexBar Proxy · Tự động cân bằng tải Pool");
-  footTxt.font = Font.systemFont(10);
-  footTxt.textColor = TOKENS.textMuted;
-  footRow.addSpacer();
 }
 
 // ==========================================
