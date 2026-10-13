@@ -208,7 +208,16 @@ function buildMediumWidget(w, data) {
   row1.layoutHorizontally();
   row1.centerAlignContent();
 
-  const title = row1.addText("Claude");
+  const titleStack = row1.addStack();
+  titleStack.layoutHorizontally();
+  titleStack.centerAlignContent();
+  titleStack.spacing = 5;
+
+  const icon = titleStack.addImage(SFSymbol.named("bolt.fill").image);
+  icon.imageSize = new Size(13, 13);
+  icon.tintColor = TOKENS.orangeFill;
+
+  const title = titleStack.addText("Claude");
   title.font = Font.boldSystemFont(16);
   title.textColor = TOKENS.textPrimary;
 
@@ -309,7 +318,16 @@ function buildSmallWidget(w, data) {
   const h = w.addStack();
   h.layoutHorizontally();
   h.centerAlignContent();
-  const t = h.addText("Claude");
+  const titleStack = h.addStack();
+  titleStack.layoutHorizontally();
+  titleStack.centerAlignContent();
+  titleStack.spacing = 4;
+
+  const icon = titleStack.addImage(SFSymbol.named("bolt.fill").image);
+  icon.imageSize = new Size(11, 11);
+  icon.tintColor = TOKENS.orangeFill;
+
+  const t = titleStack.addText("Claude");
   t.font = Font.boldSystemFont(14);
   t.textColor = TOKENS.textPrimary;
   h.addSpacer();

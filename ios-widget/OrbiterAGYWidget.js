@@ -204,7 +204,16 @@ function buildMediumWidget(w, data) {
   row1.layoutHorizontally();
   row1.centerAlignContent();
 
-  const title = row1.addText("Antigravity");
+  const titleStack = row1.addStack();
+  titleStack.layoutHorizontally();
+  titleStack.centerAlignContent();
+  titleStack.spacing = 5;
+
+  const icon = titleStack.addImage(SFSymbol.named("atom").image);
+  icon.imageSize = new Size(14, 14);
+  icon.tintColor = TOKENS.geminiTeal;
+
+  const title = titleStack.addText("Antigravity");
   title.font = Font.boldSystemFont(16);
   title.textColor = TOKENS.textPrimary;
 
@@ -313,7 +322,16 @@ function buildSmallWidget(w, data) {
   const h = w.addStack();
   h.layoutHorizontally();
   h.centerAlignContent();
-  const t = h.addText("Gemini");
+  const titleStack = h.addStack();
+  titleStack.layoutHorizontally();
+  titleStack.centerAlignContent();
+  titleStack.spacing = 4;
+
+  const icon = titleStack.addImage(SFSymbol.named("atom").image);
+  icon.imageSize = new Size(11, 11);
+  icon.tintColor = TOKENS.geminiTeal;
+
+  const t = titleStack.addText("Gemini");
   t.font = Font.boldSystemFont(14);
   t.textColor = TOKENS.textPrimary;
   h.addSpacer();

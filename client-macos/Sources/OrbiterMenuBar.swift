@@ -403,9 +403,14 @@ struct ClaudeFullCardView: View {
             // 1. Header (Active Account) - Exact CodexBar 1:1 Layout & Subtitle
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Claude")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    HStack(alignment: .center, spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(red: 249/255, green: 115/255, blue: 22/255))
+                        Text("Claude")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
                     Spacer()
                     Text(self.state.claudeEmail)
                         .font(.subheadline)
@@ -597,9 +602,14 @@ struct AntigravityFullCardView: View {
             // 1. Header (Active Account Identifier & Tier) - Exact CodexBar 1:1 Layout & Subtitle
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Antigravity")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    HStack(alignment: .center, spacing: 6) {
+                        Image(systemName: "atom")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Color(red: 0/255, green: 195/255, blue: 137/255))
+                        Text("Antigravity")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
                     Spacer()
                     Text(self.state.agyEmail)
                         .font(.subheadline)
