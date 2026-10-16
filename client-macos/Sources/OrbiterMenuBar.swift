@@ -2683,10 +2683,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 btn.imagePosition = .imageLeading
             }
             let isUsed = state.quotaDisplayMode == "used"
-            let g5h = isUsed ? (100 - state.agyGemini5hRemaining) : state.agyGemini5hRemaining
-            let gWk = isUsed ? (100 - state.agyGeminiWeeklyRemaining) : state.agyGeminiWeeklyRemaining
-            btn.title = " 5h \(g5h)% · W \(gWk)%"
-            btn.toolTip = "Antigravity Quota (5h: \(g5h)% · W: \(gWk)%)"
+            let gem5h = isUsed ? (100 - state.agyGemini5hRemaining) : state.agyGemini5hRemaining
+            let gemWk = isUsed ? (100 - state.agyGeminiWeeklyRemaining) : state.agyGeminiWeeklyRemaining
+            let cg5h = isUsed ? (100 - state.agyClaudeGpt5hRemaining) : state.agyClaudeGpt5hRemaining
+            let cgWk = isUsed ? (100 - state.agyClaudeGptWeeklyRemaining) : state.agyClaudeGptWeeklyRemaining
+            let preferClaude = (100 - state.agyClaudeGpt5hRemaining > 100 - state.agyGemini5hRemaining) ||
+                               (100 - state.agyClaudeGptWeeklyRemaining > 100 - state.agyGeminiWeeklyRemaining)
+            let disp5h = preferClaude ? cg5h : gem5h
+            let dispWk = preferClaude ? cgWk : gemWk
+            btn.title = " 5h \(disp5h)% · W \(dispWk)%"
+            btn.toolTip = "Antigravity Quota (\(isUsed ? "Đã dùng" : "Còn lại")):\n• Gemini: 5h \(gem5h)% · Tuần \(gemWk)%\n• Claude/GPT: 5h \(cg5h)% · Tuần \(cgWk)%"
         }
         let agyMenu = NSMenu()
         let agyMenuItem = NSMenuItem()
@@ -2824,10 +2830,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     agyBtn.imagePosition = .imageLeading
                 }
                 let isUsed = self.state.quotaDisplayMode == "used"
-                let g5h = isUsed ? (100 - self.state.agyGemini5hRemaining) : self.state.agyGemini5hRemaining
-                let gWk = isUsed ? (100 - self.state.agyGeminiWeeklyRemaining) : self.state.agyGeminiWeeklyRemaining
-                agyBtn.title = " 5h \(g5h)% · W \(gWk)%"
-                agyBtn.toolTip = "Antigravity Quota (5h: \(g5h)% · W: \(gWk)%)"
+                let gem5h = isUsed ? (100 - self.state.agyGemini5hRemaining) : self.state.agyGemini5hRemaining
+                let gemWk = isUsed ? (100 - self.state.agyGeminiWeeklyRemaining) : self.state.agyGeminiWeeklyRemaining
+                let cg5h = isUsed ? (100 - self.state.agyClaudeGpt5hRemaining) : self.state.agyClaudeGpt5hRemaining
+                let cgWk = isUsed ? (100 - self.state.agyClaudeGptWeeklyRemaining) : self.state.agyClaudeGptWeeklyRemaining
+                let preferClaude = (100 - self.state.agyClaudeGpt5hRemaining > 100 - self.state.agyGemini5hRemaining) ||
+                                   (100 - self.state.agyClaudeGptWeeklyRemaining > 100 - self.state.agyGeminiWeeklyRemaining)
+                let disp5h = preferClaude ? cg5h : gem5h
+                let dispWk = preferClaude ? cgWk : gemWk
+                agyBtn.title = " 5h \(disp5h)% · W \(dispWk)%"
+                agyBtn.toolTip = "Antigravity Quota (\(isUsed ? "Đã dùng" : "Còn lại")):\n• Gemini: 5h \(gem5h)% · Tuần \(gemWk)%\n• Claude/GPT: 5h \(cg5h)% · Tuần \(cgWk)%"
             }
             if let uBtn = self.ubuntuItem.button {
                 if uBtn.image == nil {
