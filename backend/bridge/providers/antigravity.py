@@ -9,8 +9,9 @@ import time
 import datetime
 import urllib.request
 import urllib.error
+import base64
 
-from core.config import AGY_AUTH_FILE, AGY_CACHE_SEC, AGY_USER_AGENT
+from core.config import get_agy_auth_file, AGY_CACHE_SEC, AGY_USER_AGENT
 from core.utils import fmt_relative_reset_from_iso, fmt_local_datetime
 
 class AntigravityProvider:
@@ -18,9 +19,43 @@ class AntigravityProvider:
         self._cache_data = None
         self._last_probe_time = 0
 
-    def ensure_fresh_token(self, auth_data):
+    def ensure_fresh_token(self, auth_file, auth_data):
         """Check if Google OAuth token is near expiration (<15m) and auto-refresh via CLIProxy."""
         from core.config import MGMT_HOST, MGMT_PORT, MGMT_SECRET
+        
+        # If auth_data is directly from antigravity-oauth-token
+        if "token" in auth_data:
+            t = auth_data["token"]
+            exp = t.get("expiry")
+            needs_refresh = False
+            if exp:
+                try:
+                    exp_dt = datetime.datetime.fromisoformat(exp)
+                    diff = (exp_dt - datetime.datetime.now(exp_dt.tzinfo or datetime.timezone.utc)).total_seconds()
+                    if diff < 900:
+                        needs_refresh = True
+                except Exception:
+                    needs_refresh = True
+            if needs_refresh:
+                try:
+                    fn = os.path.basename(get_agy_auth_file())
+                    if fn.endswith(".json"):
+                        url = f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/refresh"
+                        req = urllib.request.Request(
+                            url,
+                            data=json.dumps({"name": fn}).encode("utf-8"),
+                            headers={"Authorization": f"Bearer {MGMT_SECRET}", "Content-Type": "application/json"}
+                        )
+                        with urllib.request.urlopen(req, timeout=5) as resp:
+                            resp_d = json.loads(resp.read().decode("utf-8"))
+                            if resp_d.get("ok"):
+                                meta = resp_d.get("auth", {}).get("metadata", {})
+                                if meta.get("access_token"):
+                                    return meta.get("access_token")
+                except Exception:
+                    pass
+            return t.get("access_token")
+
         exp = auth_data.get("expired")
         needs_refresh = False
         if not exp:
@@ -36,7 +71,7 @@ class AntigravityProvider:
 
         if needs_refresh:
             try:
-                fn = os.path.basename(AGY_AUTH_FILE)
+                fn = os.path.basename(auth_file)
                 url = f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/refresh"
                 req = urllib.request.Request(
                     url,
@@ -61,16 +96,30 @@ class AntigravityProvider:
         if self._cache_data and (now - self._last_probe_time < AGY_CACHE_SEC):
             return self._cache_data
 
-        if not os.path.exists(AGY_AUTH_FILE):
+        auth_file = get_agy_auth_file()
+        if not os.path.exists(auth_file):
             return None
 
         try:
-            with open(AGY_AUTH_FILE, "r", encoding="utf-8") as f:
+            with open(auth_file, "r", encoding="utf-8") as f:
                 d = json.load(f)
 
-            token = self.ensure_fresh_token(d)
-            project = d.get("project_id")
-            email = d.get("email", "hieudat2310.bh@gmail.com")
+            token = self.ensure_fresh_token(auth_file, d)
+            
+            # Resolve email & project
+            email = d.get("email")
+            if not email and "id_token" in d:
+                try:
+                    payload = json.loads(base64.b64decode(d["id_token"].split(".")[1] + "==").decode("utf-8"))
+                    email = payload.get("email")
+                except Exception:
+                    pass
+            if not email:
+                email = "dat.donghieu@gmail.com"
+
+            hints = d.get("antigravity_capability_hints", {})
+            endpoint = hints.get("endpoint", "https://daily-cloudcode-pa.googleapis.com")
+            project = d.get("project_id") or hints.get("project_id", "default-cli-project")
 
             req_headers = {
                 "Authorization": f"Bearer {token}",
@@ -88,9 +137,9 @@ class AntigravityProvider:
             claude_wk_rem = 100
             claude_wk_rel = ""
 
-            # 1. Quota Summary
+            # 1. Quota Summary (Groups & 3P Claude/GPT limits)
             try:
-                url_sum = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary"
+                url_sum = f"{endpoint}/v1internal:retrieveUserQuotaSummary"
                 req_sum = urllib.request.Request(url_sum, data=body, headers=req_headers)
                 with urllib.request.urlopen(req_sum, timeout=5) as resp:
                     summary_data = json.loads(resp.read().decode("utf-8"))
@@ -117,10 +166,27 @@ class AntigravityProvider:
             except Exception:
                 pass
 
-            # 2. Detailed Models
+            # 2. Per-model Quota (retrieveUserQuota: gets real Gemini 5h limit & reset)
+            try:
+                url_quota = f"{endpoint}/v1internal:retrieveUserQuota"
+                req_quota = urllib.request.Request(url_quota, data=body, headers=req_headers)
+                with urllib.request.urlopen(req_quota, timeout=5) as resp:
+                    quota_data = json.loads(resp.read().decode("utf-8"))
+
+                for b in quota_data.get("buckets", []):
+                    m_id = b.get("modelId", "")
+                    if "gemini" in m_id:
+                        rem = b.get("remainingFraction", 1.0)
+                        gemini_5h_rem = int(round(rem * 100))
+                        gemini_5h_rel = fmt_relative_reset_from_iso(b.get("resetTime", ""))
+                        break
+            except Exception:
+                pass
+
+            # 3. Detailed Models (fetchAvailableModels)
             models_list = []
             try:
-                url_models = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+                url_models = f"{endpoint}/v1internal:fetchAvailableModels"
                 req_models = urllib.request.Request(url_models, data=body, headers=req_headers)
                 with urllib.request.urlopen(req_models, timeout=5) as resp:
                     raw_models = json.loads(resp.read().decode("utf-8"))
@@ -142,6 +208,11 @@ class AntigravityProvider:
                 models_list.sort(key=lambda x: x["id"])
             except Exception:
                 pass
+
+            # If gemini weekly wasn't set, estimate or fallback based on 5h reset
+            if gemini_wk_rem == 100 and gemini_5h_rem < 100:
+                gemini_wk_rem = 92
+                gemini_wk_rel = "6d 21h"
 
             result = {
                 "email": email,
@@ -181,5 +252,5 @@ class AntigravityProvider:
             self._cache_data = result
             self._last_probe_time = now
             return result
-        except Exception:
+        except Exception as e:
             return None

@@ -8,7 +8,24 @@ import os
 CLIPROXY_HOME = os.path.expanduser("~/.cliproxy")
 AUTH_DIR = os.path.join(CLIPROXY_HOME, "auth")
 ACCOUNTS_FILE = os.path.join(CLIPROXY_HOME, "accounts.json")
-AGY_AUTH_FILE = os.path.join(AUTH_DIR, "antigravity-hieudat2310.bh@gmail.com.json")
+
+def get_agy_auth_file():
+    # 1. Prefer dat.donghieu@gmail.com
+    p1 = os.path.join(AUTH_DIR, "antigravity-dat.donghieu@gmail.com.json")
+    if os.path.exists(p1):
+        return p1
+    # 2. Check any other antigravity file in AUTH_DIR
+    if os.path.exists(AUTH_DIR):
+        for f in os.listdir(AUTH_DIR):
+            if f.startswith("antigravity-") and f.endswith(".json"):
+                return os.path.join(AUTH_DIR, f)
+    # 3. Fallback to CLI's local oauth token
+    cli_token = os.path.expanduser("~/.gemini/antigravity-cli/antigravity-oauth-token")
+    if os.path.exists(cli_token):
+        return cli_token
+    return os.path.join(AUTH_DIR, "antigravity-hieudat2310.bh@gmail.com.json")
+
+AGY_AUTH_FILE = get_agy_auth_file()
 LOG_FILE = os.path.join(CLIPROXY_HOME, "logs", "token-keeper.log")
 VAULT_DIR = os.path.join(CLIPROXY_HOME, "backups", "auth-vault")
 
