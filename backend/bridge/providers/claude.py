@@ -302,6 +302,96 @@ class ClaudePoolProvider:
         order_keys = [t[0] for t in tasks]
         results.sort(key=lambda x: order_keys.index(x["email"]) if x["email"] in order_keys else 999)
 
+        # Step 3: Safely include paused / quarantined accounts for menubar visibility without probing
+        paused_dir = os.path.expanduser("~/.cliproxy/auth-paused")
+        if os.path.exists(paused_dir):
+            for fn in sorted(os.listdir(paused_dir)):
+                if fn.startswith("claude-") and fn.endswith(".json"):
+                    em = fn[len("claude-"):-len(".json")]
+                    if not any(r.get("email") == em for r in results):
+                        results.append({
+                            "email": em,
+                            "name": em,
+                            "is_available": False,
+                            "is_probe_error": False,
+                            "status_text": "Tạm dừng (auth-paused)",
+                            "error_hint": "OAuth token hết hạn. Cần đăng nhập lại để kích hoạt lại.",
+                            "remaining_5h": 0,
+                            "used_5h": 100,
+                            "reset_5h": "",
+                            "reset_5h_ts": 0,
+                            "remaining_weekly": 0,
+                            "used_weekly": 100,
+                            "reset_weekly": "Cần login lại",
+                            "reset_weekly_ts": 0,
+                            "plan": "Paused"
+                        })
+        # Step 4: Enrich with 30-day OAuth lifecycle telemetry
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        cred_file = os.path.expanduser("~/.claude/.credentials.json")
+        cred_rt_exp = None
+        if os.path.exists(cred_file):
+            try:
+                with open(cred_file, "r", encoding="utf-8") as f:
+                    cd = json.load(f)
+                rexp = cd.get("claudeAiOauth", {}).get("refreshTokenExpiresAt")
+                if rexp:
+                    cred_rt_exp = datetime.datetime.fromtimestamp(rexp / 1000, tz=datetime.timezone.utc)
+            except Exception:
+                pass
+
+        accounts_dict = {}
+        if os.path.exists(ACCOUNTS_FILE):
+            try:
+                with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                    acc_json = json.load(f)
+                accounts_dict = acc_json.get("providers", {}).get("claude", {}).get("accounts", {})
+            except Exception:
+                pass
+
+        for r in results:
+            em = r.get("email")
+            info = accounts_dict.get(em, {})
+            created_str = info.get("authorizedAt") or info.get("lastUsedAt") or info.get("createdAt")
+            created_dt = None
+            if created_str:
+                try:
+                    created_dt = datetime.datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                except Exception:
+                    pass
+            
+            rt_exp_dt = None
+            if em == "trthuhuyen2712@gmail.com" and cred_rt_exp:
+                rt_exp_dt = cred_rt_exp
+            elif created_dt:
+                rt_exp_dt = created_dt + datetime.timedelta(days=30)
+
+            if rt_exp_dt:
+                diff = rt_exp_dt - now_utc
+                days_left = diff.days
+                hours_left = diff.seconds // 3600
+                r["days_left_30d"] = max(0, days_left)
+                r["hours_left_30d"] = max(0, hours_left)
+                r["expiry_30d_str"] = rt_exp_dt.astimezone().strftime("%d/%m/%Y %H:%M")
+                if diff.total_seconds() <= 0:
+                    r["lifecycle_status"] = "expired"
+                    r["lifecycle_label"] = "Đã quá hạn 30 ngày"
+                elif days_left <= 3:
+                    r["lifecycle_status"] = "critical"
+                    r["lifecycle_label"] = f"Hết hạn sau {days_left}d {hours_left}h"
+                elif days_left <= 5:
+                    r["lifecycle_status"] = "warning"
+                    r["lifecycle_label"] = f"Hết hạn sau {days_left}d"
+                else:
+                    r["lifecycle_status"] = "healthy"
+                    r["lifecycle_label"] = f"Còn {days_left} ngày"
+            else:
+                r["days_left_30d"] = None
+                r["hours_left_30d"] = None
+                r["expiry_30d_str"] = ""
+                r["lifecycle_status"] = "unknown"
+                r["lifecycle_label"] = ""
+
         self._cache = results
         self._last_probe_time = now
         return results

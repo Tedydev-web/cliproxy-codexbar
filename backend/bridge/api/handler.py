@@ -2,7 +2,9 @@
 RESTful HTTP API Handlers for CLIProxy CodexBar Bridge
 """
 
+import os
 import json
+import subprocess
 from http.server import BaseHTTPRequestHandler
 
 class BridgeApiHandler(BaseHTTPRequestHandler):
@@ -157,6 +159,23 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
                 return
             res = self.system_provider.update_herdr()
             self.send_json(200, res)
+
+        elif self.path.startswith("/v1/reauth-account"):
+            email = req_data.get("email")
+            if not email:
+                self.send_json(400, {"error": "Missing 'email' field"})
+                return
+            import subprocess
+            reauth_bin = os.path.expanduser("~/.local/bin/claude-reauth")
+            subprocess.Popen(
+                [reauth_bin, email],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            self.send_json(200, {
+                "ok": True,
+                "message": f"Đã khởi động quy trình xác thực lại cho {email}. Trình duyệt trên Mac sẽ tự động mở."
+            })
 
         else:
             self.send_json(404, {"error": "Endpoint not found"})

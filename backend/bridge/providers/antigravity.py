@@ -137,77 +137,77 @@ class AntigravityProvider:
             claude_wk_rem = 100
             claude_wk_rel = ""
 
+            # Concurrent probe across Google CloudCode internal endpoints
+            from concurrent.futures import ThreadPoolExecutor
+
+            def _fetch_endpoint(url_target):
+                try:
+                    req = urllib.request.Request(url_target, data=body, headers=req_headers)
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        return json.loads(resp.read().decode("utf-8"))
+                except Exception:
+                    return None
+
+            urls = [
+                f"{endpoint}/v1internal:retrieveUserQuotaSummary",
+                f"{endpoint}/v1internal:retrieveUserQuota",
+                f"{endpoint}/v1internal:fetchAvailableModels"
+            ]
+
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                fetch_results = list(executor.map(_fetch_endpoint, urls))
+
+            summary_data = fetch_results[0] or {}
+            quota_data = fetch_results[1] or {}
+            raw_models = fetch_results[2] or {}
+
             # 1. Quota Summary (Groups & 3P Claude/GPT limits)
-            try:
-                url_sum = f"{endpoint}/v1internal:retrieveUserQuotaSummary"
-                req_sum = urllib.request.Request(url_sum, data=body, headers=req_headers)
-                with urllib.request.urlopen(req_sum, timeout=5) as resp:
-                    summary_data = json.loads(resp.read().decode("utf-8"))
+            for grp in summary_data.get("groups", []):
+                grp_name = grp.get("displayName", "").lower()
+                for b in grp.get("buckets", []):
+                    b_id = b.get("bucketId", "")
+                    rem_pct = int(round(b.get("remainingFraction", 1.0) * 100))
+                    rel_time = fmt_relative_reset_from_iso(b.get("resetTime", ""))
 
-                for grp in summary_data.get("groups", []):
-                    grp_name = grp.get("displayName", "").lower()
-                    for b in grp.get("buckets", []):
-                        b_id = b.get("bucketId", "")
-                        rem_pct = int(round(b.get("remainingFraction", 1.0) * 100))
-                        rel_time = fmt_relative_reset_from_iso(b.get("resetTime", ""))
-
-                        if b_id == "gemini-5h" or ("gemini" in grp_name and b.get("window") == "5h"):
-                            gemini_5h_rem = rem_pct
-                            gemini_5h_rel = rel_time
-                        elif b_id == "gemini-weekly" or ("gemini" in grp_name and b.get("window") == "weekly"):
-                            gemini_wk_rem = rem_pct
-                            gemini_wk_rel = rel_time
-                        elif b_id == "3p-5h" or (("claude" in grp_name or "gpt" in grp_name) and b.get("window") == "5h"):
-                            claude_5h_rem = rem_pct
-                            claude_5h_rel = rel_time or "5h 0m"
-                        elif b_id == "3p-weekly" or (("claude" in grp_name or "gpt" in grp_name) and b.get("window") == "weekly"):
-                            claude_wk_rem = rem_pct
-                            claude_wk_rel = rel_time
-            except Exception:
-                pass
+                    if b_id == "gemini-5h" or ("gemini" in grp_name and b.get("window") == "5h"):
+                        gemini_5h_rem = rem_pct
+                        gemini_5h_rel = rel_time
+                    elif b_id == "gemini-weekly" or ("gemini" in grp_name and b.get("window") == "weekly"):
+                        gemini_wk_rem = rem_pct
+                        gemini_wk_rel = rel_time
+                    elif b_id == "3p-5h" or (("claude" in grp_name or "gpt" in grp_name) and b.get("window") == "5h"):
+                        claude_5h_rem = rem_pct
+                        claude_5h_rel = rel_time or "5h 0m"
+                    elif b_id == "3p-weekly" or (("claude" in grp_name or "gpt" in grp_name) and b.get("window") == "weekly"):
+                        claude_wk_rem = rem_pct
+                        claude_wk_rel = rel_time
 
             # 2. Per-model Quota (retrieveUserQuota: gets real Gemini 5h limit & reset)
-            try:
-                url_quota = f"{endpoint}/v1internal:retrieveUserQuota"
-                req_quota = urllib.request.Request(url_quota, data=body, headers=req_headers)
-                with urllib.request.urlopen(req_quota, timeout=5) as resp:
-                    quota_data = json.loads(resp.read().decode("utf-8"))
-
-                for b in quota_data.get("buckets", []):
-                    m_id = b.get("modelId", "")
-                    if "gemini" in m_id:
-                        rem = b.get("remainingFraction", 1.0)
-                        gemini_5h_rem = int(round(rem * 100))
-                        gemini_5h_rel = fmt_relative_reset_from_iso(b.get("resetTime", ""))
-                        break
-            except Exception:
-                pass
+            for b in quota_data.get("buckets", []):
+                m_id = b.get("modelId", "")
+                if "gemini" in m_id:
+                    rem = b.get("remainingFraction", 1.0)
+                    gemini_5h_rem = int(round(rem * 100))
+                    gemini_5h_rel = fmt_relative_reset_from_iso(b.get("resetTime", ""))
+                    break
 
             # 3. Detailed Models (fetchAvailableModels)
             models_list = []
-            try:
-                url_models = f"{endpoint}/v1internal:fetchAvailableModels"
-                req_models = urllib.request.Request(url_models, data=body, headers=req_headers)
-                with urllib.request.urlopen(req_models, timeout=5) as resp:
-                    raw_models = json.loads(resp.read().decode("utf-8"))
-
-                for m_id, m_data in raw_models.get("models", {}).items():
-                    qi = m_data.get("quotaInfo")
-                    if qi:
-                        rem = qi.get("remainingFraction", 1.0)
-                        used = int(round((1.0 - rem) * 100))
-                        raw_reset = qi.get("resetTime", "")
-                        models_list.append({
-                            "id": m_id,
-                            "name": m_data.get("displayName", m_id),
-                            "used": used,
-                            "remaining": int(round(rem * 100)),
-                            "reset": fmt_local_datetime(raw_reset),
-                            "reset_time": raw_reset
-                        })
-                models_list.sort(key=lambda x: x["id"])
-            except Exception:
-                pass
+            for m_id, m_data in raw_models.get("models", {}).items():
+                qi = m_data.get("quotaInfo")
+                if qi:
+                    rem = qi.get("remainingFraction", 1.0)
+                    used = int(round((1.0 - rem) * 100))
+                    raw_reset = qi.get("resetTime", "")
+                    models_list.append({
+                        "id": m_id,
+                        "name": m_data.get("displayName", m_id),
+                        "used": used,
+                        "remaining": int(round(rem * 100)),
+                        "reset": fmt_local_datetime(raw_reset),
+                        "reset_time": raw_reset
+                    })
+            models_list.sort(key=lambda x: x["id"])
 
             # If gemini weekly wasn't set, estimate or fallback based on 5h reset
             if gemini_wk_rem == 100 and gemini_5h_rem < 100:

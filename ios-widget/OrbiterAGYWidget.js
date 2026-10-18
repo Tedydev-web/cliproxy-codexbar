@@ -12,9 +12,9 @@
 const CONFIG = {
   HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
   PORT: "8318",
-  TIMEOUT: 4,
-  REFRESH_MIN: 1, // Chu kỳ refresh đề xuất cho iOS sớm nhất (1 phút)
-  CACHE_KEY: "orbiter_agy_gemini_v11"
+  TIMEOUT: 12,           // 12s đảm bảo kết nối ổn định qua Tailscale
+  REFRESH_MIN: 5,        // Chu kỳ refresh tối ưu pin cho iOS (5 phút)
+  CACHE_KEY: "orbiter_agy_gemini_v13"
 };
 
 const URLS = {
@@ -37,11 +37,14 @@ const TOKENS = {
   geminiTeal: new Color("#00C389"),    // Teal Green (5h)
   geminiAmber: new Color("#F5C542"),   // Amber Yellow (Tuần)
   trackGray: new Color("#272D34"),     // Rãnh segmented bar
-  greenPace: new Color("#22C55E")      // Vạch nhịp độ an toàn
+  greenPace: new Color("#22C55E"),     // Vạch nhịp độ an toàn
+  amberWarn: new Color("#F59E0B"),     // Cảnh báo / Ngoại tuyến
+  purpleGpt: new Color("#8B5CF6")      // Tím Claude/GPT
 };
 
 // Official Antigravity Flying Shuttle Brand Logo Icon (Base64 PNG Template)
 const AGY_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAJxsHGAAACaUlEQVRYCe2XwUtVQRTGfSphQmBqIRhtkmgjESL4SjCIQMKIai2Em6BlC2lfEQiiixYtIvoHWuXahS7ColVGkVAthAjUTSqo4Os3oL7HuWdmzni5DwQHPt6dc77vO+fOXObe19BwPI7YCpTy9lupVAbwuAKawBcwXyqVdvmt76CRHvAZyPGdgGuwfoOCl8CK7KRmvs51uS4dUagFfK0p7rtcJtFeeFMUGfd1oMSnCm2Igq1gTSnsC22R6EppqjGFDHcUnE7QnID7MIGfRuVuF3xLEYj/Jpf7eMl0iumFQNFY6mrG0BNI2bJ7Hg9L+L6F5DgpDd22mio8s9a0t+xHG0VWgHs9HHZc5JWyFBNbV+gmRnmacX0Mx5pxeWtDJrNIQZOHdcuWKdYdKRhLb0JoZ9u2QsToCvH89GKQtxnXQysYchehEW0I8YjHwH3zvAXXwRnQCdx58xLsAG34vDSuHmOFPiin3gYx7zNBbgCsKrqfehVjFMNzYFcxvhuzQDMIdhRtX0zrzWP2WDF84xWIBNrnin5C0OxTzBaF4V/m5rc9XPcx90N4/GHebO9ij4nomjBy07FUIzS3FB/zu+2gHibvhdFH5qZz68CkenMzwuuT5ATniPuFwTbzy0FRIIn2PPgnPG0vXERNQP69eRqoZ0rh+Ug09Iu5OyzDA9IzIZxjnv4QKmXweSe8Xyu0agjyAyH4xryjysh3hZf7kyAP2ieqK8QyqD3I3LadVck5gnieArNgf7iDN3vqE5zeYzjCK3AyR92gFO9m8ALsL8BkRkCyDdwBPZlkQQFqdYMboLCbL6j1Y9vqCvwHoDyc53bTRvcAAAAASUVORK5CYII=";
+
 function getAgyIcon() {
   try {
     let cleanB64 = AGY_LOGO_B64.trim();
@@ -58,7 +61,7 @@ function getAgyIcon() {
   return sym.image;
 }
 
-function addSyncTimeElement(stack, timestamp) {
+function addSyncTimeElement(stack, timestamp, isOnline) {
   const d = new Date(timestamp || Date.now());
   const pad = (n) => String(n).padStart(2, "0");
   const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -68,14 +71,24 @@ function addSyncTimeElement(stack, timestamp) {
   syncStack.centerAlignContent();
   syncStack.spacing = 3;
 
+  if (isOnline === false) {
+    try {
+      const dotSym = SFSymbol.named("exclamationmark.circle.fill");
+      dotSym.applyFont(Font.systemFont(9));
+      const dotImg = syncStack.addImage(dotSym.image);
+      dotImg.imageSize = new Size(9.5, 9.5);
+      dotImg.tintColor = TOKENS.amberWarn;
+    } catch (_) {}
+  }
+
   const t = syncStack.addText(`${timeStr} · `);
   t.font = Font.systemFont(10);
-  t.textColor = TOKENS.textMuted;
+  t.textColor = isOnline === false ? TOKENS.amberWarn : TOKENS.textMuted;
 
   const rel = syncStack.addDate(d);
   rel.applyRelativeStyle();
   rel.font = Font.systemFont(10);
-  rel.textColor = TOKENS.textMuted;
+  rel.textColor = isOnline === false ? TOKENS.amberWarn : TOKENS.textMuted;
 }
 
 function formatResetWithEst(raw) {
@@ -116,7 +129,7 @@ function formatResetWithEst(raw) {
 }
 
 // ==========================================
-// DATA & CACHING
+// DATA & CACHING (BULLETPROOF RETRIEVAL)
 // ==========================================
 async function fetchAgyData() {
   const fm = FileManager.local();
@@ -130,12 +143,14 @@ async function fetchAgyData() {
     const r = new Request(URLS.AGY);
     r.timeoutInterval = CONFIG.TIMEOUT;
     const agy = await r.loadJSON();
-    if (agy && agy.email) {
+    if (agy && (agy.email || agy.gemini)) {
       const data = { agy, time: Date.now(), online: true };
       try { fm.writeString(path, JSON.stringify(data)); } catch (_) {}
       return data;
     }
-  } catch (_) {}
+  } catch (err) {
+    console.log("[Orbiter AGY] Lỗi kết nối HTTP qua Tailscale: " + err);
+  }
 
   if (cache) {
     cache.online = false;
@@ -216,28 +231,36 @@ function getWidgetContentWidth(family, hPadding) {
 // ==========================================
 function buildMediumWidget(w, data) {
   const hPadding = 14;
-  w.setPadding(14, hPadding, 14, hPadding);
+  w.setPadding(13, hPadding, 13, hPadding);
 
+  const isOnline = data.online !== false;
   const agy = data.agy || {
-    email: "hieudat2310.bh@gmail.com",
+    email: "dat.donghieu@gmail.com",
     tier: "Pro",
     gemini: {
-      five_hour_remaining: 96,
-      five_hour_refresh: "4h 44m",
-      weekly_remaining: 32,
-      weekly_refresh: "2d 2h"
+      five_hour_remaining: 97,
+      five_hour_refresh: "4h 56m",
+      weekly_remaining: 92,
+      weekly_refresh: "6d 21h"
+    },
+    claude_gpt: {
+      five_hour_remaining: 100,
+      weekly_remaining: 100
     }
   };
 
-  const g5Rem = agy.gemini?.five_hour_remaining ?? 96;
+  const g5Rem = agy.gemini?.five_hour_remaining ?? 97;
   const g5Used = 100 - g5Rem;
-  const g5ResetFormatted = formatResetWithEst(agy.gemini?.five_hour_refresh || "4h 44m");
+  const g5ResetFormatted = formatResetWithEst(agy.gemini?.five_hour_refresh || "4h 56m");
 
-  const gWkRem = agy.gemini?.weekly_remaining ?? 32;
+  const gWkRem = agy.gemini?.weekly_remaining ?? 92;
   const gWkUsed = 100 - gWkRem;
-  const gWkResetFormatted = formatResetWithEst(agy.gemini?.weekly_refresh || "2d 2h");
+  const gWkResetFormatted = formatResetWithEst(agy.gemini?.weekly_refresh || "6d 21h");
 
-  // --- HEADER: 100% NHƯ ORBITER MACOS (DÒNG 1: TÊN + EMAIL; DÒNG 2: AGO TEXT + GÓI) ---
+  const cg5Rem = agy.claude_gpt?.five_hour_remaining ?? 100;
+  const cgWkRem = agy.claude_gpt?.weekly_remaining ?? 100;
+
+  // --- HEADER: 100% NHƯ ORBITER MACOS ---
   const row1 = w.addStack();
   row1.layoutHorizontally();
   row1.centerAlignContent();
@@ -252,12 +275,12 @@ function buildMediumWidget(w, data) {
   icon.tintColor = TOKENS.geminiTeal;
 
   const title = titleStack.addText("Antigravity");
-  title.font = Font.boldSystemFont(16);
+  title.font = Font.boldSystemFont(15.5);
   title.textColor = TOKENS.textPrimary;
 
   row1.addSpacer();
 
-  const email = row1.addText(agy.email || "");
+  const email = row1.addText(agy.email || "dat.donghieu@gmail.com");
   email.font = Font.systemFont(12);
   email.textColor = TOKENS.textSecondary;
   email.lineLimit = 1;
@@ -269,7 +292,7 @@ function buildMediumWidget(w, data) {
   row2.centerAlignContent();
 
   // Mốc thời gian đồng bộ và relative live date cập nhật tự động
-  addSyncTimeElement(row2, data.time);
+  addSyncTimeElement(row2, data.time, isOnline);
 
   row2.addSpacer();
 
@@ -277,86 +300,95 @@ function buildMediumWidget(w, data) {
   planTxt.font = Font.systemFont(11);
   planTxt.textColor = TOKENS.textSecondary;
 
-  w.addSpacer(6);
+  w.addSpacer(5);
 
   // Hairline Divider
   const div = w.addStack();
   div.size = new Size(0, 0.5);
   div.backgroundColor = TOKENS.cardBorder;
 
-  w.addSpacer(8);
+  w.addSpacer(6);
 
-  // --- METRIC 1: GIỚI HẠN 5H CÒN LẠI (TEAL GREEN) ---
+  // --- METRIC 1: GIỚI HẠN 5H (TEAL GREEN) ---
   const g5Head = w.addStack();
   g5Head.layoutHorizontally();
   g5Head.centerAlignContent();
 
   const g5Title = g5Head.addText(`Giới hạn 5h còn lại: ${g5Rem}%`);
-  g5Title.font = Font.boldSystemFont(13);
+  g5Title.font = Font.boldSystemFont(12.5);
   g5Title.textColor = TOKENS.textPrimary;
 
   g5Head.addSpacer();
 
   const g5Rst = g5Head.addText(g5ResetFormatted);
-  g5Rst.font = Font.systemFont(10.5);
+  g5Rst.font = Font.systemFont(10);
   g5Rst.textColor = TOKENS.textSecondary;
 
-  w.addSpacer(4);
+  w.addSpacer(3.5);
 
-  // Thanh tiến trình 5h (Teal Green)
   const barW = getWidgetContentWidth("medium", hPadding);
-  const bar5 = drawSegmentedBar(barW, 5.5, g5Rem, TOKENS.geminiTeal);
+  const bar5 = drawSegmentedBar(barW, 5, g5Rem, TOKENS.geminiTeal);
   const v5 = w.addImage(bar5);
-  v5.imageSize = new Size(barW, 5.5);
+  v5.imageSize = new Size(barW, 5);
   v5.leftAlignImage();
 
-  w.addSpacer(3);
+  w.addSpacer(2.5);
 
   const sub5 = w.addText(`Đã dùng ${g5Used}%`);
   sub5.font = Font.systemFont(9.5);
   sub5.textColor = TOKENS.textMuted;
 
-  w.addSpacer(8);
+  w.addSpacer(6);
 
-  // --- METRIC 2: GIỚI HẠN TUẦN CÒN LẠI (AMBER YELLOW) ---
+  // --- METRIC 2: GIỚI HẠN TUẦN (AMBER YELLOW) ---
   const gWkHead = w.addStack();
   gWkHead.layoutHorizontally();
   gWkHead.centerAlignContent();
 
   const gWkTitle = gWkHead.addText(`Giới hạn tuần còn lại: ${gWkRem}%`);
-  gWkTitle.font = Font.boldSystemFont(13);
+  gWkTitle.font = Font.boldSystemFont(12.5);
   gWkTitle.textColor = TOKENS.textPrimary;
 
   gWkHead.addSpacer();
 
   const gWkRst = gWkHead.addText(gWkResetFormatted);
-  gWkRst.font = Font.systemFont(10.5);
+  gWkRst.font = Font.systemFont(10);
   gWkRst.textColor = TOKENS.textSecondary;
 
-  w.addSpacer(4);
+  w.addSpacer(3.5);
 
-  // Thanh tiến trình Tuần (Amber Yellow)
-  const barWk = drawSegmentedBar(barW, 5.5, gWkRem, TOKENS.geminiAmber);
+  const barWk = drawSegmentedBar(barW, 5, gWkRem, TOKENS.geminiAmber);
   const vWk = w.addImage(barWk);
-  vWk.imageSize = new Size(barW, 5.5);
+  vWk.imageSize = new Size(barW, 5);
   vWk.leftAlignImage();
 
-  w.addSpacer(3);
+  w.addSpacer(2.5);
 
-  const subWk = w.addText(`Đã dùng ${gWkUsed}%`);
+  // Sub row: Đã dùng tuần (trái) + Claude/GPT status pill (phải - đồng bộ Orbiter macOS)
+  const subRow = w.addStack();
+  subRow.layoutHorizontally();
+  subRow.centerAlignContent();
+
+  const subWk = subRow.addText(`Đã dùng ${gWkUsed}%`);
   subWk.font = Font.systemFont(9.5);
   subWk.textColor = TOKENS.textMuted;
+
+  subRow.addSpacer();
+
+  const cgTxt = subRow.addText(`Claude & GPT: ${cg5Rem}% khả dụng`);
+  cgTxt.font = Font.systemFont(9.5);
+  cgTxt.textColor = cg5Rem > 0 ? TOKENS.geminiTeal : TOKENS.amberWarn;
 }
 
 // ==========================================
-// SMALL WIDGET (2X2)
+// SMALL WIDGET (2X2 - FALLBACK CHUẨN)
 // ==========================================
 function buildSmallWidget(w, data) {
   const hPadding = 12;
   w.setPadding(12, hPadding, 12, hPadding);
   const agy = data.agy || {};
-  const g5Rem = agy.gemini?.five_hour_remaining ?? 96;
-  const gWkRem = agy.gemini?.weekly_remaining ?? 32;
+  const g5Rem = agy.gemini?.five_hour_remaining ?? 97;
+  const gWkRem = agy.gemini?.weekly_remaining ?? 92;
   const smallW = getWidgetContentWidth("small", hPadding);
 
   const h = w.addStack();

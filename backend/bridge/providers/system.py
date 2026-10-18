@@ -419,7 +419,7 @@ class SystemProvider:
                     "id": "sys-cloudflared",
                     "type": "System Named Tunnel",
                     "target": "Host Ingress",
-                    "url": "motcaigido.xyz / Private DNS",
+                    "url": "Cloudflare Tunnel Ingress / Private DNS",
                     "is_active": True,
                     "is_quick": False
                 })

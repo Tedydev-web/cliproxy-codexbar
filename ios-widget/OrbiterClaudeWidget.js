@@ -1,0 +1,498 @@
+// Variables used by Scriptable.
+// These must be at the very top of the file. Do not edit.
+// icon-color: orange; icon-glyph: bolt;
+/**
+ * Orbiter iOS Widget - Claude Pool Quota (Large Size)
+ * 100% Matching Pattern & Style of ClaudeFullCardView in Orbiter Menubar & CodexBar macOS
+ * Supports Large (4x4) Multi-Account Display with 30-Day Lifecycle Telemetry
+ * Full-width Segmented Progress Bars (Không bị hụt lề phải)
+ * Hiển thị toàn diện 3 tài khoản trong Pool + Cảnh báo hết hạn OAuth 30 ngày + Fallback API
+ */
+
+const CONFIG = {
+  HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
+  PORT: "8318",
+  TIMEOUT: 12,           // 12s ổn định qua Tailscale
+  REFRESH_MIN: 5,        // Chu kỳ refresh đề xuất cho iOS (5 phút)
+  CACHE_KEY: "orbiter_claude_large_v13"
+};
+
+const URLS = {
+  POOL: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/pool-status`,
+  SET_PRIORITY: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/set-priority`,
+  REAUTH: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/reauth-account`
+};
+
+// ==========================================
+// DESIGN TOKENS (CODEXBAR & ORBITER MACOS 1:1)
+// ==========================================
+const TOKENS = {
+  bgTop: new Color("#161A1D"),
+  bgBtm: new Color("#0E1114"),
+  cardBorder: new Color("#FFFFFF", 0.08),
+
+  textPrimary: new Color("#FFFFFF", 0.95),
+  textSecondary: new Color("#9CA3AF"),
+  textMuted: new Color("#6B7280"),
+
+  orangeFill: new Color("#F97316"),   // Cam Claude
+  trackGray: new Color("#272D34"),    // Rãnh segmented bar đồng bộ Orbiter macOS
+  greenPace: new Color("#22C55E"),    // Vạch nhịp độ an toàn / Online
+  amberWarn: new Color("#F59E0B"),    // Cảnh báo 429 / Sắp hết hạn 30 ngày
+  redAlert: new Color("#EF4444"),     // Hết hạn / Lỗi 401
+  blueCapi: new Color("#38BDF8")      // Xanh dương CAPI Fallback
+};
+
+// Official Claude Sparkle Brand Logo Icon (Base64 PNG Template)
+const CLAUDE_LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAJxsHGAAAD3klEQVRYCe2XW2iPYRzH95+Z04hGQuSUY84XWivEWDnkAheKckHRLpDCxS52JadyulDChuSGlaQcyiE0zFkjIYxtFCbMYcbr8333PNuz17t5/3+a0n71eX/H5/c8e97/+7zvkpJa5H/eAc/zZsEUiP3zv5NFLAYrq8IWRDIL7kJmWP6vxpjkCFgpxUgJTkDshik4FMxF9ZOjFlJ3zqntjT3X8ZNYiG7jCBN75OZkk+8FfYLxhH2apcJ9sFLsNiOYbhPoBYHcfGLV8BmGuLk/smk2FVyZZBsSHOokRjnxmcS/Oblcm4usGdwBiuE1LHUH4h8FK+dtjsBEE/yKbq04ehxUmbhUDYy0YyJrBnXXaEcOYLc3kwzA/uLkskxct0Vy3fjdsJ/5kfrL2siLCBbSY299H9+6w3WQmWyzkysysTUmthudAmeNb1VhcI64fTothPe2I/oDLIAu8AasTMfYbpwc9AabMPohulPcCwgbQKOBcMk0tqoAI9c66DNw0Pi70D+MLaXf1Niw3gnHaJgMK+ETWCm3BlpP0T3Hd80VYRNTEINfDtew2kZjNNBuXYCocovCVtAOMmE57IGr8BEqoOlziQL/kW1sVeS1W6tAh9zv5CYFep2455A75hVOF3euBm9tkpNJnobP8BYqHf0OW1RAOaTDFoj6+qmh9h7oWNApfwFKYrGYh66T4IJSyeyEodAR9GR0MLRFxyP6o3QkaGJxmcmr0E1KgwU1VcnuqbaNg3bzUBNjqslpJ1/BR9BOfIM3htfofBZZhk5cWFhPyIfvIHEf8dpI7VU/6Dw4C+7TiVsnOsv6JbQaBur9pgnsu+kt9jqohMYWtYOcHm99KWTAajgGGit5DmPiXhCDFkEZWNHH2mB4YALbjHbfcSbkH5gNnlwSWuQw0E8gujBAt+cEWHmJMUcd0IUmuA+9xNjL0DqZJafgom953kl0WvSZQyppMBzs1qpvAfhnBlrnkEQ7lAab5CAas963ai9zUPuNfwWtoyIxYfAE0IF2H7JtF+yJoLhuz2jF0XYXu2JrgU9BotusF3GeHKQEetpecWsGt3IH4fcC3TZJjs1h60OuGvxjBD0NrBSoDmc2aMefQA87NmFNEz0RSA5bBth9/MjnvfCxqSJ7TVxqRkm1hf7PIx3axOyabIVJJfA/3o0k8zzo553zW1MrCM8Dsu5dQnbNNb5cxs6u03wN4LkuBuXTSwDauBxMNeYH8/3iN5vlRz1HwLN7Pa/DMSTqNUt7k88OCZYWudHfVOreWnIYtTI/lP4sK6rY5hx+mpoHmEH2kA2xLPbzbO4llmaYwd+AqWYtWtPxbPfAAAAAElFTkSuQmCC=";
+
+function getClaudeIcon() {
+  try {
+    let cleanB64 = CLAUDE_LOGO_B64.trim();
+    if (cleanB64.length % 4 !== 0) {
+      cleanB64 += "=".repeat(4 - (cleanB64.length % 4));
+    }
+    const data = Data.fromBase64String(cleanB64);
+    if (data) {
+      const img = Image.fromData(data);
+      if (img) return img;
+    }
+  } catch (_) {}
+  const sym = SFSymbol.named("sparkles");
+  return sym.image;
+}
+
+function addSyncTimeElement(stack, timestamp, isOnline) {
+  const d = new Date(timestamp || Date.now());
+  const pad = (n) => String(n).padStart(2, "0");
+  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+  const syncStack = stack.addStack();
+  syncStack.layoutHorizontally();
+  syncStack.centerAlignContent();
+  syncStack.spacing = 3;
+
+  if (isOnline === false) {
+    try {
+      const dotSym = SFSymbol.named("exclamationmark.circle.fill");
+      dotSym.applyFont(Font.systemFont(9));
+      const dotImg = syncStack.addImage(dotSym.image);
+      dotImg.imageSize = new Size(9.5, 9.5);
+      dotImg.tintColor = TOKENS.amberWarn;
+    } catch (_) {}
+  }
+
+  const t = syncStack.addText(`${timeStr} · `);
+  t.font = Font.systemFont(10);
+  t.textColor = isOnline === false ? TOKENS.amberWarn : TOKENS.textMuted;
+
+  const rel = syncStack.addDate(d);
+  rel.applyRelativeStyle();
+  rel.font = Font.systemFont(10);
+  rel.textColor = isOnline === false ? TOKENS.amberWarn : TOKENS.textMuted;
+}
+
+function formatResetWithEst(raw) {
+  if (!raw || raw === "-") return "";
+  let cleaned = raw.replace(/Đặt lại sau /g, "").replace(/Đặt lại: /g, "").replace(/Resets in /g, "").trim();
+  if (!cleaned) return "";
+
+  let totalSec = 0;
+  const parts = cleaned.split(" ");
+  for (const p of parts) {
+    const s = p.trim();
+    if (s.endsWith("d")) totalSec += parseFloat(s.slice(0, -1)) * 86400;
+    else if (s.endsWith("h")) totalSec += parseFloat(s.slice(0, -1)) * 3600;
+    else if (s.endsWith("m")) totalSec += parseFloat(s.slice(0, -1)) * 60;
+    else if (s.endsWith("s")) totalSec += parseFloat(s.slice(0, -1));
+  }
+
+  if (totalSec <= 0) return `Đặt lại: ${cleaned}`;
+
+  const target = new Date(Date.now() + totalSec * 1000);
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const timeStr = `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
+
+  const isToday = target.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = target.toDateString() === tomorrow.toDateString();
+
+  if (totalSec < 86400 && isToday) {
+    return `Đặt lại sau ${cleaned} · ${timeStr}`;
+  } else if (isTomorrow) {
+    return `Đặt lại sau ${cleaned} · Mai ${timeStr}`;
+  } else {
+    const dayStr = `${pad(target.getDate())}/${pad(target.getMonth() + 1)} ${pad(target.getHours())}:${pad(target.getMinutes())}`;
+    return `Đặt lại sau ${cleaned} · ${dayStr}`;
+  }
+}
+
+// ==========================================
+// DATA ENGINE
+// ==========================================
+async function fetchPoolData() {
+  const fm = FileManager.local();
+  const path = fm.joinPath(fm.documentsDirectory(), `${CONFIG.CACHE_KEY}.json`);
+  let cache = null;
+  if (fm.fileExists(path)) {
+    try { cache = JSON.parse(fm.readString(path)); } catch (_) {}
+  }
+
+  try {
+    const r = new Request(URLS.POOL);
+    r.timeoutInterval = CONFIG.TIMEOUT;
+    const pool = await r.loadJSON();
+    if (pool && pool.accounts) {
+      const data = { pool, time: Date.now(), online: true };
+      try { fm.writeString(path, JSON.stringify(data)); } catch (_) {}
+      return data;
+    }
+  } catch (err) {
+    console.log("[Orbiter Claude] Lỗi kết nối HTTP qua Tailscale: " + err);
+  }
+
+  if (cache) {
+    cache.online = false;
+    return cache;
+  }
+  return { pool: null, time: null, online: false };
+}
+
+// ==========================================
+// DRAWING: FULL-WIDTH SEGMENTED BAR
+// ==========================================
+function drawSegmentedBar(width, height, percent, fillColor, pacePercent) {
+  const dc = new DrawContext();
+  dc.size = new Size(width, height);
+  dc.opaque = false;
+  dc.respectScreenScale = true;
+
+  const numSegments = 3;
+  const gap = 3;
+  const totalGaps = gap * (numSegments - 1);
+  const totalFillable = width - totalGaps;
+  const segW = totalFillable / numSegments;
+  const r = height / 2;
+
+  // 1. Rãnh xám nền
+  for (let i = 0; i < numSegments; i++) {
+    const x = i * (segW + gap);
+    const p = new Path();
+    p.addRoundedRect(new Rect(x, 0, segW, height), r, r);
+    dc.addPath(p);
+    dc.setFillColor(TOKENS.trackGray);
+    dc.fillPath();
+  }
+
+  // 2. Điểm lấp đầy (Fill)
+  const clamped = Math.max(0, Math.min(100, percent));
+  let remain = (totalFillable * clamped) / 100;
+
+  for (let i = 0; i < numSegments; i++) {
+    if (remain <= 0) break;
+    const x = i * (segW + gap);
+    const fillAmount = Math.max(0, Math.min(segW, remain));
+    if (fillAmount > 0) {
+      const p = new Path();
+      p.addRoundedRect(new Rect(x, 0, fillAmount, height), r, r);
+      dc.addPath(p);
+      dc.setFillColor(fillColor);
+      dc.fillPath();
+    }
+    remain -= fillAmount;
+  }
+
+  // 3. Vạch nhịp độ an toàn (Safe Pace Line)
+  if (pacePercent !== undefined && pacePercent !== null) {
+    const clampedPace = Math.max(0, Math.min(100, pacePercent));
+    const targetPx = (totalFillable * clampedPace) / 100;
+    let segIdx = Math.floor(targetPx / segW);
+    segIdx = Math.max(0, Math.min(numSegments - 1, segIdx));
+    const localX = targetPx - (segIdx * segW);
+    const lineX = (segIdx * (segW + gap)) + localX;
+
+    const linePath = new Path();
+    linePath.addRoundedRect(new Rect(Math.max(0, lineX - 0.75), 0, 1.5, height), 0.75, 0.75);
+    dc.addPath(linePath);
+    dc.setFillColor(TOKENS.greenPace);
+    dc.fillPath();
+  }
+
+  return dc.getImage();
+}
+
+function getWidgetContentWidth(family, hPadding) {
+  const sw = Math.min(Device.screenSize().width, Device.screenSize().height);
+  let totalW = 344;
+  if (sw <= 375) totalW = 321;
+  else if (sw <= 393) totalW = 338;
+  else if (sw <= 402) totalW = 344;
+  else if (sw <= 414) totalW = 360;
+  else totalW = 364; // Pro Max / Plus
+  return Math.round(totalW - (hPadding * 2));
+}
+
+// ==========================================
+// LARGE WIDGET BUILDER (4X4 - FULL POOL)
+// ==========================================
+function buildLargeWidget(w, data) {
+  const hPadding = 14;
+  w.setPadding(12, hPadding, 12, hPadding);
+
+  const isOnline = data.online !== false;
+  const rawAccounts = data.pool?.accounts || [];
+  const accounts = rawAccounts.length > 0 ? rawAccounts : [
+    { name: "trthuhuyen2712@gmail.com", email: "trthuhuyen2712@gmail.com", plan: "Max 5x", used_5h: 8, remaining_5h: 92, reset_5h: "4h 54m", used_weekly: 82, remaining_weekly: 18, reset_weekly: "1d 8h", is_available: true, lifecycle_status: "critical", lifecycle_label: "Hết hạn sau 2d 7h" },
+    { name: "projecttoncorporation@gmail.com", email: "projecttoncorporation@gmail.com", plan: "Max 20x", used_5h: 0, remaining_5h: 100, reset_5h: "3h 4m", used_weekly: 67, remaining_weekly: 33, reset_weekly: "2d 11h", is_available: true, lifecycle_status: "warning", lifecycle_label: "Hết hạn sau 5d" },
+    { name: "projectplayground2025@gmail.com", email: "projectplayground2025@gmail.com", plan: "Paused", used_5h: 100, remaining_5h: 0, reset_5h: "", used_weekly: 100, remaining_weekly: 0, reset_weekly: "Cần login lại", is_available: false, lifecycle_status: "expired", lifecycle_label: "Đã quá hạn 30 ngày" }
+  ];
+  const contentW = getWidgetContentWidth("large", hPadding);
+
+  // --- 1. WIDGET HEADER (100% ORBITER MACOS DESKTOP) ---
+  const firstAcc = accounts[0] || {};
+
+  const hRow1 = w.addStack();
+  hRow1.layoutHorizontally();
+  hRow1.centerAlignContent();
+
+  const titleStack = hRow1.addStack();
+  titleStack.layoutHorizontally();
+  titleStack.centerAlignContent();
+  titleStack.spacing = 6;
+
+  const icon = titleStack.addImage(getClaudeIcon());
+  icon.imageSize = new Size(16, 16);
+  icon.tintColor = TOKENS.orangeFill;
+
+  const title = titleStack.addText("Claude");
+  title.font = Font.boldSystemFont(16);
+  title.textColor = TOKENS.textPrimary;
+
+  hRow1.addSpacer();
+
+  const hEmail = hRow1.addText(firstAcc.email || firstAcc.name || "");
+  hEmail.font = Font.systemFont(12);
+  hEmail.textColor = TOKENS.textSecondary;
+  hEmail.lineLimit = 1;
+
+  w.addSpacer(2);
+
+  const hRow2 = w.addStack();
+  hRow2.layoutHorizontally();
+  hRow2.centerAlignContent();
+
+  addSyncTimeElement(hRow2, data.time, isOnline);
+
+  hRow2.addSpacer();
+
+  const hPlan = hRow2.addText(`Gói ${firstAcc.plan || "Max 5x"}`);
+  hPlan.font = Font.systemFont(11);
+  hPlan.textColor = TOKENS.textSecondary;
+
+  w.addSpacer(6);
+
+  // Hairline Divider
+  const headerDiv = w.addStack();
+  headerDiv.size = new Size(0, 0.5);
+  headerDiv.backgroundColor = TOKENS.cardBorder;
+
+  w.addSpacer(7);
+
+  // --- 2. HIỂN THỊ CẢ 3 TÀI KHOẢN (ĐỒNG BỘ 100% ORBITER) ---
+  const displayAccounts = accounts.slice(0, 3);
+
+  displayAccounts.forEach((acc, idx) => {
+    const isFirst = idx === 0;
+    const realNum = idx + 1;
+    const isPaused = acc.is_available === false;
+
+    const accStack = w.addStack();
+    accStack.layoutVertically();
+
+    // --- A. ACCOUNT HEADER ROW ---
+    const accHead = accStack.addStack();
+    accHead.layoutHorizontally();
+    accHead.centerAlignContent();
+
+    // Priority badge (star cho #1)
+    if (isFirst) {
+      try {
+        const starSym = SFSymbol.named("star.fill");
+        starSym.applyFont(Font.systemFont(11));
+        const starImg = accHead.addImage(starSym.image);
+        starImg.imageSize = new Size(11, 11);
+        starImg.tintColor = TOKENS.orangeFill;
+        accHead.addSpacer(3);
+      } catch (_) {}
+    }
+
+    const idBadge = accHead.addText(isFirst ? "#1 " : `#${realNum} `);
+    idBadge.font = Font.boldMonospacedSystemFont(12);
+    idBadge.textColor = isFirst ? TOKENS.orangeFill : TOKENS.textSecondary;
+
+    const displayEmail = (acc.email || acc.name || "").replace("@gmail.com", "");
+    const emailTxt = accHead.addText(displayEmail);
+    emailTxt.font = Font.boldSystemFont(12);
+    emailTxt.textColor = isPaused ? TOKENS.textMuted : TOKENS.textPrimary;
+    emailTxt.lineLimit = 1;
+
+    accHead.addSpacer(4);
+
+    const planTxt = accHead.addText(`· ${acc.plan || "Max"}`);
+    planTxt.font = Font.systemFont(10.5);
+    planTxt.textColor = TOKENS.textMuted;
+
+    accHead.addSpacer();
+
+    // Status Badge & 30-Day Lifecycle Alert
+    const statusStack = accHead.addStack();
+    statusStack.layoutHorizontally();
+    statusStack.centerAlignContent();
+    statusStack.spacing = 3;
+
+    if (acc.lifecycle_status === "critical") {
+      const warnTxt = statusStack.addText(`⚠️ ${acc.lifecycle_label || "Sắp hết hạn"}`);
+      warnTxt.font = Font.boldSystemFont(10);
+      warnTxt.textColor = TOKENS.amberWarn;
+    } else if (acc.lifecycle_status === "warning") {
+      const warnTxt = statusStack.addText(`ℹ️ ${acc.lifecycle_label || "Còn 5d"}`);
+      warnTxt.font = Font.systemFont(9.5);
+      warnTxt.textColor = TOKENS.textSecondary;
+    } else if (isPaused) {
+      try {
+        const errSym = SFSymbol.named("xmark.circle.fill");
+        errSym.applyFont(Font.systemFont(9.5));
+        const errImg = statusStack.addImage(errSym.image);
+        errImg.imageSize = new Size(9.5, 9.5);
+        errImg.tintColor = TOKENS.redAlert;
+      } catch (_) {}
+      const s = statusStack.addText("Tạm dừng");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = TOKENS.redAlert;
+    } else {
+      try {
+        const okSym = SFSymbol.named("checkmark.circle.fill");
+        okSym.applyFont(Font.systemFont(9.5));
+        const okImg = statusStack.addImage(okSym.image);
+        okImg.imageSize = new Size(9.5, 9.5);
+        okImg.tintColor = TOKENS.greenPace;
+      } catch (_) {}
+      const s = statusStack.addText(isFirst ? "Đang dùng" : "Sẵn sàng");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = TOKENS.greenPace;
+    }
+
+    accStack.addSpacer(4);
+
+    if (isPaused) {
+      // Dòng tóm tắt cho tài khoản bị cách ly
+      const pausedNotice = accStack.addText("OAuth token hết hạn 30 ngày · Cần re-auth");
+      pausedNotice.font = Font.systemFont(9.5);
+      pausedNotice.textColor = TOKENS.textMuted;
+      accStack.addSpacer(6);
+    } else {
+      // --- B. METRIC 1: PHIÊN 5H ---
+      const p5Row = accStack.addStack();
+      p5Row.layoutHorizontally();
+      p5Row.centerAlignContent();
+
+      const p5Label = p5Row.addText(`5h: còn ${acc.remaining_5h ?? 100}%`);
+      p5Label.font = Font.boldSystemFont(11);
+      p5Label.textColor = TOKENS.textPrimary;
+
+      p5Row.addSpacer();
+
+      const r5Est = formatResetWithEst(acc.reset_5h);
+      const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Đặt lại: ${acc.reset_5h}` : ""));
+      p5Reset.font = Font.systemFont(9.5);
+      p5Reset.textColor = TOKENS.textSecondary;
+
+      accStack.addSpacer(3);
+
+      const bar5 = drawSegmentedBar(contentW, 4.5, acc.used_5h ?? 0, TOKENS.orangeFill, isFirst ? acc.remaining_5h : null);
+      const v5 = accStack.addImage(bar5);
+      v5.imageSize = new Size(contentW, 4.5);
+      v5.leftAlignImage();
+
+      accStack.addSpacer(4);
+
+      // --- C. METRIC 2: HÀNG TUẦN ---
+      const pWkRow = accStack.addStack();
+      pWkRow.layoutHorizontally();
+      pWkRow.centerAlignContent();
+
+      const pWkLabel = pWkRow.addText(`Tuần: còn ${acc.remaining_weekly ?? 100}%`);
+      pWkLabel.font = Font.boldSystemFont(11);
+      pWkLabel.textColor = TOKENS.textPrimary;
+
+      pWkRow.addSpacer();
+
+      const rWkEst = formatResetWithEst(acc.reset_weekly);
+      const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Đặt lại: ${acc.reset_weekly}` : ""));
+      pWkReset.font = Font.systemFont(9.5);
+      pWkReset.textColor = TOKENS.textSecondary;
+
+      accStack.addSpacer(3);
+
+      const barWk = drawSegmentedBar(contentW, 4.5, acc.used_weekly ?? 0, TOKENS.orangeFill, null);
+      const vWk = accStack.addImage(barWk);
+      vWk.imageSize = new Size(contentW, 4.5);
+      vWk.leftAlignImage();
+
+      accStack.addSpacer(6);
+    }
+  });
+
+  w.addSpacer();
+
+  // --- 3. FOOTER: CHỐT CHẶN DỰ PHÒNG CONSOLE API (CAPI) ---
+  const footerRow = w.addStack();
+  footerRow.layoutHorizontally();
+  footerRow.centerAlignContent();
+
+  try {
+    const keySym = SFSymbol.named("key.fill");
+    keySym.applyFont(Font.systemFont(9.5));
+    const keyImg = footerRow.addImage(keySym.image);
+    keyImg.imageSize = new Size(9.5, 9.5);
+    keyImg.tintColor = TOKENS.blueCapi;
+    footerRow.addSpacer(3.5);
+  } catch (_) {}
+
+  const fTitle = footerRow.addText("Console API Fallback (capi)");
+  fTitle.font = Font.systemFont(9.5);
+  fTitle.textColor = TOKENS.textSecondary;
+
+  footerRow.addSpacer();
+
+  const fStatus = footerRow.addText("Sẵn sàng trực tuyến");
+  fStatus.font = Font.boldSystemFont(9.5);
+  fStatus.textColor = TOKENS.blueCapi;
+}
+
+// ==========================================
+// MAIN ENTRY
+// ==========================================
+async function main() {
+  const data = await fetchPoolData();
+  const w = new ListWidget();
+  const grad = new LinearGradient();
+  grad.locations = [0.0, 1.0];
+  grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
+  w.backgroundGradient = grad;
+
+  buildLargeWidget(w, data);
+
+  w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
+
+  if (config.runsInWidget) {
+    Script.setWidget(w);
+  } else {
+    await w.presentLarge();
+  }
+}
+
+await main();
+Script.complete();

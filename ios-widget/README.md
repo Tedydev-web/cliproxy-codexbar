@@ -1,63 +1,45 @@
-# Bộ Widget iOS Độc Lập Cho CodexBar & Orbiter Menubar
+# Bộ Widget iOS Độc Lập Cho Orbiter (Scriptable)
 
-Hệ thống được thiết kế **tách biệt làm 2 Widget độc lập** chuẩn kích thước **Medium (2x4)** và **Small (2x2)** của iOS, tương đồng 1:1 với phong cách giao diện CodexBar & Orbiter Menubar trên macOS:
-
----
-
-## 1. Widget 1: Claude Pool Quota (`CodexBarClaudeWidget.js`)
-* **File script**: [`ios-widget/CodexBarClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarClaudeWidget.js)
-* **Kích thước**: Hỗ trợ **Large (4x4)**, **Medium (2x4)** hoặc **Small (2x2)**
-* **Giao diện**:
-  - Tái tạo 1:1 theo card Claude của CodexBar & Orbiter macOS.
-  - **Dạng Large (4x4)**: Hiển thị đầy đủ **cả 3 tài khoản trong Pool**:
-    - Tài khoản #1 đang ưu tiên: Full quota 5h, hàng tuần, thời gian đặt lại, dự trữ nhịp độ.
-    - 2 Tài khoản còn lại (#2 & #3): Hiển thị chi tiết từng card riêng với đầy đủ quota 5h & tuần, thanh tiến trình mini 3 đoạn, gói dịch vụ và huy hiệu trạng thái (● Khả dụng / ⚠️ 429 API / ⛔ Hết hạn) y hệt desktop!
-  - **Dạng Medium (2x4)**: Hiển thị tài khoản chính đang ưu tiên #1 với đầy đủ 2 thanh tiến trình 5h và Tuần full-width.
-  - **Dạng Small (2x2)**: Thu gọn tối giản hiển thị 2 thanh tiến trình 5h và Tuần.
-* **Tính năng Đổi Tài Khoản Ưu Tiên (Interactive Switcher)**:
-  - Khi bạn mở script trong app Scriptable (hoặc bấm vào widget), một bảng chọn Native iOS sẽ hiện lên danh sách **cả 3 tài khoản trong Pool**.
-  - Bạn chỉ cần bấm chọn 1 tài khoản, widget sẽ tự động gửi lệnh tới `/v1/set-priority` để đưa tài khoản đó lên **ưu tiên số #1 (Drain order)** ngay tức thì!
+Hệ thống được rút gọn và tối ưu hóa chuyên biệt thành **đúng 2 Widget độc lập**, đồng bộ 1:1 với phong cách giao diện của **Orbiter Menubar trên macOS**:
 
 ---
 
-## 2. Widget 2: Antigravity Quota (`OrbiterAGYWidget.js`)
+## 1. Widget 1: Antigravity Quota (Kích thước Medium 2x4)
 * **File script**: [`ios-widget/OrbiterAGYWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterAGYWidget.js)
-* **Kích thước**: Khuyên dùng **Medium (2x4)** hoặc **Small (2x2)**
-* **Giao diện**:
-  - Tái tạo 1:1 theo card `AntigravityFullCardView` trong Orbiter Menubar.
-  - Nhóm 1: **Gemini Models** (Flash Lite & Pro) — Thanh Segmented Bar màu **Teal Green (`#00C389`)**.
-  - Nhóm 2: **Claude & GPT Models** (Opus, Sonnet, GPT-OSS) — Thanh Segmented Bar màu **Purple (`#8B5CF6`)**.
-  - Hiển thị tài khoản email Antigravity (`hieudat2310.bh@gmail.com`) và gói `Tier Pro`.
+* **Kích thước**: **Medium (2x4)** (khuyên dùng) hoặc Small (2x2)
+* **Giao diện & Tính năng**:
+  - Đồng bộ 1:1 theo card `AntigravityFullCardView` trong Orbiter Menubar macOS.
+  - **Header**: Icon Antigravity Shuttle (`#00C389`), tài khoản `dat.donghieu@gmail.com`, gói `Gói Pro`, mốc cập nhật thời gian thực.
+  - **Giới hạn 5h (Gemini Flash & Pro)**: Thanh Segmented Progress Bar màu **Teal Green (`#00C389`)**, hiển thị % còn lại và thời gian đặt lại.
+  - **Giới hạn Tuần**: Thanh Segmented Progress Bar màu **Amber Yellow (`#F5C542`)**, hiển thị % còn lại và thời gian đặt lại.
+  - **Chỉ số Claude & GPT**: Huy hiệu trạng thái khả dụng cho Opus, Sonnet, GPT-OSS.
+  - **Cơ chế chống rớt mạng**: Timeout 12s, bộ nhớ đệm Cache thông minh và huy hiệu cảnh báo `(Ngoại tuyến)` khi mất sóng Tailscale.
 
 ---
 
-## 3. Widget 3: Ubuntu Server Monitor (`OrbiterServerMonitorWidget.js`)
-* **File script**: [`ios-widget/OrbiterServerMonitorWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterServerMonitorWidget.js)
-* **Kích thước**: Khuyên dùng **Medium (2x4)** hoặc **Small (2x2)**
-* **Giao diện**:
-  - Tái tạo 1:1 theo card **Ubuntu Host** trong Orbiter macOS Menubar (`OrbiterMenuBar.swift`).
-  - **Header**: Ubuntu Host (`100.127.1.234`) kèm thời gian Uptime và chấm tròn trạng thái `● Online` (Xanh lá).
-  - **CPU**: % Đang dùng, số Cores, chỉ số tải Load Average, thanh Segmented Bar xanh lá (đỏ nếu > 80%).
-  - **RAM**: % Đã dùng, dung lượng `GB đã dùng / tổng GB`, thanh Segmented Bar màu Mint/Teal (`#00C389`).
-  - **Ổ cứng (/)**: % Đã dùng, dung lượng còn trống và tổng ổ cứng, thanh Segmented Bar màu tím (`#AF52DE`).
-* **Tính năng chạm (Interactive)**:
-  - Khi mở trong app Scriptable, hiển thị toàn bộ danh sách **Dev Ports đang mở** (Port 8004, 8317, 8318, 3000...), dịch vụ hệ thống (CLIProxy, Herdr, Cloudflared) và Cloudflare Tunnels.
+## 2. Widget 2: Claude Pool Quota (Kích thước Large 4x4)
+* **File script**: [`ios-widget/OrbiterClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterClaudeWidget.js)
+* **Kích thước**: **Large (4x4)**
+* **Giao diện & Tính năng**:
+  - Tái tạo 1:1 theo card Claude của Orbiter Desktop macOS.
+  - **Header**: Icon Claude Sparkle (`#F97316`), tài khoản chính đang ưu tiên, thời gian cập nhật.
+  - **Hiển thị đầy đủ cả 3 tài khoản trong Pool**:
+    1. `#1 trthuhuyen2712@gmail.com` (Đang dùng, Gói Max 5x) — Full bar 5h & tuần, vạch nhịp độ an toàn (`greenPace`), dự trữ nhịp độ.
+    2. `#2 projecttoncorporation@gmail.com` (Sẵn sàng, Gói Max 20x) — Full bar 5h & tuần.
+    3. `#3 projectplayground2025@gmail.com` (Tạm dừng - Quá hạn 30 ngày) — Thẻ thông báo cách ly.
+  - **Theo dõi vòng đời OAuth 30 ngày**: Tự động hiển thị huy hiệu cảnh báo nguy cơ (ví dụ: `⚠️ Hết hạn sau 2d 7h` hoặc `ℹ️ Hết hạn sau 5d`) trực tiếp trên widget!
+  - **Chốt chặn dự phòng Console API (capi)**: Hiển thị trạng thái kết nối trực tuyến của Anthropic Console API Key ở chân widget.
 
 ---
 
-## Cách Cài Đặt Trên iPhone:
+## Cách Cài Đặt Lên iPhone / iPad (Scriptable):
 
-1. **Widget 1 (Claude Quota)**:
-   - Trong app **Scriptable**, tạo script mới tên **`CodexBarClaude`**.
-   - Copy mã từ file [`CodexBarClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/CodexBarClaudeWidget.js) và dán vào.
-   - Thêm widget ngoài Home Screen kích thước **Medium (2x4)** hoặc **Small (2x2)**, chọn script `CodexBarClaude`.
-
-2. **Widget 2 (Gemini / Antigravity Quota)**:
+1. **Cài đặt Widget Antigravity (Medium 2x4)**:
    - Trong app **Scriptable**, tạo script mới tên **`OrbiterAGY`**.
-   - Copy mã từ file [`OrbiterAGYWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterAGYWidget.js) và dán vào.
-   - Thêm widget ngoài Home Screen kích thước **Medium (2x4)** hoặc **Small (2x2)**, chọn script `OrbiterAGY`.
+   - Copy toàn bộ nội dung file [`OrbiterAGYWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterAGYWidget.js) và dán vào.
+   - Ra màn hình chính (Home Screen), thêm widget Scriptable kích thước **Medium (2x4)**, chọn script `OrbiterAGY`.
 
-3. **Widget 3 (Ubuntu Server Monitor)**:
-   - Trong app **Scriptable**, tạo script mới tên **`OrbiterServerMonitor`**.
-   - Copy mã từ file [`OrbiterServerMonitorWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterServerMonitorWidget.js) và dán vào.
-   - Thêm widget ngoài Home Screen kích thước **Medium (2x4)** hoặc **Small (2x2)**, chọn script `OrbiterServerMonitor`.
+2. **Cài đặt Widget Claude (Large 4x4)**:
+   - Trong app **Scriptable**, tạo script mới tên **`OrbiterClaude`**.
+   - Copy toàn bộ nội dung file [`OrbiterClaudeWidget.js`](file:///home/tedydev/Documents/workspace/cliproxy-codexbar/ios-widget/OrbiterClaudeWidget.js) và dán vào.
+   - Ra màn hình chính (Home Screen), thêm widget Scriptable kích thước **Large (4x4)**, chọn script `OrbiterClaude`.
