@@ -35,7 +35,7 @@ const TOKENS = {
   textSecondary: new Color("#9CA3AF"),
   textMuted: new Color("#6B7280"),
 
-  orangeFill: new Color("#F97316"),   // Cam Claude
+  orangeFill: new Color("#DA7756"),   // Cam Đất Terracotta Claude (Đồng bộ 100% macOS Orbiter #DA7756)
   trackGray: new Color("#272D34"),    // Rãnh segmented bar đồng bộ Orbiter macOS
   greenPace: new Color("#22C55E"),    // Vạch nhịp độ an toàn / Online
   amberWarn: new Color("#F59E0B"),    // Cảnh báo 429 / Sắp hết hạn 30 ngày
@@ -239,7 +239,7 @@ function getWidgetContentWidth(family, hPadding) {
 // ==========================================
 function buildLargeWidget(w, data) {
   const hPadding = 14;
-  w.setPadding(12, hPadding, 12, hPadding);
+  w.setPadding(13, hPadding, 12, hPadding);
 
   const isOnline = data.online !== false;
   const rawAccounts = data.pool?.accounts || [];
@@ -277,7 +277,7 @@ function buildLargeWidget(w, data) {
   hEmail.textColor = TOKENS.textSecondary;
   hEmail.lineLimit = 1;
 
-  w.addSpacer(2);
+  w.addSpacer(2.5);
 
   const hRow2 = w.addStack();
   hRow2.layoutHorizontally();
@@ -291,16 +291,16 @@ function buildLargeWidget(w, data) {
   hPlan.font = Font.systemFont(11);
   hPlan.textColor = TOKENS.textSecondary;
 
-  w.addSpacer(6);
+  w.addSpacer(7);
 
-  // Hairline Divider
+  // Hairline Divider sau Header
   const headerDiv = w.addStack();
   headerDiv.size = new Size(0, 0.5);
   headerDiv.backgroundColor = TOKENS.cardBorder;
 
-  w.addSpacer(7);
+  w.addSpacer(8);
 
-  // --- 2. HIỂN THỊ CẢ 3 TÀI KHOẢN (ĐỒNG BỘ 100% ORBITER) ---
+  // --- 2. HIỂN THỊ CẢ 3 TÀI KHOẢN (ĐỒNG BỘ 100% ORBITER MACOS) ---
   const displayAccounts = accounts.slice(0, 3);
 
   displayAccounts.forEach((acc, idx) => {
@@ -320,21 +320,21 @@ function buildLargeWidget(w, data) {
     if (isFirst) {
       try {
         const starSym = SFSymbol.named("star.fill");
-        starSym.applyFont(Font.systemFont(11));
+        starSym.applyFont(Font.systemFont(11.5));
         const starImg = accHead.addImage(starSym.image);
-        starImg.imageSize = new Size(11, 11);
+        starImg.imageSize = new Size(11.5, 11.5);
         starImg.tintColor = TOKENS.orangeFill;
-        accHead.addSpacer(3);
+        accHead.addSpacer(3.5);
       } catch (_) {}
     }
 
     const idBadge = accHead.addText(isFirst ? "#1 " : `#${realNum} `);
-    idBadge.font = Font.boldMonospacedSystemFont(12);
+    idBadge.font = Font.boldMonospacedSystemFont(isFirst ? 13 : 12);
     idBadge.textColor = isFirst ? TOKENS.orangeFill : TOKENS.textSecondary;
 
     const displayEmail = (acc.email || acc.name || "").replace("@gmail.com", "");
     const emailTxt = accHead.addText(displayEmail);
-    emailTxt.font = Font.boldSystemFont(12);
+    emailTxt.font = Font.boldSystemFont(isFirst ? 12.5 : 12);
     emailTxt.textColor = isPaused ? TOKENS.textMuted : TOKENS.textPrimary;
     emailTxt.lineLimit = 1;
 
@@ -350,7 +350,7 @@ function buildLargeWidget(w, data) {
     const statusStack = accHead.addStack();
     statusStack.layoutHorizontally();
     statusStack.centerAlignContent();
-    statusStack.spacing = 3;
+    statusStack.spacing = 3.5;
 
     if (acc.lifecycle_status === "critical") {
       const warnTxt = statusStack.addText(`⚠️ ${acc.lifecycle_label || "Sắp hết hạn"}`);
@@ -384,14 +384,27 @@ function buildLargeWidget(w, data) {
       s.textColor = TOKENS.greenPace;
     }
 
-    accStack.addSpacer(4);
+    accStack.addSpacer(isFirst ? 5 : 4);
 
     if (isPaused) {
       // Dòng tóm tắt cho tài khoản bị cách ly
-      const pausedNotice = accStack.addText("OAuth token hết hạn 30 ngày · Cần re-auth");
+      const noticeRow = accStack.addStack();
+      noticeRow.layoutHorizontally();
+      noticeRow.centerAlignContent();
+      noticeRow.spacing = 4;
+
+      try {
+        const lockSym = SFSymbol.named("lock.fill");
+        lockSym.applyFont(Font.systemFont(9.5));
+        const lockImg = noticeRow.addImage(lockSym.image);
+        lockImg.imageSize = new Size(9.5, 9.5);
+        lockImg.tintColor = TOKENS.amberWarn;
+      } catch (_) {}
+
+      const pausedNotice = noticeRow.addText("OAuth token hết hạn 30 ngày · Cần re-auth trên Ubuntu");
       pausedNotice.font = Font.systemFont(9.5);
       pausedNotice.textColor = TOKENS.textMuted;
-      accStack.addSpacer(6);
+      accStack.addSpacer(2);
     } else {
       // --- B. METRIC 1: PHIÊN 5H ---
       const p5Row = accStack.addStack();
@@ -399,24 +412,34 @@ function buildLargeWidget(w, data) {
       p5Row.centerAlignContent();
 
       const p5Label = p5Row.addText(`Phiên 5h: ${acc.used_5h ?? 0}% đã dùng`);
-      p5Label.font = Font.boldSystemFont(11);
+      p5Label.font = Font.boldSystemFont(isFirst ? 12 : 11);
       p5Label.textColor = TOKENS.textPrimary;
 
       p5Row.addSpacer();
 
       const r5Est = formatResetWithEst(acc.reset_5h);
       const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Đặt lại: ${acc.reset_5h}` : ""));
-      p5Reset.font = Font.systemFont(9.5);
+      p5Reset.font = Font.systemFont(isFirst ? 10 : 9.5);
       p5Reset.textColor = TOKENS.textSecondary;
 
-      accStack.addSpacer(3);
+      accStack.addSpacer(3.5);
 
-      const bar5 = drawSegmentedBar(contentW, 4.5, acc.used_5h ?? 0, TOKENS.orangeFill, isFirst ? acc.remaining_5h : null);
+      const bar5Height = isFirst ? 5.5 : 4.5;
+      const bar5 = drawSegmentedBar(contentW, bar5Height, acc.used_5h ?? 0, TOKENS.orangeFill, isFirst ? acc.remaining_5h : null);
       const v5 = accStack.addImage(bar5);
-      v5.imageSize = new Size(contentW, 4.5);
+      v5.imageSize = new Size(contentW, bar5Height);
       v5.leftAlignImage();
 
-      accStack.addSpacer(4);
+      // DÒNG NHỊP ĐỘ AN TOÀN (ĐỒNG BỘ 100% ORBITER MACOS DESKTOP: "90% dự trữ nhịp độ")
+      if (isFirst && acc.remaining_5h !== undefined && acc.remaining_5h !== null) {
+        accStack.addSpacer(2.5);
+        const paceSub = accStack.addText(`${acc.remaining_5h}% dự trữ nhịp độ`);
+        paceSub.font = Font.systemFont(9.5);
+        paceSub.textColor = TOKENS.textMuted;
+        accStack.addSpacer(5.5);
+      } else {
+        accStack.addSpacer(5);
+      }
 
       // --- C. METRIC 2: HÀNG TUẦN ---
       const pWkRow = accStack.addStack();
@@ -424,28 +447,43 @@ function buildLargeWidget(w, data) {
       pWkRow.centerAlignContent();
 
       const pWkLabel = pWkRow.addText(`Hàng tuần: ${acc.used_weekly ?? 0}% đã dùng`);
-      pWkLabel.font = Font.boldSystemFont(11);
+      pWkLabel.font = Font.boldSystemFont(isFirst ? 12 : 11);
       pWkLabel.textColor = TOKENS.textPrimary;
 
       pWkRow.addSpacer();
 
       const rWkEst = formatResetWithEst(acc.reset_weekly);
       const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Đặt lại: ${acc.reset_weekly}` : ""));
-      pWkReset.font = Font.systemFont(9.5);
+      pWkReset.font = Font.systemFont(isFirst ? 10 : 9.5);
       pWkReset.textColor = TOKENS.textSecondary;
 
-      accStack.addSpacer(3);
+      accStack.addSpacer(3.5);
 
-      const barWk = drawSegmentedBar(contentW, 4.5, acc.used_weekly ?? 0, TOKENS.orangeFill, null);
+      const barWkHeight = isFirst ? 5.5 : 4.5;
+      const barWk = drawSegmentedBar(contentW, barWkHeight, acc.used_weekly ?? 0, TOKENS.orangeFill, null);
       const vWk = accStack.addImage(barWk);
-      vWk.imageSize = new Size(contentW, 4.5);
+      vWk.imageSize = new Size(contentW, barWkHeight);
       vWk.leftAlignImage();
+    }
 
-      accStack.addSpacer(6);
+    // Hairline Divider giữa các tài khoản
+    if (idx < displayAccounts.length - 1) {
+      w.addSpacer(7);
+      const accDiv = w.addStack();
+      accDiv.size = new Size(0, 0.5);
+      accDiv.backgroundColor = TOKENS.cardBorder;
+      w.addSpacer(7);
     }
   });
 
-  w.addSpacer();
+  w.addSpacer(); // Flexible spring spacer phân bổ đều khoảng trống
+
+  // Hairline Divider trước Footer
+  const footerDiv = w.addStack();
+  footerDiv.size = new Size(0, 0.5);
+  footerDiv.backgroundColor = TOKENS.cardBorder;
+
+  w.addSpacer(6);
 
   // --- 3. FOOTER: CHỐT CHẶN DỰ PHÒNG CONSOLE API (CAPI) ---
   const footerRow = w.addStack();
