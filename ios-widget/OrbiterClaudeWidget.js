@@ -398,7 +398,7 @@ function buildLargeWidget(w, data) {
       p5Row.layoutHorizontally();
       p5Row.centerAlignContent();
 
-      const p5Label = p5Row.addText(`5h: còn ${acc.remaining_5h ?? 100}%`);
+      const p5Label = p5Row.addText(`Phiên 5h: ${acc.used_5h ?? 0}% đã dùng`);
       p5Label.font = Font.boldSystemFont(11);
       p5Label.textColor = TOKENS.textPrimary;
 
@@ -423,7 +423,7 @@ function buildLargeWidget(w, data) {
       pWkRow.layoutHorizontally();
       pWkRow.centerAlignContent();
 
-      const pWkLabel = pWkRow.addText(`Tuần: còn ${acc.remaining_weekly ?? 100}%`);
+      const pWkLabel = pWkRow.addText(`Hàng tuần: ${acc.used_weekly ?? 0}% đã dùng`);
       pWkLabel.font = Font.boldSystemFont(11);
       pWkLabel.textColor = TOKENS.textPrimary;
 

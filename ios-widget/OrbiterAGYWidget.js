@@ -314,7 +314,7 @@ function buildMediumWidget(w, data) {
   g5Head.layoutHorizontally();
   g5Head.centerAlignContent();
 
-  const g5Title = g5Head.addText(`Giới hạn 5h còn lại: ${g5Rem}%`);
+  const g5Title = g5Head.addText(`Giới hạn 5h: ${g5Used}% đã dùng`);
   g5Title.font = Font.boldSystemFont(12.5);
   g5Title.textColor = TOKENS.textPrimary;
 
@@ -327,14 +327,14 @@ function buildMediumWidget(w, data) {
   w.addSpacer(3.5);
 
   const barW = getWidgetContentWidth("medium", hPadding);
-  const bar5 = drawSegmentedBar(barW, 5, g5Rem, TOKENS.geminiTeal);
+  const bar5 = drawSegmentedBar(barW, 5, g5Used, TOKENS.geminiTeal);
   const v5 = w.addImage(bar5);
   v5.imageSize = new Size(barW, 5);
   v5.leftAlignImage();
 
   w.addSpacer(2.5);
 
-  const sub5 = w.addText(`Đã dùng ${g5Used}%`);
+  const sub5 = w.addText(`Còn lại ${g5Rem}%`);
   sub5.font = Font.systemFont(9.5);
   sub5.textColor = TOKENS.textMuted;
 
@@ -345,7 +345,7 @@ function buildMediumWidget(w, data) {
   gWkHead.layoutHorizontally();
   gWkHead.centerAlignContent();
 
-  const gWkTitle = gWkHead.addText(`Giới hạn tuần còn lại: ${gWkRem}%`);
+  const gWkTitle = gWkHead.addText(`Giới hạn tuần: ${gWkUsed}% đã dùng`);
   gWkTitle.font = Font.boldSystemFont(12.5);
   gWkTitle.textColor = TOKENS.textPrimary;
 
@@ -357,27 +357,27 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(3.5);
 
-  const barWk = drawSegmentedBar(barW, 5, gWkRem, TOKENS.geminiAmber);
+  const barWk = drawSegmentedBar(barW, 5, gWkUsed, TOKENS.geminiAmber);
   const vWk = w.addImage(barWk);
   vWk.imageSize = new Size(barW, 5);
   vWk.leftAlignImage();
 
   w.addSpacer(2.5);
 
-  // Sub row: Đã dùng tuần (trái) + Claude/GPT status pill (phải - đồng bộ Orbiter macOS)
+  // Sub row: Còn lại tuần (trái) + Claude/GPT status pill (phải - đồng bộ Orbiter macOS)
   const subRow = w.addStack();
   subRow.layoutHorizontally();
   subRow.centerAlignContent();
 
-  const subWk = subRow.addText(`Đã dùng ${gWkUsed}%`);
+  const subWk = subRow.addText(`Còn lại ${gWkRem}%`);
   subWk.font = Font.systemFont(9.5);
   subWk.textColor = TOKENS.textMuted;
 
   subRow.addSpacer();
 
-  const cgTxt = subRow.addText(`Claude & GPT: ${cg5Rem}% khả dụng`);
+  const cgTxt = subRow.addText(`Claude & GPT: ${cg5Used}% đã dùng`);
   cgTxt.font = Font.systemFont(9.5);
-  cgTxt.textColor = cg5Rem > 0 ? TOKENS.geminiTeal : TOKENS.amberWarn;
+  cgTxt.textColor = cg5Used > 80 ? TOKENS.amberWarn : TOKENS.geminiTeal;
 }
 
 // ==========================================
@@ -388,7 +388,9 @@ function buildSmallWidget(w, data) {
   w.setPadding(12, hPadding, 12, hPadding);
   const agy = data.agy || {};
   const g5Rem = agy.gemini?.five_hour_remaining ?? 97;
+  const g5Used = 100 - g5Rem;
   const gWkRem = agy.gemini?.weekly_remaining ?? 92;
+  const gWkUsed = 100 - gWkRem;
   const smallW = getWidgetContentWidth("small", hPadding);
 
   const h = w.addStack();
@@ -417,7 +419,7 @@ function buildSmallWidget(w, data) {
   const u5Head = w.addStack();
   u5Head.layoutHorizontally();
   u5Head.centerAlignContent();
-  const u5 = u5Head.addText(`5h: còn ${g5Rem}%`);
+  const u5 = u5Head.addText(`5h: ${g5Used}% đã dùng`);
   u5.font = Font.boldSystemFont(11);
   u5.textColor = TOKENS.textPrimary;
   u5Head.addSpacer();
@@ -426,7 +428,7 @@ function buildSmallWidget(w, data) {
   r5.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const b5 = drawSegmentedBar(smallW, 4.5, g5Rem, TOKENS.geminiTeal);
+  const b5 = drawSegmentedBar(smallW, 4.5, g5Used, TOKENS.geminiTeal);
   const v5 = w.addImage(b5);
   v5.imageSize = new Size(smallW, 4.5);
   v5.leftAlignImage();
@@ -437,7 +439,7 @@ function buildSmallWidget(w, data) {
   const uwHead = w.addStack();
   uwHead.layoutHorizontally();
   uwHead.centerAlignContent();
-  const uw = uwHead.addText(`Tuần: còn ${gWkRem}%`);
+  const uw = uwHead.addText(`Tuần: ${gWkUsed}% đã dùng`);
   uw.font = Font.boldSystemFont(11);
   uw.textColor = TOKENS.textPrimary;
   uwHead.addSpacer();
@@ -446,7 +448,7 @@ function buildSmallWidget(w, data) {
   rw.textColor = TOKENS.textMuted;
 
   w.addSpacer(3);
-  const bw = drawSegmentedBar(smallW, 4.5, gWkRem, TOKENS.geminiAmber);
+  const bw = drawSegmentedBar(smallW, 4.5, gWkUsed, TOKENS.geminiAmber);
   const vw = w.addImage(bw);
   vw.imageSize = new Size(smallW, 4.5);
   vw.leftAlignImage();
