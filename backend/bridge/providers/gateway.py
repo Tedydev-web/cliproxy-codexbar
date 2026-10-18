@@ -6,12 +6,85 @@ Exposes Anthropic Console Direct API metrics, model catalogs, and one-click comm
 
 import os
 import json
+import time
 import datetime
+import urllib.request
+import urllib.error
 
 class GatewayProvider:
     def __init__(self, config_path=None):
         self.config_path = config_path or os.path.expanduser("~/.cliproxy/config.yaml")
         self.console_api_key = "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"
+        self._last_probe_time = 0
+        self._cached_health = None
+
+    def check_health(self, force=False):
+        """
+        Probe api.anthropic.com/v1/models using the private Console API Key.
+        - Zero token spend ($0.00).
+        - Caches result for 120s to ensure sub-millisecond bridge responses.
+        - Returns dict with is_healthy, status_label, latency_ms, models_count, error.
+        """
+        now = time.time()
+        if not force and self._cached_health and (now - self._last_probe_time < 120):
+            return self._cached_health
+
+        url = "https://api.anthropic.com/v1/models"
+        headers = {
+            "x-api-key": self.console_api_key,
+            "anthropic-version": "2023-06-01",
+            "User-Agent": "CLIProxy-Quota-Bridge/2.0"
+        }
+        req = urllib.request.Request(url, headers=headers, method="GET")
+
+        start = time.time()
+        try:
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                elapsed_ms = int((time.time() - start) * 1000)
+                body = resp.read().decode("utf-8")
+                data = json.loads(body)
+                models_cnt = len(data.get("data", []))
+                self._cached_health = {
+                    "is_healthy": True,
+                    "status": "online",
+                    "status_label": f"Trực tuyến ({elapsed_ms}ms)",
+                    "latency_ms": elapsed_ms,
+                    "models_count": models_cnt,
+                    "error": "",
+                    "last_checked": datetime.datetime.now().strftime("%H:%M:%S")
+                }
+        except urllib.error.HTTPError as e:
+            elapsed_ms = int((time.time() - start) * 1000)
+            err_label = f"Lỗi HTTP {e.code}"
+            if e.code == 401:
+                err_label = "Lỗi xác thực (401)"
+            elif e.code == 403:
+                err_label = "Từ chối truy cập (403)"
+            elif e.code == 429:
+                err_label = "Hạn mức (429)"
+            self._cached_health = {
+                "is_healthy": False,
+                "status": "error",
+                "status_label": err_label,
+                "latency_ms": elapsed_ms,
+                "models_count": 0,
+                "error": f"HTTP {e.code}: {e.reason}",
+                "last_checked": datetime.datetime.now().strftime("%H:%M:%S")
+            }
+        except Exception as e:
+            elapsed_ms = int((time.time() - start) * 1000)
+            self._cached_health = {
+                "is_healthy": False,
+                "status": "offline",
+                "status_label": "Mất kết nối",
+                "latency_ms": elapsed_ms,
+                "models_count": 0,
+                "error": str(e),
+                "last_checked": datetime.datetime.now().strftime("%H:%M:%S")
+            }
+
+        self._last_probe_time = now
+        return self._cached_health
 
     def get_gateway_info(self):
         """Return status and execution commands for the Anthropic Console Direct API."""
@@ -81,7 +154,7 @@ class GatewayProvider:
             }
         ]
 
-        now_str = datetime.datetime.now().strftime("%H:%M:%S")
+        health = self.check_health()
 
         return {
             "enabled": True,
@@ -93,11 +166,13 @@ class GatewayProvider:
             "max_budget": 0.0,
             "max_budget_formatted": "Không giới hạn",
             "spend_percent": 0.0,
-            "is_active_now": True,
+            "is_active_now": health["is_healthy"],
             "last_active": datetime.datetime.utcnow().isoformat(),
-            "last_active_time": now_str,
-            "last_active_human": "Trực tuyến / Sẵn sàng",
+            "last_active_time": health["last_checked"],
+            "last_active_human": health["status_label"],
+            "latency_ms": health["latency_ms"],
+            "models_count": health["models_count"],
             "models": models_list,
             "quick_commands": commands_list,
-            "error": ""
+            "error": health["error"]
         }

@@ -505,9 +505,16 @@ function buildLargeWidget(w, data) {
 
   footerRow.addSpacer();
 
-  const fStatus = footerRow.addText("Sẵn sàng trực tuyến");
+  const gw = data.pool?.gateway || {};
+  const isCapiOnline = gw.is_active_now !== false;
+  let capiText = "Sẵn sàng trực tuyến";
+  if (gw.last_active_human) {
+    capiText = gw.last_active_human;
+  }
+
+  const fStatus = footerRow.addText(capiText);
   fStatus.font = Font.boldSystemFont(9.5);
-  fStatus.textColor = TOKENS.blueCapi;
+  fStatus.textColor = isCapiOnline ? TOKENS.blueCapi : TOKENS.redAlert;
 }
 
 // ==========================================
