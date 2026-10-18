@@ -258,7 +258,9 @@ function buildMediumWidget(w, data) {
   const gWkResetFormatted = formatResetWithEst(agy.gemini?.weekly_refresh || "6d 21h");
 
   const cg5Rem = agy.claude_gpt?.five_hour_remaining ?? 100;
+  const cg5Used = 100 - cg5Rem;
   const cgWkRem = agy.claude_gpt?.weekly_remaining ?? 100;
+  const cgWkUsed = 100 - cgWkRem;
 
   // --- HEADER: 100% NHƯ ORBITER MACOS ---
   const row1 = w.addStack();
