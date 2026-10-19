@@ -153,16 +153,22 @@ class AntigravityProvider:
                 f"{endpoint}/v1internal:retrieveUserQuota",
                 f"{endpoint}/v1internal:fetchAvailableModels"
             ]
+            include_prod_summary = "cloudcode-pa.googleapis.com" not in endpoint
+            if include_prod_summary:
+                urls.append("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")
 
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            with ThreadPoolExecutor(max_workers=4) as executor:
                 fetch_results = list(executor.map(_fetch_endpoint, urls))
 
             summary_data = fetch_results[0] or {}
             quota_data = fetch_results[1] or {}
             raw_models = fetch_results[2] or {}
+            prod_summary = fetch_results[3] if include_prod_summary and len(fetch_results) > 3 and fetch_results[3] else {}
 
             # 1. Quota Summary (Groups & 3P Claude/GPT limits)
-            for grp in summary_data.get("groups", []):
+            # Combine groups so Gemini 5h/Weekly buckets from production are included even on daily endpoint
+            all_groups = (summary_data.get("groups", []) or []) + (prod_summary.get("groups", []) or [])
+            for grp in all_groups:
                 grp_name = grp.get("displayName", "").lower()
                 for b in grp.get("buckets", []):
                     b_id = b.get("bucketId", "")
@@ -182,13 +188,23 @@ class AntigravityProvider:
                         claude_wk_rem = rem_pct
                         claude_wk_rel = rel_time
 
-            # 2. Per-model Quota (retrieveUserQuota: gets real Gemini 5h limit & reset)
+            # 2. Per-model Quota (retrieveUserQuota: gets real Gemini consumed limit & reset)
             for b in quota_data.get("buckets", []):
                 m_id = b.get("modelId", "")
                 if "gemini" in m_id:
                     rem = b.get("remainingFraction", 1.0)
-                    gemini_5h_rem = int(round(rem * 100))
-                    gemini_5h_rel = fmt_relative_reset_from_iso(b.get("resetTime", ""))
+                    rem_pct = int(round(rem * 100))
+                    raw_reset = b.get("resetTime", "")
+                    rel_time = fmt_relative_reset_from_iso(raw_reset)
+                    token_type = b.get("tokenType", "")
+
+                    # WTUS stands for Weekly Token Usage Share. It represents the weekly limit!
+                    if token_type == "WTUS":
+                        gemini_wk_rem = rem_pct
+                        gemini_wk_rel = rel_time
+                    else:
+                        gemini_5h_rem = rem_pct
+                        gemini_5h_rel = rel_time
                     break
 
             # 3. Detailed Models (fetchAvailableModels)
@@ -209,10 +225,8 @@ class AntigravityProvider:
                     })
             models_list.sort(key=lambda x: x["id"])
 
-            # If gemini weekly wasn't set, estimate or fallback based on 5h reset
-            if gemini_wk_rem == 100 and gemini_5h_rem < 100:
-                gemini_wk_rem = 92
-                gemini_wk_rel = "6d 21h"
+            if not gemini_5h_rel:
+                gemini_5h_rel = "5h 0m"
 
             result = {
                 "email": email,
