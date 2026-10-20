@@ -256,19 +256,6 @@ def refresh_single_account(filename, max_retries=3):
 def check_30day_consent_lifecycle(verbose=False):
     """Monitor 30-day Anthropic consent ceiling and notify early (Day 25 alert)."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    
-    # Check ~/.claude/.credentials.json for exact ground truth if present
-    cred_file = os.path.expanduser("~/.claude/.credentials.json")
-    cred_rt_exp = None
-    if os.path.exists(cred_file):
-        try:
-            with open(cred_file, "r", encoding="utf-8") as f:
-                cd = json.load(f)
-            rexp = cd.get("claudeAiOauth", {}).get("refreshTokenExpiresAt")
-            if rexp:
-                cred_rt_exp = datetime.datetime.fromtimestamp(rexp / 1000, tz=datetime.timezone.utc)
-        except Exception:
-            pass
 
     acc_data = {}
     if os.path.exists(ACCOUNTS_FILE):
@@ -284,7 +271,16 @@ def check_30day_consent_lifecycle(verbose=False):
         fn = info.get("tokenFile", f"claude-{email}.json")
         fpath = os.path.join(AUTH_DIR, fn)
         active = os.path.exists(fpath)
-        
+
+        if active:
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    file_data = json.load(f)
+                if not file_data.get("refresh_token"):
+                    continue
+            except Exception:
+                pass
+
         created_str = info.get("authorizedAt") or info.get("lastUsedAt") or info.get("createdAt")
         created_dt = None
         if created_str:
@@ -292,12 +288,8 @@ def check_30day_consent_lifecycle(verbose=False):
                 created_dt = datetime.datetime.fromisoformat(created_str.replace("Z", "+00:00"))
             except Exception:
                 pass
-                
-        rt_exp_dt = None
-        if email == "trthuhuyen2712@gmail.com" and cred_rt_exp:
-            rt_exp_dt = cred_rt_exp
-        elif created_dt:
-            rt_exp_dt = created_dt + datetime.timedelta(days=30)
+
+        rt_exp_dt = created_dt + datetime.timedelta(days=30) if created_dt else None
             
         if rt_exp_dt:
             diff = rt_exp_dt - now
