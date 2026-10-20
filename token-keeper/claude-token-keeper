@@ -16,14 +16,28 @@ import shutil
 import datetime
 import json
 import time
+import subprocess
 import urllib.request
 import urllib.error
+import yaml
 
 AUTH_DIR = os.path.expanduser("~/.cliproxy/auth")
+AUTH_PAUSED_DIR = os.path.expanduser("~/.cliproxy/auth-paused")
+ACCOUNTS_FILE = os.path.expanduser("~/.cliproxy/accounts.json")
 BACKUP_VAULT = os.path.expanduser("~/.cliproxy/backups/auth-vault")
 LOG_FILE = os.path.expanduser("~/.cliproxy/logs/token-keeper.log")
-MANAGEMENT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET", "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY")
+CONFIG_FILE = os.path.expanduser("~/.cliproxy/config.yaml")
+MANAGEMENT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET")
 MGMT_PORT = int(os.environ.get("CLIPROXY_MGMT_PORT", 8317))
+
+def load_console_api_key():
+    """Read the Console API key from CLIProxy's own config.yaml (single source of truth)."""
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return cfg["api-keys"]["claude"][0]["keys"][0]["api-key"]
+    except Exception:
+        return None
 
 def log(msg):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -107,8 +121,79 @@ def restore_latest_from_vault(filename):
     log(f"[SELF-HEALING CẢNH BÁO] Không tìm thấy bản backup hợp lệ trong Vault cho {filename}")
     return False
 
+def notify_quarantine(filename, reason):
+    """Notify user via Herdr and system notification when account is quarantined."""
+    email_display = filename.replace("claude-", "").replace("antigravity-", "").replace(".json", "")
+    
+    # 1. Herdr desktop notification
+    try:
+        subprocess.run([
+            "herdr", "notification", "show",
+            "OAuth Token Expired",
+            "--body", f"Tài khoản {email_display} đã được tự động cách ly vào auth-paused. Vui lòng đăng nhập lại.",
+            "--sound", "request"
+        ], timeout=4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+    # 2. Linux Desktop notification fallback
+    try:
+        subprocess.run([
+            "notify-send", "-u", "critical",
+            "CLIProxy Token Alert",
+            f"Tài khoản {email_display} đã hết hạn và được chuyển vào auth-paused."
+        ], timeout=3, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def quarantine_account(filename, reason="OAuth token expired"):
+    """Auto-quarantine failed account: move to auth-paused, update accounts.json, and notify."""
+    os.makedirs(AUTH_PAUSED_DIR, exist_ok=True)
+    src = os.path.join(AUTH_DIR, filename)
+    dst = os.path.join(AUTH_PAUSED_DIR, filename)
+    
+    if os.path.exists(src):
+        try:
+            shutil.move(src, dst)
+            log(f"🚨 [AUTO-QUARANTINE] Đã chuyển {filename} sang {AUTH_PAUSED_DIR} (Lý do: {reason})")
+        except Exception as e:
+            log(f"Lỗi khi di chuyển file {filename} sang auth-paused: {e}")
+
+    # Update accounts.json to remove from active drainOrder
+    if os.path.exists(ACCOUNTS_FILE):
+        try:
+            with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                acc_data = json.load(f)
+            modified = False
+            for prov in ("claude", "agy"):
+                prov_info = acc_data.get("providers", {}).get(prov, {})
+                ordered_ids = prov_info.get("drainOrder", {}).get("orderedIds", [])
+                accounts_dict = prov_info.get("accounts", {})
+                
+                for em, acc in list(accounts_dict.items()):
+                    if acc.get("tokenFile") == filename or filename == f"{prov}-{em}.json":
+                        acc["status"] = "paused"
+                        if em in ordered_ids:
+                            ordered_ids.remove(em)
+                            modified = True
+            if modified:
+                tmp_path = ACCOUNTS_FILE + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(acc_data, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, ACCOUNTS_FILE)
+                log(f"[AUTO-QUARANTINE] Đã cập nhật accounts.json loại bỏ {filename} khỏi drainOrder.")
+        except Exception as e:
+            log(f"Lỗi cập nhật accounts.json khi cách ly: {e}")
+
+    notify_quarantine(filename, reason)
+
 def refresh_single_account(filename, max_retries=3):
     """Execute refresh for a single account with retry & exponential backoff."""
+    if not MANAGEMENT_SECRET:
+        log("CLIPROXY_MANAGEMENT_SECRET is not set (expected in ~/.cliproxy/bridge.env). Skipping refresh.")
+        return False
     url = f"http://127.0.0.1:{MGMT_PORT}/v0/management/auth-files/refresh"
     backoffs = [2.0, 5.0, 10.0]
     
@@ -138,6 +223,21 @@ def refresh_single_account(filename, max_retries=3):
                     return True
                 else:
                     log(f"⚠️ Cảnh báo từ CLIProxy khi làm mới {filename} (Lần thử {attempt+1}/{max_retries}): {data}")
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", errors="ignore")
+            except Exception:
+                pass
+            unrecoverable = any(
+                kw in (err_body + " " + str(e)).lower()
+                for kw in ["invalid_grant", "refresh token expired", "token has expired", "revoked", "invalid_client", "401 oauth"]
+            )
+            if unrecoverable:
+                log(f"🚨 [UNRECOVERABLE] Lỗi OAuth không thể khôi phục cho {filename} (HTTP {e.code}): {err_body or e}")
+                quarantine_account(filename, reason=err_body or str(e))
+                return False
+            log(f"⚠️ Lỗi HTTP từ CLIProxy khi làm mới {filename} (Lần thử {attempt+1}/{max_retries}): {e} {err_body}")
         except (urllib.error.URLError, TimeoutError) as e:
             log(f"⚠️ Kết nối CLIProxy tạm thời gián đoạn khi làm mới {filename} (Lần thử {attempt+1}/{max_retries}): {e}")
         except Exception as e:
@@ -153,8 +253,77 @@ def refresh_single_account(filename, max_retries=3):
         restore_latest_from_vault(filename)
     return False
 
+def check_30day_consent_lifecycle(verbose=False):
+    """Monitor 30-day Anthropic consent ceiling and notify early (Day 25 alert)."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    # Check ~/.claude/.credentials.json for exact ground truth if present
+    cred_file = os.path.expanduser("~/.claude/.credentials.json")
+    cred_rt_exp = None
+    if os.path.exists(cred_file):
+        try:
+            with open(cred_file, "r", encoding="utf-8") as f:
+                cd = json.load(f)
+            rexp = cd.get("claudeAiOauth", {}).get("refreshTokenExpiresAt")
+            if rexp:
+                cred_rt_exp = datetime.datetime.fromtimestamp(rexp / 1000, tz=datetime.timezone.utc)
+        except Exception:
+            pass
+
+    acc_data = {}
+    if os.path.exists(ACCOUNTS_FILE):
+        try:
+            with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                acc_data = json.load(f)
+        except Exception:
+            pass
+            
+    claude_accs = acc_data.get("providers", {}).get("claude", {}).get("accounts", {})
+    
+    for email, info in claude_accs.items():
+        fn = info.get("tokenFile", f"claude-{email}.json")
+        fpath = os.path.join(AUTH_DIR, fn)
+        active = os.path.exists(fpath)
+        
+        created_str = info.get("authorizedAt") or info.get("lastUsedAt") or info.get("createdAt")
+        created_dt = None
+        if created_str:
+            try:
+                created_dt = datetime.datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+            except Exception:
+                pass
+                
+        rt_exp_dt = None
+        if email == "trthuhuyen2712@gmail.com" and cred_rt_exp:
+            rt_exp_dt = cred_rt_exp
+        elif created_dt:
+            rt_exp_dt = created_dt + datetime.timedelta(days=30)
+            
+        if rt_exp_dt:
+            diff = rt_exp_dt - now
+            days_left = diff.days
+            hours_left = diff.seconds // 3600
+            
+            if diff.total_seconds() <= 0:
+                log(f"🚨 [CẢNH BÁO 30 NGÀY] {email} ({'ACTIVE' if active else 'PAUSED'}): ĐÃ QUÁ HẠN 30 NGÀY! Cần chạy 'claude-reauth'.")
+            elif days_left <= 3:
+                log(f"⚠️ [CẢNH BÁO KHẨN] {email}: Chỉ còn {days_left} ngày {hours_left}h là hết hạn 30 ngày (Hạn: {rt_exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}). Cần chạy 'claude-reauth'!")
+                try:
+                    subprocess.run([
+                        "herdr", "notification", "show",
+                        "Sắp hết hạn OAuth 30 ngày",
+                        "--body", f"Tài khoản {email} còn {days_left} ngày nữa là chạm mốc 30 ngày của Anthropic. Hãy chạy claude-reauth.",
+                        "--sound", "alert"
+                    ], timeout=4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
+            elif days_left <= 5:
+                log(f"ℹ️ [CẢNH BÁO SỚM] {email}: Còn {days_left} ngày nữa tới mốc 30 ngày của Anthropic.")
+            elif verbose:
+                log(f"✅ [AN TOÀN] {email}: Còn {days_left} ngày {hours_left}h tới mốc 30 ngày (Hạn: {rt_exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}).")
+
 def refresh_tokens():
-    """Trigger atomic token refresh with anti-burst sequential staggering for both Claude & Antigravity."""
+    """Trigger adaptive token refresh with anti-burst sequential staggering."""
     all_files = sorted(glob.glob(os.path.join(AUTH_DIR, "*.json")))
     target_files = [
         f for f in all_files 
@@ -170,6 +339,22 @@ def refresh_tokens():
     
     for idx, fpath in enumerate(target_files):
         fn = os.path.basename(fpath)
+        seconds_left = get_token_expiration_seconds_left(fpath)
+        
+        # Adaptive check to prevent RTR race conditions with CLIProxy's internal conductor:
+        if fn.startswith("claude-") and seconds_left > 7200:
+            h = seconds_left // 3600
+            m = (seconds_left % 3600) // 60
+            log(f"🛡️ [ADAPTIVE SKIP] {fn} còn {h}h{m}m hiệu lực. Bỏ qua refresh cưỡng bức để tránh xung đột RTR.")
+            success_count += 1
+            continue
+
+        if fn.startswith("antigravity-") and seconds_left > 1200:
+            m = seconds_left // 60
+            log(f"🛡️ [ADAPTIVE SKIP] {fn} còn {m}m hiệu lực. Bỏ qua refresh cưỡng bức.")
+            success_count += 1
+            continue
+
         if refresh_single_account(fn):
             success_count += 1
             
@@ -177,13 +362,60 @@ def refresh_tokens():
         if idx < total - 1:
             time.sleep(2.0)
 
-    log(f"Hoàn tất chu trình Proactive Refresh: {success_count}/{total} tài khoản đã được gia hạn.")
+    log(f"Hoàn tất chu trình Adaptive Refresh: {success_count}/{total} tài khoản an toàn.")
+
+CONSOLE_API_KEY = load_console_api_key()
+
+def check_capi_health():
+    """Probe Anthropic Console Direct API (capi) with zero token spend."""
+    if not CONSOLE_API_KEY:
+        log("🚨 [CAPI CẢNH BÁO] Không tìm thấy Console API Key trong config.yaml!")
+        return False
+    url = "https://api.anthropic.com/v1/models"
+    headers = {
+        "x-api-key": CONSOLE_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "User-Agent": "Claude-Token-Keeper/3.0"
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    start = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
+            elapsed_ms = int((time.time() - start) * 1000)
+            data = json.loads(resp.read().decode("utf-8"))
+            models_cnt = len(data.get("data", []))
+            log(f"🔑 [CAPI HEALTH] ✅ Console API Key hợp lệ ({elapsed_ms}ms, {models_cnt} models trực tuyến).")
+            return True
+    except urllib.error.HTTPError as e:
+        elapsed_ms = int((time.time() - start) * 1000)
+        log(f"🚨 [CAPI CẢNH BÁO] Console API Key thất bại: HTTP {e.code} ({e.reason})!")
+        try:
+            subprocess.run([
+                "herdr", "notification", "show",
+                "Cảnh báo Console API (CAPI)",
+                "--body", f"Khóa Console API Key gặp lỗi HTTP {e.code}: {e.reason}. Hãy kiểm tra tài khoản Anthropic Console.",
+                "--sound", "alert"
+            ], timeout=4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+        return False
+    except Exception as e:
+        log(f"⚠️ [CAPI CẢNH BÁO] Không thể kết nối tới api.anthropic.com: {e}")
+        return False
 
 def main():
     os.umask(0o077)
-    log("=== Bắt đầu chu trình Token Keeper & Vault (Production Suite) ===")
+    if len(sys.argv) > 1 and sys.argv[1] in ("--check", "check", "status", "-s"):
+        log("=== Báo cáo Vòng đời OAuth & Sức khỏe Token ===")
+        check_30day_consent_lifecycle(verbose=True)
+        check_capi_health()
+        return
+
+    log("=== Bắt đầu chu trình Token Keeper & Vault (Adaptive Production Suite) ===")
     backup_tokens()
+    check_30day_consent_lifecycle()
     refresh_tokens()
+    check_capi_health()
     log("=== Hoàn tất chu trình Token Keeper ===")
 
 if __name__ == "__main__":
