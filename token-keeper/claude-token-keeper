@@ -180,6 +180,7 @@ def refresh_tokens():
     log(f"Hoàn tất chu trình Proactive Refresh: {success_count}/{total} tài khoản đã được gia hạn.")
 
 def main():
+    os.umask(0o077)
     log("=== Bắt đầu chu trình Token Keeper & Vault (Production Suite) ===")
     backup_tokens()
     refresh_tokens()
