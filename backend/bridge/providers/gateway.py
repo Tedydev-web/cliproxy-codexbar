@@ -10,13 +10,23 @@ import time
 import datetime
 import urllib.request
 import urllib.error
+import yaml
 
 class GatewayProvider:
     def __init__(self, config_path=None):
         self.config_path = config_path or os.path.expanduser("~/.cliproxy/config.yaml")
-        self.console_api_key = "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"
+        self.console_api_key = self._load_console_api_key()
         self._last_probe_time = 0
         self._cached_health = None
+
+    def _load_console_api_key(self):
+        """Read the Console API key from CLIProxy's own config.yaml (single source of truth)."""
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f)
+            return cfg["api-keys"]["claude"][0]["keys"][0]["api-key"]
+        except Exception:
+            return None
 
     def check_health(self, force=False):
         """

@@ -32,7 +32,9 @@ VAULT_DIR = os.path.join(CLIPROXY_HOME, "backups", "auth-vault")
 # Network & Ports
 MGMT_HOST = os.environ.get("CLIPROXY_HOST", "127.0.0.1")
 MGMT_PORT = int(os.environ.get("CLIPROXY_MGMT_PORT", 8317))
-MGMT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET", "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY")
+MGMT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET")
+if not MGMT_SECRET:
+    raise RuntimeError("CLIPROXY_MANAGEMENT_SECRET is not set (expected in ~/.cliproxy/bridge.env)")
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", 8318))
 
 # Cache & Probe Policies
