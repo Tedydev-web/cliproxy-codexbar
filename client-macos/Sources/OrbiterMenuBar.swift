@@ -1149,6 +1149,14 @@ class QuotaState: ObservableObject {
         let host = bridgeHost.trimmingCharacters(in: .whitespacesAndNewlines)
         return host.hasSuffix("/") ? String(host.dropLast()) : host
     }
+
+    static let bridgeSecret = "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY"
+
+    func authedRequest(_ url: URL) -> URLRequest {
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
+        return req
+    }
     
     var onUpdate: (() -> Void)?
     
@@ -1169,6 +1177,7 @@ class QuotaState: ObservableObject {
         guard let url = URL(string: "\(self.baseUrl)/v1/set-order") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body = ["order": newOrder]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -1237,6 +1246,7 @@ class QuotaState: ObservableObject {
         guard let url = URL(string: "\(self.baseUrl)/v1/set-priority") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body = ["email": email] as [String : Any]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -1255,7 +1265,7 @@ class QuotaState: ObservableObject {
     
     func fetchData() {
         if let url = URL(string: "\(self.baseUrl)/v1/keeper-telemetry") {
-            URLSession.shared.dataTask(with: url) { data, _, _ in
+            URLSession.shared.dataTask(with: authedRequest(url)) { data, _, _ in
                 guard let data = data,
                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
                 DispatchQueue.main.async {
@@ -1283,7 +1293,7 @@ class QuotaState: ObservableObject {
         }
         
         if let agyUrl = URL(string: "\(self.baseUrl)/v1/antigravity-quota") {
-            URLSession.shared.dataTask(with: agyUrl) { data, _, _ in
+            URLSession.shared.dataTask(with: authedRequest(agyUrl)) { data, _, _ in
                 guard let data = data,
                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
                 DispatchQueue.main.async {
@@ -1317,7 +1327,7 @@ class QuotaState: ObservableObject {
         }
         
         if let poolUrl = URL(string: "\(self.baseUrl)/v1/pool-status") {
-            URLSession.shared.dataTask(with: poolUrl) { data, _, _ in
+            URLSession.shared.dataTask(with: authedRequest(poolUrl)) { data, _, _ in
                 guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let accs = json["accounts"] as? [[String: Any]] else { return }
@@ -1413,7 +1423,7 @@ class QuotaState: ObservableObject {
     
     func fetchSystemData() {
         guard let url = URL(string: "\(self.baseUrl)/v1/system-telemetry") else { return }
-        URLSession.shared.dataTask(with: url) { data, _, _ in
+        URLSession.shared.dataTask(with: authedRequest(url)) { data, _, _ in
             guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
             DispatchQueue.main.async {
@@ -1511,6 +1521,7 @@ class QuotaState: ObservableObject {
         self.sysActionMessage = "Đang dừng port \(port)..."
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var body: [String: Any] = ["port": port]
         if let p = pid { body["pid"] = p }
@@ -1531,6 +1542,7 @@ class QuotaState: ObservableObject {
         self.sysActionMessage = "Đang tạo Cloudflare Tunnel cho port \(port)..."
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = ["port": port]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -1555,6 +1567,7 @@ class QuotaState: ObservableObject {
         guard let url = URL(string: "\(self.baseUrl)/v1/tunnel-stop") else { return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = ["tunnel_id": tunnelId]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -1573,6 +1586,7 @@ class QuotaState: ObservableObject {
         self.sysActionMessage = "Đang khởi động lại \(name)..."
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let body: [String: Any] = ["service": name]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -1591,6 +1605,7 @@ class QuotaState: ObservableObject {
         self.sysActionMessage = "Đang kiểm tra & cập nhật Herdr..."
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
+        req.setValue("Bearer \(Self.bridgeSecret)", forHTTPHeaderField: "Authorization")
         
         URLSession.shared.dataTask(with: req) { data, _, _ in
             DispatchQueue.main.async {

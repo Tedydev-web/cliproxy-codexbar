@@ -4,8 +4,10 @@ RESTful HTTP API Handlers for CLIProxy CodexBar Bridge
 
 import os
 import json
+import hmac
 import subprocess
 from http.server import BaseHTTPRequestHandler
+from core.config import MGMT_SECRET
 
 class BridgeApiHandler(BaseHTTPRequestHandler):
     claude_provider = None
@@ -13,6 +15,11 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     keeper_provider = None
     gateway_provider = None
     system_provider = None
+
+    def is_authorized(self):
+        auth = self.headers.get("Authorization", "")
+        token = auth[len("Bearer "):] if auth.startswith("Bearer ") else ""
+        return hmac.compare_digest(token, MGMT_SECRET)
 
     def send_json(self, status_code, data):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -33,6 +40,12 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if self.path == "/health":
+            self.send_json(200, {"status": "healthy", "service": "cliproxy-quota-bridge"})
+            return
+        if not self.is_authorized():
+            self.send_json(401, {"error": "Unauthorized"})
+            return
         if self.path.startswith("/v1/pool-status"):
             accounts = self.claude_provider.get_pool_status()
             gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else None
@@ -71,8 +84,6 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/system-ports"):
             ports = self.system_provider.get_listening_ports() if self.system_provider else []
             self.send_json(200, {"ports": ports})
-        elif self.path == "/health":
-            self.send_json(200, {"status": "healthy", "service": "cliproxy-quota-bridge"})
         else:
             # Default fallback for CodexBar clients
             accounts = self.claude_provider.get_pool_status()
@@ -80,6 +91,9 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             self.send_json(200, {"accounts": accounts, "gateway": gw_info})
 
     def do_POST(self):
+        if not self.is_authorized():
+            self.send_json(401, {"error": "Unauthorized"})
+            return
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length)
         try:

@@ -17,6 +17,8 @@ const CONFIG = {
   CACHE_KEY: "orbiter_claude_large_v13"
 };
 
+const BRIDGE_SECRET = "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY";
+
 const URLS = {
   POOL: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/pool-status`,
   SET_PRIORITY: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/set-priority`,
@@ -143,6 +145,7 @@ async function fetchPoolData() {
   try {
     const r = new Request(URLS.POOL);
     r.timeoutInterval = CONFIG.TIMEOUT;
+    r.headers = { "Authorization": `Bearer ${BRIDGE_SECRET}` };
     const pool = await r.loadJSON();
     if (pool && pool.accounts) {
       const data = { pool, time: Date.now(), online: true };

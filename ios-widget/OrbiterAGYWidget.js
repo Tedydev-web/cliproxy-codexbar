@@ -17,6 +17,8 @@ const CONFIG = {
   CACHE_KEY: "orbiter_agy_gemini_v13"
 };
 
+const BRIDGE_SECRET = "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY";
+
 const URLS = {
   AGY: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/antigravity-quota`
 };
@@ -142,6 +144,7 @@ async function fetchAgyData() {
   try {
     const r = new Request(URLS.AGY);
     r.timeoutInterval = CONFIG.TIMEOUT;
+    r.headers = { "Authorization": `Bearer ${BRIDGE_SECRET}` };
     const agy = await r.loadJSON();
     if (agy && (agy.email || agy.gemini)) {
       const data = { agy, time: Date.now(), online: true };
