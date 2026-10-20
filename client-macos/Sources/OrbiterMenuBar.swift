@@ -1150,7 +1150,7 @@ class QuotaState: ObservableObject {
         return host.hasSuffix("/") ? String(host.dropLast()) : host
     }
 
-    static let bridgeSecret = "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY"
+    static let bridgeSecret = "__CLIPROXY_BRIDGE_SECRET__"
 
     func authedRequest(_ url: URL) -> URLRequest {
         var req = URLRequest(url: url)

@@ -17,7 +17,7 @@ const CONFIG = {
   CACHE_KEY: "orbiter_agy_gemini_v13"
 };
 
-const BRIDGE_SECRET = "LklK2tDx5ECvF8mxWYAKRCbrWPZv3mpj32ZZzrbcQZY";
+const BRIDGE_SECRET = "PASTE_CLIPROXY_BRIDGE_SECRET_HERE";
 
 const URLS = {
   AGY: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/antigravity-quota`

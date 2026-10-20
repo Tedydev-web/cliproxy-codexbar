@@ -17,6 +17,9 @@ PLIST_TARGET="${HOME}/Library/LaunchAgents/com.tedydev.orbitermenubar.plist"
 
 echo "=== Cài đặt OrbiterMenuBar trên macOS ==="
 
+: "${CLIPROXY_BRIDGE_SECRET:?CLIPROXY_BRIDGE_SECRET chưa được set (sync-all.sh tự truyền giá trị này từ ~/.cliproxy/bridge.env)}"
+sed -i '' "s/__CLIPROXY_BRIDGE_SECRET__/${CLIPROXY_BRIDGE_SECRET}/" "${SCRIPT_DIR}/Sources/OrbiterMenuBar.swift"
+
 # 1. Biên dịch
 "${SCRIPT_DIR}/build.sh"
 
