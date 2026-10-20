@@ -401,6 +401,7 @@ class ClaudePoolProvider:
             return False
 
         # 1. Update accounts.json drainOrder
+        accounts_dict = {}
         try:
             if os.path.exists(ACCOUNTS_FILE):
                 with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
@@ -409,6 +410,7 @@ class ClaudePoolProvider:
                     if "drainOrder" not in acc_data["providers"]["claude"]:
                         acc_data["providers"]["claude"]["drainOrder"] = {"mode": "manual"}
                     acc_data["providers"]["claude"]["drainOrder"]["orderedIds"] = ordered_emails
+                    accounts_dict = acc_data["providers"]["claude"].get("accounts", {})
                     with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
                         json.dump(acc_data, f, indent=2)
         except Exception:
@@ -418,7 +420,7 @@ class ClaudePoolProvider:
         total = len(ordered_emails)
         for idx, em in enumerate(ordered_emails):
             prio = max(1, total - idx + 1)
-            fn = f"claude-{em}.json"
+            fn = accounts_dict.get(em, {}).get("tokenFile", f"claude-{em}.json")
             try:
                 req = urllib.request.Request(
                     f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/fields",
