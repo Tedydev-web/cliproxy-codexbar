@@ -6,6 +6,7 @@ Claude Account and Pool Provider
 """
 
 import os
+import sys
 import json
 import time
 import datetime
@@ -37,7 +38,16 @@ class ClaudePoolProvider:
         if email in self._plan_cache:
             return self._plan_cache[email]
 
-        auth_file = os.path.join(AUTH_DIR, f"claude-{email}.json")
+        token_file = f"claude-{email}.json"
+        if os.path.exists(ACCOUNTS_FILE):
+            try:
+                with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                    acc = json.load(f)
+                info = acc.get("providers", {}).get("claude", {}).get("accounts", {}).get(email, {})
+                token_file = info.get("tokenFile", token_file)
+            except Exception:
+                pass
+        auth_file = os.path.join(AUTH_DIR, token_file)
         if not os.path.exists(auth_file):
             return "Max"
 
@@ -411,10 +421,14 @@ class ClaudePoolProvider:
                         acc_data["providers"]["claude"]["drainOrder"] = {"mode": "manual"}
                     acc_data["providers"]["claude"]["drainOrder"]["orderedIds"] = ordered_emails
                     accounts_dict = acc_data["providers"]["claude"].get("accounts", {})
-                    with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
+                    tmp_path = ACCOUNTS_FILE + ".tmp"
+                    with open(tmp_path, "w", encoding="utf-8") as f:
                         json.dump(acc_data, f, indent=2)
-        except Exception:
-            pass
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp_path, ACCOUNTS_FILE)
+        except Exception as e:
+            print(f"set_accounts_order: accounts.json write failed: {e}", file=sys.stderr)
 
         # 2. Update priority via Management API
         total = len(ordered_emails)
@@ -433,18 +447,8 @@ class ClaudePoolProvider:
                 )
                 with urllib.request.urlopen(req, timeout=3):
                     pass
-            except Exception:
-                # Fallback direct atomic disk update
-                fpath = os.path.join(AUTH_DIR, fn)
-                if os.path.exists(fpath):
-                    try:
-                        with open(fpath, "r", encoding="utf-8") as fp:
-                            ad = json.load(fp)
-                        ad["priority"] = prio
-                        with open(fpath, "w", encoding="utf-8") as fp:
-                            json.dump(ad, fp, indent=2)
-                    except Exception:
-                        pass
+            except Exception as e:
+                print(f"set_accounts_order: priority PATCH failed for {fn}: {e}", file=sys.stderr)
 
         self._last_probe_time = 0
         return True
