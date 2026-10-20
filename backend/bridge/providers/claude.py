@@ -105,9 +105,7 @@ class ClaudePoolProvider:
             res = {}
             for f in data.get("files", []):
                 if f.get("type") == "claude" or "claude-" in f.get("name", ""):
-                    email = f.get("email") or f.get("account")
-                    if not email and f.get("name", "").startswith("claude-") and f.get("name", "").endswith(".json"):
-                        email = f.get("name")[len("claude-"):-len(".json")]
+                    fname = f.get("name", "")
 
                     quota = f.get("quota") or {}
                     signals = quota.get("signals") or {}
@@ -126,7 +124,7 @@ class ClaudePoolProvider:
                             except Exception:
                                 pass
 
-                        res[email] = {
+                        res[fname] = {
                             "remaining_5h": max(0, 100 - u_5h),
                             "used_5h": u_5h,
                             "reset_5h": fmt_relative_reset_from_ts(ts_5h),
@@ -277,8 +275,8 @@ class ClaudePoolProvider:
 
         for task in tasks:
             em, tf, nick = task
-            if em in passive:
-                p = passive[em]
+            if tf in passive:
+                p = passive[tf]
                 if p["age_sec"] < PASSIVE_FRESHNESS_SEC or p["remaining_weekly"] == 0:
                     is_avail = (p["remaining_5h"] > 0 and p["remaining_weekly"] > 0)
                     results.append({
