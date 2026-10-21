@@ -36,6 +36,9 @@ MGMT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET")
 if not MGMT_SECRET:
     raise RuntimeError("CLIPROXY_MANAGEMENT_SECRET is not set (expected in ~/.cliproxy/bridge.env)")
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", 8318))
+WIDGET_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "widgets")
+WIDGET_FILES = ("OrbiterClaudeWidget.js", "OrbiterAGYWidget.js")
+WIDGET_SECRET_PLACEHOLDER = "PASTE_CLIPROXY_BRIDGE_SECRET_HERE"
 
 # Cache & Probe Policies
 PROBE_CACHE_SEC = 60

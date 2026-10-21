@@ -7,7 +7,7 @@ import json
 import hmac
 import subprocess
 from http.server import BaseHTTPRequestHandler
-from core.config import MGMT_SECRET
+from core.config import MGMT_SECRET, WIDGET_DIR, WIDGET_FILES, WIDGET_SECRET_PLACEHOLDER
 
 class BridgeApiHandler(BaseHTTPRequestHandler):
     claude_provider = None
@@ -25,6 +25,24 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def send_widget(self, name):
+        if name not in WIDGET_FILES:
+            self.send_json(404, {"error": f"Unknown widget '{name}'"})
+            return
+        try:
+            with open(os.path.join(WIDGET_DIR, name), "r", encoding="utf-8") as f:
+                code = f.read()
+        except OSError as e:
+            self.send_json(404, {"error": f"Widget '{name}' not deployed: {e}"})
+            return
+        payload = code.replace(WIDGET_SECRET_PLACEHOLDER, MGMT_SECRET, 1).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/javascript; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
@@ -71,6 +89,8 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/system-metrics"):
             metrics = self.system_provider.get_system_metrics() if self.system_provider else {}
             self.send_json(200, metrics)
+        elif self.path.startswith("/v1/widget/"):
+            self.send_widget(self.path[len("/v1/widget/"):].split("?")[0])
         elif self.path.startswith("/v1/system-ports"):
             ports = self.system_provider.get_listening_ports() if self.system_provider else []
             self.send_json(200, {"ports": ports})

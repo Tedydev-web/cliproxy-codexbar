@@ -17,6 +17,8 @@ echo "--------------------------------------------------"
 echo "[1/2] Đồng bộ Backend trên máy chủ cục bộ..."
 mkdir -p ~/.local/lib/cliproxy-bridge ~/.local/bin
 cp -r "${SCRIPT_DIR}/backend/bridge/"* ~/.local/lib/cliproxy-bridge/
+mkdir -p ~/.local/lib/cliproxy-bridge/widgets
+cp "${SCRIPT_DIR}/ios-widget/OrbiterClaudeWidget.js" "${SCRIPT_DIR}/ios-widget/OrbiterAGYWidget.js" ~/.local/lib/cliproxy-bridge/widgets/
 cat << 'EOF' > ~/.local/bin/cliproxy-quota-bridge
 #!/usr/bin/env bash
 exec python3 ~/.local/lib/cliproxy-bridge/main.py "$@"
