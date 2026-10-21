@@ -22,6 +22,7 @@ from core.config import (
     PROBE_CACHE_SEC,
     EXHAUSTED_CACHE_SEC,
     PASSIVE_FRESHNESS_SEC,
+    HEADER_PROBE_SEC,
     PROBE_STAGGER_SEC,
     PROBE_USER_AGENT
 )
@@ -33,6 +34,7 @@ class ClaudePoolProvider:
         self._last_probe_time = 0
         self._account_probe_timestamps = {}
         self._plan_cache = {}
+        self._header_probe_cache = {}
 
     def get_plan_tier(self, email):
         if email in self._plan_cache:
@@ -141,15 +143,88 @@ class ClaudePoolProvider:
         except Exception:
             return {}
 
-    def _setup_token_expiry(self, token_file):
+    def _setup_token_meta(self, token_file):
         try:
             with open(os.path.join(AUTH_DIR, token_file), "r", encoding="utf-8") as f:
                 d = json.load(f)
         except (OSError, ValueError):
             return None
-        if d.get("refresh_token"):
+        return None if d.get("refresh_token") else d
+
+    def _oauth_reader_file(self, real_email, exclude):
+        if not real_email or not os.path.isdir(AUTH_DIR):
             return None
-        return d.get("expired") or ""
+        for fn in sorted(os.listdir(AUTH_DIR)):
+            if not (fn.startswith("claude-") and fn.endswith(".json")) or fn == exclude:
+                continue
+            try:
+                with open(os.path.join(AUTH_DIR, fn), "r", encoding="utf-8") as f:
+                    d = json.load(f)
+            except (OSError, ValueError):
+                continue
+            if d.get("refresh_token") and d.get("email") == real_email and not d.get("disabled"):
+                return fn
+        return None
+
+    def _header_probe(self, token_file):
+        now = time.time()
+        cached = self._header_probe_cache.get(token_file)
+        if cached and now - cached[0] < HEADER_PROBE_SEC:
+            return cached[1]
+        p = None
+        try:
+            with open(os.path.join(AUTH_DIR, token_file), "r", encoding="utf-8") as f:
+                token = json.load(f).get("access_token")
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages",
+                data=json.dumps({
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 1,
+                    "system": "You are Claude Code, Anthropic's official CLI for Claude.",
+                    "messages": [{"role": "user", "content": "hi"}]
+                }).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "anthropic-version": "2023-06-01",
+                    "anthropic-beta": "oauth-2025-04-20",
+                    "Content-Type": "application/json",
+                    "User-Agent": PROBE_USER_AGENT
+                },
+                method="POST"
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    h = resp.headers
+            except urllib.error.HTTPError as e:
+                h = e.headers
+            u_5h = h.get("anthropic-ratelimit-unified-5h-utilization")
+            u_wk = h.get("anthropic-ratelimit-unified-7d-utilization")
+            if u_5h is None or u_wk is None:
+                raise ValueError("response has no unified rate-limit headers")
+            ts_5h = h.get("anthropic-ratelimit-unified-5h-reset")
+            ts_wk = h.get("anthropic-ratelimit-unified-7d-reset")
+            p = {
+                "used_5h": int(round(float(u_5h) * 100)),
+                "reset_5h": fmt_relative_reset_from_ts(ts_5h),
+                "reset_5h_ts": int(float(ts_5h)) if ts_5h else 0,
+                "used_weekly": int(round(float(u_wk) * 100)),
+                "reset_weekly": fmt_relative_reset_from_ts(ts_wk),
+                "reset_weekly_ts": int(float(ts_wk)) if ts_wk else 0
+            }
+        except Exception as e:
+            print(f"header probe failed for {token_file}: {e}", file=sys.stderr)
+        self._header_probe_cache[token_file] = (now, p)
+        return p
+
+    def _setup_token_status(self, email, token_file, nickname, meta, passive):
+        if passive and passive.get("age_sec", PASSIVE_FRESHNESS_SEC) < PASSIVE_FRESHNESS_SEC:
+            return self._setup_token_result(email, nickname, passive)
+        reader = self._oauth_reader_file(meta.get("email"), token_file)
+        if reader:
+            r = self.probe_single_account((email, reader, nickname))
+            if not r.get("is_probe_error"):
+                return r
+        return self._setup_token_result(email, nickname, self._header_probe(token_file) or passive)
 
     def _setup_token_result(self, email, nickname, p):
         now = time.time()
@@ -311,10 +386,10 @@ class ClaudePoolProvider:
 
         for task in tasks:
             em, tf, nick = task
-            exp = self._setup_token_expiry(tf)
-            if exp is not None:
-                setup_expiry[em] = exp
-                results.append(self._setup_token_result(em, nick, passive.get(tf)))
+            meta = self._setup_token_meta(tf)
+            if meta is not None:
+                setup_expiry[em] = meta.get("expired") or ""
+                results.append(self._setup_token_status(em, tf, nick, meta, passive.get(tf)))
                 continue
             if tf in passive:
                 p = passive[tf]

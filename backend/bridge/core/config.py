@@ -41,6 +41,7 @@ BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", 8318))
 PROBE_CACHE_SEC = 60
 EXHAUSTED_CACHE_SEC = 600       # 10m cache for weekly exhausted accounts
 PASSIVE_FRESHNESS_SEC = 1800    # 30m maximum age for passive sniffing
+HEADER_PROBE_SEC = 300          # 5m minimum gap between 1-token header probes per setup-token
 AGY_CACHE_SEC = 60
 PROBE_STAGGER_SEC = 0.35        # Delay between sequential probes
 PROBE_USER_AGENT = "claude-cli/2.1.296 (external, cli)"
