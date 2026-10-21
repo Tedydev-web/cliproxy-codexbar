@@ -141,6 +141,41 @@ class ClaudePoolProvider:
         except Exception:
             return {}
 
+    def _setup_token_expiry(self, token_file):
+        try:
+            with open(os.path.join(AUTH_DIR, token_file), "r", encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            return None
+        if d.get("refresh_token"):
+            return None
+        return d.get("expired") or ""
+
+    def _setup_token_result(self, email, nickname, p):
+        now = time.time()
+        live_5h = bool(p) and p.get("reset_5h_ts", 0) > now
+        live_wk = bool(p) and p.get("reset_weekly_ts", 0) > now
+        u_5h = p["used_5h"] if live_5h else 0
+        u_wk = p["used_weekly"] if live_wk else 0
+        is_avail = u_5h < 100 and u_wk < 100
+        return {
+            "email": email,
+            "name": nickname or email,
+            "is_available": is_avail,
+            "is_probe_error": False,
+            "status_text": "Khả dụng" if is_avail else "Hết hạn",
+            "error_hint": "" if p else "Setup-token: quota chỉ cập nhật khi có request đi qua proxy",
+            "remaining_5h": 100 - u_5h,
+            "used_5h": u_5h,
+            "reset_5h": p["reset_5h"] if live_5h else "",
+            "reset_5h_ts": p.get("reset_5h_ts", 0) if live_5h else 0,
+            "remaining_weekly": 100 - u_wk,
+            "used_weekly": u_wk,
+            "reset_weekly": p["reset_weekly"] if live_wk else "",
+            "reset_weekly_ts": p.get("reset_weekly_ts", 0) if live_wk else 0,
+            "plan": self.get_plan_tier(email)
+        }
+
     def probe_single_account(self, task):
         email, token_file, nickname = task
         prev = next((a for a in self._cache if a.get("email") == email), None)
@@ -272,9 +307,15 @@ class ClaudePoolProvider:
         passive = self.fetch_passive_quota()
         results = []
         probe_needed = []
+        setup_expiry = {}
 
         for task in tasks:
             em, tf, nick = task
+            exp = self._setup_token_expiry(tf)
+            if exp is not None:
+                setup_expiry[em] = exp
+                results.append(self._setup_token_result(em, nick, passive.get(tf)))
+                continue
             if tf in passive:
                 p = passive[tf]
                 if p["age_sec"] < PASSIVE_FRESHNESS_SEC or p["remaining_weekly"] == 0:
@@ -321,6 +362,7 @@ class ClaudePoolProvider:
                             "email": em,
                             "name": em,
                             "is_available": False,
+                            "is_paused": True,
                             "is_probe_error": False,
                             "status_text": "Tạm dừng (auth-paused)",
                             "error_hint": "OAuth token hết hạn. Cần đăng nhập lại để kích hoạt lại.",
@@ -336,17 +378,6 @@ class ClaudePoolProvider:
                         })
         # Step 4: Enrich with 30-day OAuth lifecycle telemetry
         now_utc = datetime.datetime.now(datetime.timezone.utc)
-        cred_file = os.path.expanduser("~/.claude/.credentials.json")
-        cred_rt_exp = None
-        if os.path.exists(cred_file):
-            try:
-                with open(cred_file, "r", encoding="utf-8") as f:
-                    cd = json.load(f)
-                rexp = cd.get("claudeAiOauth", {}).get("refreshTokenExpiresAt")
-                if rexp:
-                    cred_rt_exp = datetime.datetime.fromtimestamp(rexp / 1000, tz=datetime.timezone.utc)
-            except Exception:
-                pass
 
         accounts_dict = {}
         if os.path.exists(ACCOUNTS_FILE):
@@ -369,8 +400,17 @@ class ClaudePoolProvider:
                     pass
             
             rt_exp_dt = None
-            if em == "trthuhuyen2712@gmail.com" and cred_rt_exp:
-                rt_exp_dt = cred_rt_exp
+            warn_days = 5
+            if r.get("is_paused"):
+                pass
+            elif em in setup_expiry:
+                try:
+                    rt_exp_dt = datetime.datetime.fromisoformat(setup_expiry[em].replace("Z", "+00:00"))
+                    if rt_exp_dt.tzinfo is None:
+                        rt_exp_dt = rt_exp_dt.astimezone()
+                except ValueError:
+                    rt_exp_dt = None
+                warn_days = 30
             elif created_dt:
                 rt_exp_dt = created_dt + datetime.timedelta(days=30)
 
@@ -387,7 +427,7 @@ class ClaudePoolProvider:
                 elif days_left <= 3:
                     r["lifecycle_status"] = "critical"
                     r["lifecycle_label"] = f"Hết hạn sau {days_left}d {hours_left}h"
-                elif days_left <= 5:
+                elif days_left <= warn_days:
                     r["lifecycle_status"] = "warning"
                     r["lifecycle_label"] = f"Hết hạn sau {days_left}d"
                 else:
@@ -415,10 +455,11 @@ class ClaudePoolProvider:
                 with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
                     acc_data = json.load(f)
                 if "providers" in acc_data and "claude" in acc_data["providers"]:
+                    accounts_dict = acc_data["providers"]["claude"].get("accounts", {})
+                    ordered_emails = [e for e in ordered_emails if accounts_dict.get(e, {}).get("status") != "paused"]
                     if "drainOrder" not in acc_data["providers"]["claude"]:
                         acc_data["providers"]["claude"]["drainOrder"] = {"mode": "manual"}
                     acc_data["providers"]["claude"]["drainOrder"]["orderedIds"] = ordered_emails
-                    accounts_dict = acc_data["providers"]["claude"].get("accounts", {})
                     tmp_path = ACCOUNTS_FILE + ".tmp"
                     with open(tmp_path, "w", encoding="utf-8") as f:
                         json.dump(acc_data, f, indent=2)
