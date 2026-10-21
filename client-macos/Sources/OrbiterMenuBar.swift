@@ -145,13 +145,44 @@ struct CompactAccountRowView: View {
     let isAvailable: Bool
     let isCurrent: Bool
     var isProbeError: Bool = false
+    var isDisabled: Bool = false
     var onMoveUp: (() -> Void)? = nil
     var onMoveDown: (() -> Void)? = nil
     let onSwitch: () -> Void
-    
+    var onToggleEnabled: (() -> Void)? = nil
+
     @State private var isHovered: Bool = false
-    
+
     var body: some View {
+        HStack(alignment: .center, spacing: 6) {
+            rowContent
+            if let onToggleEnabled = onToggleEnabled {
+                Button(action: onToggleEnabled) {
+                    Image(systemName: self.isDisabled ? "play.circle" : "pause.circle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(self.isDisabled ? Color(nsColor: .systemGreen) : Color.secondary)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+                .help(self.isDisabled ? "Bật account" : "Tắt account")
+            }
+        }
+        .opacity(self.isDisabled ? 0.55 : 1)
+        .contextMenu {
+            if let onToggleEnabled = onToggleEnabled {
+                Button(self.isDisabled ? "Bật account" : "Tắt account", action: onToggleEnabled)
+            }
+            if !self.isDisabled {
+                Button("Đặt làm #1", action: onSwitch)
+            }
+            Button("Copy email") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(self.email, forType: .string)
+            }
+        }
+    }
+
+    private var rowContent: some View {
         HStack(alignment: .center, spacing: 6) {
             // 1. Subtle Inline Order & Priority Arrows
             if let onMoveUp = onMoveUp, let onMoveDown = onMoveDown {
@@ -305,8 +336,16 @@ struct PoolAccountItem: Identifiable {
     let remainingWeekly: Int
     let usedWeekly: Int
     let resetWeekly: String
-    
+    var isDisabled: Bool = false
+    var isPaused: Bool = false
+
     var subDetailsText: String {
+        if isPaused {
+            return "Đã cách ly · \(errorHint.isEmpty ? "Cần đăng nhập lại" : errorHint)"
+        }
+        if isDisabled {
+            return "\(plan) · Đang tắt · 5h: \(used5h)% · Tuần: \(usedWeekly)%"
+        }
         if isProbeError {
             return "\(plan) · Tạm nghẽn 429 API · Sẵn sàng"
         }
@@ -494,9 +533,11 @@ struct ClaudeFullCardView: View {
                         isAvailable: acc.isAvailable,
                         isCurrent: self.state.claudeEmail == acc.email,
                         isProbeError: acc.isProbeError,
+                        isDisabled: acc.isDisabled,
                         onMoveUp: { self.state.moveAccount(fromIndex: index, toIndex: index - 1) },
                         onMoveDown: { self.state.moveAccount(fromIndex: index, toIndex: index + 1) },
-                        onSwitch: { AppDelegate.shared?.confirmSwitch(to: acc.email) }
+                        onSwitch: { AppDelegate.shared?.confirmSwitch(to: acc.email) },
+                        onToggleEnabled: acc.isPaused ? nil : { AppDelegate.shared?.confirmToggleEnabled(email: acc.email, enable: acc.isDisabled) }
                     )
                 }
             }
@@ -1263,6 +1304,31 @@ class QuotaState: ObservableObject {
         }.resume()
     }
     
+    func setEnabled(email: String, enabled: Bool, onError: @escaping (String) -> Void) {
+        guard let url = URL(string: "\(self.baseUrl)/v1/set-enabled") else { return }
+        self.switchingMessage = enabled ? "Đang bật \(email)..." : "Đang tắt \(email)..."
+        var req = authedRequest(url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["email": email, "enabled": enabled])
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let body = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            DispatchQueue.main.async {
+                if status == 200 {
+                    self.switchingMessage = enabled ? "Đã bật \(email)" : "Đã tắt \(email)"
+                } else {
+                    self.switchingMessage = ""
+                    onError(body?["error"] as? String ?? error?.localizedDescription ?? "HTTP \(status)")
+                }
+                self.fetchData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    self.switchingMessage = ""
+                }
+            }
+        }.resume()
+    }
+
     func fetchData() {
         if let url = URL(string: "\(self.baseUrl)/v1/keeper-telemetry") {
             URLSession.shared.dataTask(with: authedRequest(url)) { data, _, _ in
@@ -1346,7 +1412,9 @@ class QuotaState: ObservableObject {
                         let uWk = a["used_weekly"] as? Int ?? (100 - remWk)
                         let rWk = a["reset_weekly"] as? String ?? ""
                         let pln = a["plan"] as? String ?? "Max"
-                        
+                        let disabled = a["is_disabled"] as? Bool ?? false
+                        let paused = a["is_paused"] as? Bool ?? false
+
                         parsedList.append(PoolAccountItem(
                             email: em,
                             name: nm,
@@ -1359,13 +1427,14 @@ class QuotaState: ObservableObject {
                             reset5h: r5h,
                             remainingWeekly: remWk,
                             usedWeekly: uWk,
-                            resetWeekly: rWk
+                            resetWeekly: rWk,
+                            isDisabled: disabled,
+                            isPaused: paused
                         ))
                     }
                     self.claudeAccounts = parsedList
-                    
-                    // The #1 account in the pool order is ALWAYS the active account (selector drain order)
-                    let targetAccount = parsedList.first
+
+                    let targetAccount = parsedList.first { !$0.isDisabled && !$0.isPaused } ?? parsedList.first
                     
                     if let current = targetAccount {
                         self.claudeEmail = current.email
@@ -2901,8 +2970,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openSettingsWindow()
     }
     
+    func confirmToggleEnabled(email: String, enable: Bool) {
+        let alert = NSAlert()
+        alert.messageText = enable ? "Bật lại account?" : "Tắt account?"
+        alert.informativeText = enable
+            ? "\(email)\n\nCLIProxy sẽ dùng lại account này theo thứ tự ưu tiên."
+            : "\(email)\n\nCLIProxy sẽ không dùng account này cho tới khi bật lại."
+        alert.alertStyle = enable ? .informational : .warning
+        alert.addButton(withTitle: enable ? "Bật" : "Tắt")
+        alert.addButton(withTitle: "Hủy bỏ")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        state.setEnabled(email: email, enabled: enable) { message in
+            let err = NSAlert()
+            err.messageText = enable ? "Không bật được account" : "Không tắt được account"
+            err.informativeText = message
+            err.alertStyle = .critical
+            NSApp.activate(ignoringOtherApps: true)
+            err.runModal()
+        }
+    }
+
     func confirmSwitch(to email: String) {
         if state.claudeEmail == email { return }
+        if state.claudeAccounts.first(where: { $0.email == email })?.isDisabled == true {
+            let alert = NSAlert()
+            alert.messageText = "Account đang tắt"
+            alert.informativeText = "\(email)\n\nBật account trước rồi mới đặt làm #1."
+            alert.alertStyle = .informational
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+            return
+        }
         let alert = NSAlert()
         alert.messageText = "Xác nhận chuyển đổi tài khoản đang dùng"
         alert.informativeText = "Bạn có chắc chắn muốn chuyển tài khoản ưu tiên số 1 sang:\n\n\(email)\n\nThao tác này sẽ thiết lập tài khoản này lên đầu chuỗi điều phối (selector drain order) của CLIProxy."
