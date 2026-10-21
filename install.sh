@@ -26,7 +26,7 @@ elif [ "${OS}" = "Linux" ]; then
     mkdir -p "${HOME}/.local/lib/cliproxy-bridge" "${HOME}/.local/bin"
     cp -r backend/bridge/* "${HOME}/.local/lib/cliproxy-bridge/"
     mkdir -p "${HOME}/.local/lib/cliproxy-bridge/widgets"
-    cp ios-widget/OrbiterClaudeWidget.js ios-widget/OrbiterAGYWidget.js "${HOME}/.local/lib/cliproxy-bridge/widgets/"
+    cp ios-widget/OrbiterClaudeWidget.js ios-widget/OrbiterAGYWidget.js ios-widget/OrbiterControl.js "${HOME}/.local/lib/cliproxy-bridge/widgets/"
     cat << 'WRAPPER' > "${HOME}/.local/bin/cliproxy-quota-bridge"
 #!/usr/bin/env bash
 exec python3 ~/.local/lib/cliproxy-bridge/main.py "$@"

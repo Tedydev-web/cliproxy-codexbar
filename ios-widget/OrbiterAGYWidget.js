@@ -9,18 +9,43 @@
  * Đồng bộ chuẩn xác Header: Cập nhật lúc HH:mm:ss · Xs trước, formatResetWithEst, v.v.
  */
 
+if (typeof orbiter === "undefined") {
+  const bootSecret = "PASTE_CLIPROXY_BRIDGE_SECRET_HERE";
+  const bootHost = "http://100.127.1.234:8318";
+  const bootFm = FileManager.local();
+  const req = new Request(`${bootHost}/v1/widget/OrbiterWidgetLoader.js`);
+  req.headers = { Authorization: `Bearer ${bootSecret}` };
+  const loaderCode = await req.loadString();
+  if (req.response.statusCode !== 200) throw new Error(`Orbiter: không tải được loader v2 (HTTP ${req.response.statusCode})`);
+  const scriptPath = bootFm.joinPath(bootFm.documentsDirectory(), `${Script.name()}.js`);
+  const current = bootFm.fileExists(scriptPath) ? bootFm.readString(scriptPath).split("\n") : [];
+  const headerEnd = current.findIndex((line) => !line.startsWith("//"));
+  const header = current.slice(0, headerEnd < 0 ? current.length : headerEnd).join("\n");
+  bootFm.writeString(scriptPath, header ? `${header}\n${loaderCode}` : loaderCode);
+  Keychain.set("orbiter.bridge.secret", bootSecret);
+  Keychain.set("orbiter.bridge.host", bootHost);
+  for (const f of bootFm.listContents(bootFm.documentsDirectory())) {
+    if (f.startsWith("orbiter-loader-cache-")) bootFm.remove(bootFm.joinPath(bootFm.documentsDirectory(), f));
+  }
+  const done = "Đã nâng cấp Orbiter loader v2. Widget hiện đầy đủ ở lần làm mới tới.";
+  if (config.runsInWidget) {
+    const w = new ListWidget();
+    w.addText(done);
+    Script.setWidget(w);
+  } else {
+    const a = new Alert();
+    a.title = "Orbiter";
+    a.message = done;
+    a.addAction("OK");
+    await a.presentAlert();
+  }
+  Script.complete();
+  return;
+}
+
 const CONFIG = {
-  HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
-  PORT: "8318",
-  TIMEOUT: 12,           // 12s đảm bảo kết nối ổn định qua Tailscale
-  REFRESH_MIN: 5,        // Chu kỳ refresh tối ưu pin cho iOS (5 phút)
+  REFRESH_MIN: 5,
   CACHE_KEY: "orbiter_agy_gemini_v13"
-};
-
-const BRIDGE_SECRET = "PASTE_CLIPROXY_BRIDGE_SECRET_HERE";
-
-const URLS = {
-  AGY: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/antigravity-quota`
 };
 
 // ==========================================
@@ -135,17 +160,14 @@ function formatResetWithEst(raw) {
 // ==========================================
 async function fetchAgyData() {
   const fm = FileManager.local();
-  const path = fm.joinPath(fm.documentsDirectory(), `${CONFIG.CACHE_KEY}.json`);
+  const path = fm.joinPath(orbiter.cacheDir, `${CONFIG.CACHE_KEY}.json`);
   let cache = null;
   if (fm.fileExists(path)) {
     try { cache = JSON.parse(fm.readString(path)); } catch (_) {}
   }
 
   try {
-    const r = new Request(URLS.AGY);
-    r.timeoutInterval = CONFIG.TIMEOUT;
-    r.headers = { "Authorization": `Bearer ${BRIDGE_SECRET}` };
-    const agy = await r.loadJSON();
+    const agy = await orbiter.api("/v1/antigravity-quota");
     if (agy && (agy.email || agy.gemini)) {
       const data = { agy, time: Date.now(), online: true };
       try { fm.writeString(path, JSON.stringify(data)); } catch (_) {}
@@ -462,9 +484,24 @@ function buildSmallWidget(w, data) {
 // ==========================================
 // MAIN ENTRY
 // ==========================================
+function agySummary(agy) {
+  const s = (agy && agy.summary) || {};
+  return [
+    `Antigravity ${agy && agy.email ? agy.email : ""}`.trim(),
+    `Gemini 5h: đã dùng ${s.gemini_5h ?? "-"}% (reset ${s.gemini_5h_reset || "-"})`,
+    `Gemini tuần: đã dùng ${s.gemini_weekly ?? "-"}% (reset ${s.gemini_weekly_reset || "-"})`,
+    `Claude/GPT: đã dùng ${s.claude_used ?? "-"}% (reset ${s.claude_reset || "-"})`
+  ].join("\n");
+}
+
 async function main() {
   const data = await fetchAgyData();
+  if (orbiter.mode === "shortcut" || orbiter.mode === "siri") {
+    Script.setShortcutOutput(data.agy ? agySummary(data.agy) : "Antigravity: không có dữ liệu");
+    return;
+  }
   const w = new ListWidget();
+  w.url = orbiter.runURL;
   const grad = new LinearGradient();
   grad.locations = [0.0, 1.0];
   grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
@@ -479,7 +516,7 @@ async function main() {
 
   w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
 
-  if (config.runsInWidget) {
+  if (orbiter.mode === "widget") {
     Script.setWidget(w);
   } else {
     await w.presentMedium();
@@ -487,4 +524,3 @@ async function main() {
 }
 
 await main();
-Script.complete();

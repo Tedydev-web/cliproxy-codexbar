@@ -9,20 +9,43 @@
  * Hiển thị toàn diện 3 tài khoản trong Pool + Cảnh báo hết hạn OAuth 30 ngày + Fallback API
  */
 
+if (typeof orbiter === "undefined") {
+  const bootSecret = "PASTE_CLIPROXY_BRIDGE_SECRET_HERE";
+  const bootHost = "http://100.127.1.234:8318";
+  const bootFm = FileManager.local();
+  const req = new Request(`${bootHost}/v1/widget/OrbiterWidgetLoader.js`);
+  req.headers = { Authorization: `Bearer ${bootSecret}` };
+  const loaderCode = await req.loadString();
+  if (req.response.statusCode !== 200) throw new Error(`Orbiter: không tải được loader v2 (HTTP ${req.response.statusCode})`);
+  const scriptPath = bootFm.joinPath(bootFm.documentsDirectory(), `${Script.name()}.js`);
+  const current = bootFm.fileExists(scriptPath) ? bootFm.readString(scriptPath).split("\n") : [];
+  const headerEnd = current.findIndex((line) => !line.startsWith("//"));
+  const header = current.slice(0, headerEnd < 0 ? current.length : headerEnd).join("\n");
+  bootFm.writeString(scriptPath, header ? `${header}\n${loaderCode}` : loaderCode);
+  Keychain.set("orbiter.bridge.secret", bootSecret);
+  Keychain.set("orbiter.bridge.host", bootHost);
+  for (const f of bootFm.listContents(bootFm.documentsDirectory())) {
+    if (f.startsWith("orbiter-loader-cache-")) bootFm.remove(bootFm.joinPath(bootFm.documentsDirectory(), f));
+  }
+  const done = "Đã nâng cấp Orbiter loader v2. Widget hiện đầy đủ ở lần làm mới tới.";
+  if (config.runsInWidget) {
+    const w = new ListWidget();
+    w.addText(done);
+    Script.setWidget(w);
+  } else {
+    const a = new Alert();
+    a.title = "Orbiter";
+    a.message = done;
+    a.addAction("OK");
+    await a.presentAlert();
+  }
+  Script.complete();
+  return;
+}
+
 const CONFIG = {
-  HOST: "100.127.1.234", // IP Tailscale Ubuntu Host
-  PORT: "8318",
-  TIMEOUT: 12,           // 12s ổn định qua Tailscale
-  REFRESH_MIN: 5,        // Chu kỳ refresh đề xuất cho iOS (5 phút)
+  REFRESH_MIN: 5,
   CACHE_KEY: "orbiter_claude_large_v13"
-};
-
-const BRIDGE_SECRET = "PASTE_CLIPROXY_BRIDGE_SECRET_HERE";
-
-const URLS = {
-  POOL: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/pool-status`,
-  SET_PRIORITY: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/set-priority`,
-  REAUTH: `http://${CONFIG.HOST}:${CONFIG.PORT}/v1/reauth-account`
 };
 
 // ==========================================
@@ -136,17 +159,14 @@ function formatResetWithEst(raw) {
 // ==========================================
 async function fetchPoolData() {
   const fm = FileManager.local();
-  const path = fm.joinPath(fm.documentsDirectory(), `${CONFIG.CACHE_KEY}.json`);
+  const path = fm.joinPath(orbiter.cacheDir, `${CONFIG.CACHE_KEY}.json`);
   let cache = null;
   if (fm.fileExists(path)) {
     try { cache = JSON.parse(fm.readString(path)); } catch (_) {}
   }
 
   try {
-    const r = new Request(URLS.POOL);
-    r.timeoutInterval = CONFIG.TIMEOUT;
-    r.headers = { "Authorization": `Bearer ${BRIDGE_SECRET}` };
-    const pool = await r.loadJSON();
+    const pool = await orbiter.api("/v1/pool-status");
     if (pool && pool.accounts) {
       const data = { pool, time: Date.now(), online: true };
       try { fm.writeString(path, JSON.stringify(data)); } catch (_) {}
@@ -523,24 +543,101 @@ function buildLargeWidget(w, data) {
 // ==========================================
 // MAIN ENTRY
 // ==========================================
-async function main() {
-  const data = await fetchPoolData();
+function drawRing(percent) {
+  const size = 58;
+  const line = 6;
+  const r = (size - line) / 2;
+  const c = size / 2;
+  const ctx = new DrawContext();
+  ctx.size = new Size(size, size);
+  ctx.opaque = false;
+  ctx.respectScreenScale = true;
+  const arc = (from, to, color) => {
+    const path = new Path();
+    const steps = Math.max(2, Math.ceil((to - from) * 90));
+    for (let i = 0; i <= steps; i++) {
+      const t = (-0.25 + from + ((to - from) * i) / steps) * 2 * Math.PI;
+      const p = new Point(c + r * Math.cos(t), c + r * Math.sin(t));
+      if (i === 0) path.move(p);
+      else path.addLine(p);
+    }
+    ctx.addPath(path);
+    ctx.setStrokeColor(color);
+    ctx.setLineWidth(line);
+    ctx.strokePath();
+  };
+  arc(0, 1, new Color("#FFFFFF", 0.25));
+  const p = Math.min(1, Math.max(0, (percent || 0) / 100));
+  if (p > 0) arc(0, p, Color.white());
+  return ctx.getImage();
+}
+
+function buildAccessoryWidget(w, data, Control) {
+  const act = data.pool ? Control.activeAccount(data.pool) : null;
+  const online = data.online !== false;
+  if (orbiter.family === "accessoryInline") {
+    w.addText(act ? `Claude 5h ${Control.pct(act.used_5h)} · tuần ${Control.pct(act.used_weekly)}` : "Claude: không có dữ liệu");
+    return;
+  }
+  w.addAccessoryWidgetBackground = true;
+  if (orbiter.family === "accessoryCircular") {
+    const stack = w.addStack();
+    stack.layoutVertically();
+    stack.centerAlignContent();
+    const img = stack.addImage(drawRing(act ? act.used_5h : 0));
+    img.imageSize = new Size(44, 44);
+    const t = w.addText(act ? `${act.used_5h}%` : "-");
+    t.font = Font.boldSystemFont(11);
+    t.centerAlignText();
+    return;
+  }
+  const title = w.addText(act ? `${Control.shortName(act)}${online ? "" : " · offline"}` : "Claude pool");
+  title.font = Font.boldSystemFont(13);
+  title.lineLimit = 1;
+  const quota = w.addText(act ? `5h ${Control.pct(act.used_5h)} · tuần ${Control.pct(act.used_weekly)}` : "Không có account đang bật");
+  quota.font = Font.systemFont(13);
+  const detail = w.addText(act ? formatResetWithEst(act.reset_5h) || act.lifecycle_label || "" : "");
+  detail.font = Font.systemFont(11);
+  detail.lineLimit = 1;
+}
+
+async function buildWidget(data, Control) {
   const w = new ListWidget();
-  const grad = new LinearGradient();
-  grad.locations = [0.0, 1.0];
-  grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
-  w.backgroundGradient = grad;
-
-  buildLargeWidget(w, data);
-
-  w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
-
-  if (config.runsInWidget) {
-    Script.setWidget(w);
+  if (String(orbiter.family || "").startsWith("accessory")) {
+    buildAccessoryWidget(w, data, Control);
   } else {
-    await w.presentLarge();
+    const grad = new LinearGradient();
+    grad.locations = [0.0, 1.0];
+    grad.colors = [TOKENS.bgTop, TOKENS.bgBtm];
+    w.backgroundGradient = grad;
+    buildLargeWidget(w, data);
+  }
+  w.url = Control.withQuery(orbiter.runURL, "action=control");
+  w.refreshAfterDate = new Date(Date.now() + CONFIG.REFRESH_MIN * 60 * 1000);
+  return w;
+}
+
+async function main() {
+  const Control = await orbiter.load("OrbiterControl.js");
+  if (orbiter.mode === "shortcut" || orbiter.mode === "siri") {
+    await Control.shortcut(orbiter.input);
+    return;
+  }
+  const preview = async () => (await buildWidget(await fetchPoolData(), Control)).presentLarge();
+  if (orbiter.mode === "app") {
+    if (orbiter.params.action === "preview") await preview();
+    else await Control.controlPanel({ preview });
+    return;
+  }
+  const data = await fetchPoolData();
+  Script.setWidget(await buildWidget(data, Control));
+  if (data.online && data.pool) {
+    try {
+      await Control.notify(data.pool);
+    } catch (e) {
+      console.log(`[Orbiter Claude] notify: ${e}`);
+    }
   }
 }
 
 await main();
-Script.complete();

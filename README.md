@@ -121,6 +121,19 @@ Dán nguyên văn `ios-widget/OrbiterWidgetLoader.js` vào Scriptable **một l�
 
 Mỗi lần chạy, loader gửi `HEAD /v1/widget/<file>` để so `ETag`; chỉ khi code đổi mới tải bằng `GET`. Code được cache trong Scriptable và dùng khi mất kết nối. Cập nhật widget = sửa `ios-widget/*.js` rồi chạy `./sync-all.sh`; không bao giờ phải dán lại loader.
 
+Máy đang chạy loader v1 (bản có secret dán sẵn) không cần dán lại: lần chạy kế tiếp, widget tự ghi loader v2 đè lên script (giữ icon/màu), lưu secret vào Keychain và xoá các file `orbiter-loader-cache-*` cũ.
+
+Tính năng widget Claude:
+
+| Ở đâu | Làm gì |
+|---|---|
+| Chạm widget / mở script trong app | Bảng điều khiển: quota 5h/tuần, hạn token, trạng thái từng account; chạm account để **Đặt làm #1**, **Tắt/Bật** (có xác nhận), Copy email; kèm Làm mới, Xem trước widget, Gửi thông báo thử, Cấu hình bridge, Xoá cache code |
+| Widget màn hình khoá | `accessoryRectangular` (account đang chạy + 5h/tuần + reset), `accessoryCircular` (vòng 5h), `accessoryInline` |
+| Thông báo | Account đang chạy ≥ 90% (5h hoặc tuần), account bị cách ly, token sắp hết hạn; mỗi điều kiện báo một lần mỗi chu kỳ. Lần đầu bấm "Gửi thông báo thử" để iOS hỏi quyền |
+| Shortcuts / Siri (action "Run Script", input) | `status` (text), `json`, `switch <account>`, `enable <account>`, `disable <account>`; input dạng dictionary `{action, account}` cũng được. `<account>` là một đoạn của email, phải khớp đúng một account |
+
+Bridge từ chối tắt account cuối cùng còn bật (HTTP 409). Đặt #1 chỉ đổi thứ tự cho request mới; phiên đang chạy giữ credential cũ tới khi hết session affinity (1 giờ) hoặc failover.
+
 Code do bridge phục vụ chạy như thân một `async function` với một tham số `orbiter`:
 
 | Thuộc tính | Ý nghĩa |

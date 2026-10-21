@@ -4,8 +4,11 @@ const DEFAULT_HOST = "http://100.127.1.234:8318";
 const LOADER_VERSION = 2;
 
 const fm = FileManager.local();
-const cacheDir = fm.joinPath(fm.documentsDirectory(), "orbiter");
+const cacheDir = fm.joinPath(fm.libraryDirectory(), "orbiter");
 if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir, true);
+for (const f of fm.listContents(fm.documentsDirectory())) {
+  if (f.startsWith("orbiter-loader-cache-")) fm.remove(fm.joinPath(fm.documentsDirectory(), f));
+}
 
 const selector = String(args.widgetParameter || Script.name()).toLowerCase();
 const entry = selector.includes("agy") ? "OrbiterAGYWidget.js" : "OrbiterClaudeWidget.js";
