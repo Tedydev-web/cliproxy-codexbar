@@ -253,6 +253,30 @@ def refresh_single_account(filename, max_retries=3):
         restore_latest_from_vault(filename)
     return False
 
+def alert_herdr(title, body):
+    try:
+        subprocess.run([
+            "herdr", "notification", "show",
+            title,
+            "--body", body,
+            "--sound", "alert"
+        ], timeout=4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def check_setup_token_expiry(email, expired_str, now):
+    try:
+        exp_dt = datetime.datetime.fromisoformat(str(expired_str).replace("Z", "+00:00"))
+    except ValueError:
+        log(f"⚠️ [SETUP-TOKEN] {email}: không đọc được trường expired ({expired_str!r}).")
+        return
+    if exp_dt.tzinfo is None:
+        exp_dt = exp_dt.astimezone()
+    days_left = (exp_dt - now).days
+    if days_left <= 30:
+        log(f"⚠️ [CẢNH BÁO KHẨN] {email}: setup-token còn {days_left} ngày là hết hạn (Hạn: {exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}). Cần tạo token mới bằng 'claude setup-token'!")
+        alert_herdr("Sắp hết hạn setup-token", f"Tài khoản {email} còn {days_left} ngày nữa là hết hạn setup-token 1 năm. Hãy tạo token mới bằng claude setup-token.")
+
 def check_30day_consent_lifecycle(verbose=False):
     """Monitor 30-day Anthropic consent ceiling and notify early (Day 25 alert)."""
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -268,6 +292,8 @@ def check_30day_consent_lifecycle(verbose=False):
     claude_accs = acc_data.get("providers", {}).get("claude", {}).get("accounts", {})
     
     for email, info in claude_accs.items():
+        if info.get("status") == "paused":
+            continue
         fn = info.get("tokenFile", f"claude-{email}.json")
         fpath = os.path.join(AUTH_DIR, fn)
         active = os.path.exists(fpath)
@@ -277,6 +303,7 @@ def check_30day_consent_lifecycle(verbose=False):
                 with open(fpath, "r", encoding="utf-8") as f:
                     file_data = json.load(f)
                 if not file_data.get("refresh_token"):
+                    check_setup_token_expiry(email, file_data.get("expired"), now)
                     continue
             except Exception:
                 pass
@@ -300,15 +327,7 @@ def check_30day_consent_lifecycle(verbose=False):
                 log(f"🚨 [CẢNH BÁO 30 NGÀY] {email} ({'ACTIVE' if active else 'PAUSED'}): ĐÃ QUÁ HẠN 30 NGÀY! Cần chạy 'claude-reauth'.")
             elif days_left <= 3:
                 log(f"⚠️ [CẢNH BÁO KHẨN] {email}: Chỉ còn {days_left} ngày {hours_left}h là hết hạn 30 ngày (Hạn: {rt_exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}). Cần chạy 'claude-reauth'!")
-                try:
-                    subprocess.run([
-                        "herdr", "notification", "show",
-                        "Sắp hết hạn OAuth 30 ngày",
-                        "--body", f"Tài khoản {email} còn {days_left} ngày nữa là chạm mốc 30 ngày của Anthropic. Hãy chạy claude-reauth.",
-                        "--sound", "alert"
-                    ], timeout=4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except Exception:
-                    pass
+                alert_herdr("Sắp hết hạn OAuth 30 ngày", f"Tài khoản {email} còn {days_left} ngày nữa là chạm mốc 30 ngày của Anthropic. Hãy chạy claude-reauth.")
             elif days_left <= 5:
                 log(f"ℹ️ [CẢNH BÁO SỚM] {email}: Còn {days_left} ngày nữa tới mốc 30 ngày của Anthropic.")
             elif verbose:
