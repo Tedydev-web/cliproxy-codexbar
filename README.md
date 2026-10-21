@@ -117,9 +117,22 @@ cd client-macos
 Script sẽ biên dịch mã nguồn `OrbiterMenuBar.swift` thành file nhị phân tối ưu `-O`, đưa vào `/usr/local/bin/OrbiterMenuBar` và kích hoạt dịch vụ tự khởi động `com.tedydev.orbitermenubar`.
 
 ### 3. iOS Widget (Scriptable, qua Tailscale)
-Dán `ios-widget/OrbiterWidgetLoader.js` vào Scriptable **một lần**, thay `PASTE_CLIPROXY_BRIDGE_SECRET_HERE` bằng `CLIPROXY_MANAGEMENT_SECRET` trong `~/.cliproxy/bridge.env`. Đặt tên script chứa `AGY` (hoặc Parameter của widget là `agy`) để chạy widget Antigravity; mọi tên khác chạy widget Claude.
+Dán nguyên văn `ios-widget/OrbiterWidgetLoader.js` vào Scriptable **một lần** (file không chứa secret). Lần đầu mở script trong app, loader hỏi `CLIPROXY_MANAGEMENT_SECRET` (trong `~/.cliproxy/bridge.env`) và URL bridge rồi lưu vào iOS Keychain, dùng chung cho mọi script. Khi bridge trả 401 (secret đã rotate), mở script trong app để nhập lại. Đặt tên script chứa `AGY` (hoặc Parameter của widget là `agy`) để chạy widget Antigravity; mọi tên khác chạy widget Claude.
 
-Mỗi lần chạy, loader tải bản mới nhất từ `GET /v1/widget/<file>` của bridge (bearer auth, bridge tự chèn secret), lưu cache trong Scriptable và dùng cache khi mất kết nối. Cập nhật widget = sửa `ios-widget/*.js` rồi chạy `./sync-all.sh`.
+Mỗi lần chạy, loader gửi `HEAD /v1/widget/<file>` để so `ETag`; chỉ khi code đổi mới tải bằng `GET`. Code được cache trong Scriptable và dùng khi mất kết nối. Cập nhật widget = sửa `ios-widget/*.js` rồi chạy `./sync-all.sh`; không bao giờ phải dán lại loader.
+
+Code do bridge phục vụ chạy như thân một `async function` với một tham số `orbiter`:
+
+| Thuộc tính | Ý nghĩa |
+|---|---|
+| `orbiter.api(path, {method, body})` | Gọi bridge (bearer tự gắn), trả JSON; lỗi ném `OrbiterError` có `status` |
+| `orbiter.load(file)` | Tải + chạy một file khác trong allowlist, trả giá trị `return` của nó (module dùng chung) |
+| `orbiter.mode` | `widget` / `app` / `shortcut` / `siri` |
+| `orbiter.family` | `config.widgetFamily` (`small`…`accessoryRectangular`…) |
+| `orbiter.params` / `orbiter.input` | `args.queryParameters` (deep-link) / `args.shortcutParameter` |
+| `orbiter.runURL` | URL chạy lại chính script (dùng cho `widget.url`, notification) |
+| `orbiter.stale` / `orbiter.errors` | Đang chạy bằng code cache và lý do |
+| `orbiter.settings()` / `orbiter.clearCache()` | Mở hộp thoại cấu hình bridge / xoá cache code |
 
 ---
 
