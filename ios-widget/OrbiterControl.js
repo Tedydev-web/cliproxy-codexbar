@@ -254,6 +254,7 @@ async function shortcut(input) {
   } else if (["switch", "chuyển", "first"].includes(action)) {
     const a = findAccount(p, account);
     if (!a || a.is_paused) out = `Không tìm thấy đúng một account khớp "${account}"`;
+    else if (a.is_disabled) out = `${shortName(a)} đang tắt, bật trước rồi mới đặt làm #1`;
     else {
       await setFirst(a);
       out = `Đã đặt ${shortName(a)} làm #1`;
