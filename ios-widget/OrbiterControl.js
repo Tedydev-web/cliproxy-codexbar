@@ -2,6 +2,7 @@ const fm = FileManager.local();
 const STATE_PATH = fm.joinPath(orbiter.cacheDir, "notify-state.json");
 const STATE_TTL_MS = 8 * 86400 * 1000;
 const WARN_PCT = 90;
+const LIVE_REFRESH_MS = 10000;
 
 const pct = (n) => (typeof n === "number" && Number.isFinite(n) ? `${n}%` : "-");
 const shortName = (a) => String(a.name || a.email || "").replace(/@gmail\.com$/i, "");
@@ -171,13 +172,21 @@ async function controlPanel({ preview } = {}) {
   table.showSeparators = true;
   let p = await pool();
   let updatedAt = new Date();
+  let offline = false;
+  let busy = false;
 
-  const refresh = async () => {
+  const refresh = async (silent = false) => {
+    if (busy) return;
+    busy = true;
     try {
       p = await pool();
       updatedAt = new Date();
+      offline = false;
     } catch (e) {
-      await info("Không tải được pool", e.message || String(e));
+      offline = true;
+      if (!silent) await info("Không tải được pool", e.message || String(e));
+    } finally {
+      busy = false;
     }
     render();
     table.reload();
@@ -188,7 +197,7 @@ async function controlPanel({ preview } = {}) {
     const header = new UITableRow();
     header.isHeader = true;
     header.height = 60;
-    header.addText("Orbiter · Claude pool", `Cập nhật ${updatedAt.toLocaleTimeString("vi-VN")}${orbiter.stale ? " · đang chạy code cache" : ""}`);
+    header.addText("Orbiter · Claude pool", `Cập nhật ${updatedAt.toLocaleTimeString("vi-VN")} · tự làm mới mỗi ${LIVE_REFRESH_MS / 1000}s${offline ? " · mất kết nối" : ""}${orbiter.stale ? " · đang chạy code cache" : ""}`);
     table.addRow(header);
 
     const act = activeAccount(p);
@@ -207,7 +216,7 @@ async function controlPanel({ preview } = {}) {
       });
     });
 
-    addTextRow(table, "Làm mới", null, refresh);
+    addTextRow(table, "Làm mới", null, () => refresh(false));
     if (preview) addTextRow(table, "Xem trước widget", null, async () => preview());
     addTextRow(table, "Gửi thông báo thử", "Lần đầu iOS sẽ hỏi quyền thông báo", async () => {
       try {
@@ -227,7 +236,12 @@ async function controlPanel({ preview } = {}) {
   }
 
   render();
-  await table.present(true);
+  const timer = Timer.schedule(LIVE_REFRESH_MS, true, () => refresh(true));
+  try {
+    await table.present(true);
+  } finally {
+    timer.invalidate();
+  }
 }
 
 function findAccount(p, query) {

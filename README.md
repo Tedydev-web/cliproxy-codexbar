@@ -45,6 +45,7 @@
 - **Hỗ trợ Pool đa tài khoản**:
   - Quản lý thứ tự ưu tiên xả quota (`#1`, `#2`, `#3`) bằng nút mũi tên `▲▼` tức thì không độ trễ.
   - Bấm vào tài khoản để chuyển Active Account an toàn với hộp thoại xác nhận.
+  - Nút ⏸/▶ cạnh mỗi tài khoản (hoặc chuột phải → Tắt/Bật account) để tắt/bật account trong CLIProxy, có xác nhận; account đang tắt hiện mờ và không được chọn làm account đang chạy.
 - **Tùy chọn hiển thị Quota linh hoạt**:
   - Lựa chọn giữa **Đã sử dụng (% đã dùng)** (chuẩn Claude) hoặc **Còn lại (% còn trống)**.
   - Tự động đồng bộ nhất quán trên toàn bộ thanh tiến độ, nhãn thông số và biểu tượng trên Menu Bar của tất cả các provider (Claude, Antigravity, Gemini, GPT).
@@ -125,7 +126,8 @@ Tính năng widget Claude:
 
 | Ở đâu | Làm gì |
 |---|---|
-| Chạm widget / mở script trong app | Bảng điều khiển: quota 5h/tuần, hạn token, trạng thái từng account; chạm account để **Đặt làm #1**, **Tắt/Bật** (có xác nhận), Copy email; kèm Làm mới, Xem trước widget, Gửi thông báo thử, Cấu hình bridge, Xoá cache code |
+| Chạm widget / mở script trong app | Bảng điều khiển: quota 5h/tuần, hạn token, trạng thái từng account; chạm account để **Đặt làm #1**, **Tắt/Bật** (có xác nhận), Copy email; kèm Làm mới, Xem trước widget, Gửi thông báo thử, Cấu hình bridge, Xoá cache code. Tự làm mới mỗi 10 giây khi đang mở |
+| Widget màn hình chính | Xin iOS làm mới sau 1 phút; tần suất thật do iOS quyết định theo ngân sách làm mới widget, nên muốn xem số liệu liên tục thì chạm widget để mở bảng điều khiển |
 | Widget màn hình khoá | `accessoryRectangular` (account đang chạy + 5h/tuần + reset), `accessoryCircular` (vòng 5h), `accessoryInline` |
 | Thông báo | Account đang chạy ≥ 90% (5h hoặc tuần), account bị cách ly, token sắp hết hạn; mỗi điều kiện báo một lần mỗi chu kỳ. Lần đầu bấm "Gửi thông báo thử" để iOS hỏi quyền |
 | Shortcuts / Siri (action "Run Script", input) | `status` (text), `json`, `switch <account>`, `enable <account>`, `disable <account>`; input dạng dictionary `{action, account}` cũng được. `<account>` là một đoạn của email, phải khớp đúng một account |

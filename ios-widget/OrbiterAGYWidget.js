@@ -10,7 +10,7 @@
  */
 
 const CONFIG = {
-  REFRESH_MIN: 5,
+  REFRESH_MIN: 1,
   CACHE_KEY: "orbiter_agy_gemini_v13"
 };
 

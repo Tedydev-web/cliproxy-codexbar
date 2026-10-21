@@ -10,7 +10,7 @@
  */
 
 const CONFIG = {
-  REFRESH_MIN: 5,
+  REFRESH_MIN: 1,
   CACHE_KEY: "orbiter_claude_large_v13"
 };
 
