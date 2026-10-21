@@ -116,6 +116,11 @@ cd client-macos
 ```
 Script sẽ biên dịch mã nguồn `OrbiterMenuBar.swift` thành file nhị phân tối ưu `-O`, đưa vào `/usr/local/bin/OrbiterMenuBar` và kích hoạt dịch vụ tự khởi động `com.tedydev.orbitermenubar`.
 
+### 3. iOS Widget (Scriptable, qua Tailscale)
+Dán `ios-widget/OrbiterWidgetLoader.js` vào Scriptable **một lần**, thay `PASTE_CLIPROXY_BRIDGE_SECRET_HERE` bằng `CLIPROXY_MANAGEMENT_SECRET` trong `~/.cliproxy/bridge.env`. Đặt tên script chứa `AGY` (hoặc Parameter của widget là `agy`) để chạy widget Antigravity; mọi tên khác chạy widget Claude.
+
+Mỗi lần chạy, loader tải bản mới nhất từ `GET /v1/widget/<file>` của bridge (bearer auth, bridge tự chèn secret), lưu cache trong Scriptable và dùng cache khi mất kết nối. Cập nhật widget = sửa `ios-widget/*.js` rồi chạy `./sync-all.sh`.
+
 ---
 
 ## 📂 Cấu trúc dự án
