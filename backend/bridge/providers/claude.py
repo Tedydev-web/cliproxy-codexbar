@@ -422,6 +422,15 @@ class ClaudePoolProvider:
             if idx < len(probe_needed) - 1:
                 time.sleep(PROBE_STAGGER_SEC)
 
+        try:
+            disabled_map = self._auth_disabled_map()
+        except Exception as e:
+            print(f"get_pool_status: disabled flags unavailable: {e}", file=sys.stderr)
+            disabled_map = {}
+        token_files = {t[0]: t[1] for t in tasks}
+        for r in results:
+            r["is_disabled"] = disabled_map.get(token_files.get(r["email"], ""), False)
+
         # Preserve intended drain order
         order_keys = [t[0] for t in tasks]
         results.sort(key=lambda x: order_keys.index(x["email"]) if x["email"] in order_keys else 999)
@@ -518,6 +527,50 @@ class ClaudePoolProvider:
         self._cache = results
         self._last_probe_time = now
         return results
+
+    def _auth_disabled_map(self):
+        req = urllib.request.Request(
+            f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files",
+            headers={"Authorization": f"Bearer {MGMT_SECRET}"}
+        )
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return {f.get("name", ""): bool(f.get("disabled")) for f in data.get("files", [])}
+
+    def set_account_enabled(self, email, enabled):
+        try:
+            with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                claude = json.load(f)["providers"]["claude"]
+        except (OSError, ValueError, KeyError) as e:
+            return 500, {"error": f"accounts.json unreadable: {e}"}
+        accounts = claude.get("accounts", {})
+        acc = accounts.get(email)
+        if not acc or acc.get("status") == "paused":
+            return 404, {"error": f"Account '{email}' not found or quarantined"}
+        token_file = lambda em: accounts.get(em, {}).get("tokenFile", f"claude-{em}.json")
+
+        if not enabled:
+            try:
+                states = self._auth_disabled_map()
+            except Exception as e:
+                return 502, {"error": f"CLIProxy management unreachable: {e}"}
+            others = [em for em in claude.get("drainOrder", {}).get("orderedIds", []) if em != email]
+            if not [em for em in others if states.get(token_file(em)) is False]:
+                return 409, {"error": "Refusing to disable the last enabled account"}
+
+        try:
+            req = urllib.request.Request(
+                f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/fields",
+                data=json.dumps({"name": token_file(email), "disabled": not enabled}).encode("utf-8"),
+                headers={"Authorization": f"Bearer {MGMT_SECRET}", "Content-Type": "application/json"},
+                method="PATCH"
+            )
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+        except Exception as e:
+            return 502, {"error": f"CLIProxy rejected the change: {e}"}
+        self._last_probe_time = 0
+        return 200, {"ok": True, "email": email, "enabled": enabled}
 
     def set_accounts_order(self, ordered_emails):
         if not ordered_emails or not isinstance(ordered_emails, list):

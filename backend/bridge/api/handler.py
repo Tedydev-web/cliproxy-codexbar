@@ -5,6 +5,7 @@ RESTful HTTP API Handlers for CLIProxy CodexBar Bridge
 import os
 import json
 import hmac
+import hashlib
 import subprocess
 from http.server import BaseHTTPRequestHandler
 from core.config import MGMT_SECRET, WIDGET_DIR, WIDGET_FILES, WIDGET_SECRET_PLACEHOLDER
@@ -29,7 +30,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def send_widget(self, name):
+    def send_widget(self, name, head=False):
         if name not in WIDGET_FILES:
             self.send_json(404, {"error": f"Unknown widget '{name}'"})
             return
@@ -43,9 +44,22 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/javascript; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        self.send_header("ETag", '"' + hashlib.sha256(payload).hexdigest()[:32] + '"')
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        if not head:
+            self.wfile.write(payload)
+
+    def do_HEAD(self):
+        if not self.is_authorized():
+            self.send_response(401)
+            self.end_headers()
+            return
+        if self.path.startswith("/v1/widget/"):
+            self.send_widget(self.path[len("/v1/widget/"):].split("?")[0], head=True)
+        else:
+            self.send_response(405)
+            self.end_headers()
 
     def do_GET(self):
         if self.path == "/health":
@@ -134,6 +148,15 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "order": new_order})
             else:
                 self.send_json(400, {"error": "Invalid order payload"})
+
+        elif self.path.startswith("/v1/set-enabled"):
+            email = req_data.get("email")
+            enabled = req_data.get("enabled")
+            if not email or not isinstance(enabled, bool):
+                self.send_json(400, {"error": "Need 'email' (string) and 'enabled' (bool)"})
+                return
+            status, result = self.claude_provider.set_account_enabled(email, enabled)
+            self.send_json(status, result)
 
         elif self.path.startswith("/v1/kill-port"):
             if not self.system_provider:
