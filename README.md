@@ -45,7 +45,7 @@
 - **Hỗ trợ Pool đa tài khoản**:
   - Quản lý thứ tự ưu tiên xả quota (`#1`, `#2`, `#3`) bằng nút mũi tên `▲▼` tức thì không độ trễ.
   - Bấm vào tài khoản để chuyển Active Account an toàn với hộp thoại xác nhận.
-  - Nút ⏸/▶ cạnh mỗi tài khoản (hoặc chuột phải → Tắt/Bật account) để tắt/bật account trong CLIProxy, có xác nhận; account đang tắt hiện mờ và không được chọn làm account đang chạy.
+  - Nút pause/play cạnh mỗi tài khoản (hoặc chuột phải → Tắt/Bật account) để tắt/bật account trong CLIProxy, có xác nhận; account đang tắt hiện mờ và không được chọn làm account đang chạy.
 - **Tùy chọn hiển thị Quota linh hoạt**:
   - Lựa chọn giữa **Đã sử dụng (% đã dùng)** (chuẩn Claude) hoặc **Còn lại (% còn trống)**.
   - Tự động đồng bộ nhất quán trên toàn bộ thanh tiến độ, nhãn thông số và biểu tượng trên Menu Bar của tất cả các provider (Claude, Antigravity, Gemini, GPT).
