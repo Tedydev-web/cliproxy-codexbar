@@ -9,40 +9,6 @@
  * Đồng bộ chuẩn xác Header: Cập nhật lúc HH:mm:ss · Xs trước, formatResetWithEst, v.v.
  */
 
-if (typeof orbiter === "undefined") {
-  const bootSecret = "PASTE_CLIPROXY_BRIDGE_SECRET_HERE";
-  const bootHost = "http://100.127.1.234:8318";
-  const bootFm = FileManager.local();
-  const req = new Request(`${bootHost}/v1/widget/OrbiterWidgetLoader.js`);
-  req.headers = { Authorization: `Bearer ${bootSecret}` };
-  const loaderCode = await req.loadString();
-  if (req.response.statusCode !== 200) throw new Error(`Orbiter: không tải được loader v2 (HTTP ${req.response.statusCode})`);
-  const scriptPath = bootFm.joinPath(bootFm.documentsDirectory(), `${Script.name()}.js`);
-  const current = bootFm.fileExists(scriptPath) ? bootFm.readString(scriptPath).split("\n") : [];
-  const headerEnd = current.findIndex((line) => !line.startsWith("//"));
-  const header = current.slice(0, headerEnd < 0 ? current.length : headerEnd).join("\n");
-  bootFm.writeString(scriptPath, header ? `${header}\n${loaderCode}` : loaderCode);
-  Keychain.set("orbiter.bridge.secret", bootSecret);
-  Keychain.set("orbiter.bridge.host", bootHost);
-  for (const f of bootFm.listContents(bootFm.documentsDirectory())) {
-    if (f.startsWith("orbiter-loader-cache-")) bootFm.remove(bootFm.joinPath(bootFm.documentsDirectory(), f));
-  }
-  const done = "Đã nâng cấp Orbiter loader v2. Widget hiện đầy đủ ở lần làm mới tới.";
-  if (config.runsInWidget) {
-    const w = new ListWidget();
-    w.addText(done);
-    Script.setWidget(w);
-  } else {
-    const a = new Alert();
-    a.title = "Orbiter";
-    a.message = done;
-    a.addAction("OK");
-    await a.presentAlert();
-  }
-  Script.complete();
-  return;
-}
-
 const CONFIG = {
   REFRESH_MIN: 5,
   CACHE_KEY: "orbiter_agy_gemini_v13"

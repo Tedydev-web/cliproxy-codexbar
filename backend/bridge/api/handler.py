@@ -8,7 +8,7 @@ import hmac
 import hashlib
 import subprocess
 from http.server import BaseHTTPRequestHandler
-from core.config import MGMT_SECRET, WIDGET_DIR, WIDGET_FILES, WIDGET_SECRET_PLACEHOLDER
+from core.config import MGMT_SECRET, WIDGET_DIR, WIDGET_FILES
 
 class BridgeApiHandler(BaseHTTPRequestHandler):
     claude_provider = None
@@ -40,7 +40,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         except OSError as e:
             self.send_json(404, {"error": f"Widget '{name}' not deployed: {e}"})
             return
-        payload = code.replace(WIDGET_SECRET_PLACEHOLDER, MGMT_SECRET, 1).encode("utf-8")
+        payload = code.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/javascript; charset=utf-8")
         self.send_header("Cache-Control", "no-store")

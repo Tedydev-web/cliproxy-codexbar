@@ -121,8 +121,6 @@ Dán nguyên văn `ios-widget/OrbiterWidgetLoader.js` vào Scriptable **một l�
 
 Mỗi lần chạy, loader gửi `HEAD /v1/widget/<file>` để so `ETag`; chỉ khi code đổi mới tải bằng `GET`. Code được cache trong Scriptable và dùng khi mất kết nối. Cập nhật widget = sửa `ios-widget/*.js` rồi chạy `./sync-all.sh`; không bao giờ phải dán lại loader.
 
-Máy đang chạy loader v1 (bản có secret dán sẵn) không cần dán lại: lần chạy kế tiếp, widget tự ghi loader v2 đè lên script (giữ icon/màu), lưu secret vào Keychain và xoá các file `orbiter-loader-cache-*` cũ.
-
 Tính năng widget Claude:
 
 | Ở đâu | Làm gì |
