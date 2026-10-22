@@ -23,6 +23,7 @@ from core.config import (
     EXHAUSTED_CACHE_SEC,
     PASSIVE_FRESHNESS_SEC,
     HEADER_PROBE_SEC,
+    OAUTH_RT_LIFETIME_DAYS,
     PROBE_STAGGER_SEC,
     PROBE_USER_AGENT
 )
@@ -437,10 +438,17 @@ class ClaudePoolProvider:
 
         # Step 3: Safely include paused / quarantined accounts for menubar visibility without probing
         paused_dir = os.path.expanduser("~/.cliproxy/auth-paused")
+        pool_files = {}
+        try:
+            with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                for acc_key, acc_info in json.load(f).get("providers", {}).get("claude", {}).get("accounts", {}).items():
+                    pool_files[acc_info.get("tokenFile", f"claude-{acc_key}.json")] = acc_key
+        except (OSError, ValueError) as e:
+            print(f"get_pool_status: accounts.json unreadable for paused rows: {e}", file=sys.stderr)
         if os.path.exists(paused_dir):
             for fn in sorted(os.listdir(paused_dir)):
-                if fn.startswith("claude-") and fn.endswith(".json"):
-                    em = fn[len("claude-"):-len(".json")]
+                if fn in pool_files:
+                    em = pool_files[fn]
                     if not any(r.get("email") == em for r in results):
                         results.append({
                             "email": em,
@@ -496,7 +504,7 @@ class ClaudePoolProvider:
                     rt_exp_dt = None
                 warn_days = 30
             elif created_dt:
-                rt_exp_dt = created_dt + datetime.timedelta(days=30)
+                rt_exp_dt = created_dt + datetime.timedelta(days=OAUTH_RT_LIFETIME_DAYS)
 
             if rt_exp_dt:
                 diff = rt_exp_dt - now_utc
@@ -507,7 +515,7 @@ class ClaudePoolProvider:
                 r["expiry_30d_str"] = rt_exp_dt.astimezone().strftime("%d/%m/%Y %H:%M")
                 if diff.total_seconds() <= 0:
                     r["lifecycle_status"] = "expired"
-                    r["lifecycle_label"] = "Đã quá hạn 30 ngày"
+                    r["lifecycle_label"] = f"Đã quá hạn {OAUTH_RT_LIFETIME_DAYS} ngày"
                 elif days_left <= 3:
                     r["lifecycle_status"] = "critical"
                     r["lifecycle_label"] = f"Hết hạn sau {days_left}d {hours_left}h"

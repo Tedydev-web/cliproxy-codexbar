@@ -55,7 +55,7 @@
     - Qua ngày mai: `Đặt lại sau 18h · Mai 11:01:45`
     - Dài hạn: `Đặt lại sau 6d 15h · 19/10 08:26`
 - **Hai loại credential Claude trong pool**:
-  - **OAuth (`/login`)**: CLIProxy tự refresh mỗi 4h, nhưng refresh token chỉ sống khoảng 30 ngày kể từ lần đăng nhập gốc. Token Keeper cảnh báo khi còn ≤ 3 ngày; hết hạn thì tự cách ly vào `~/.cliproxy/auth-paused`.
+  - **OAuth (`/login`)**: CLIProxy tự refresh mỗi 4h, nhưng refresh token chỉ sống khoảng 28–29 ngày kể từ lần đăng nhập gốc (quan sát thực tế, xoay vòng không kéo dài được). Token Keeper tính mốc 28 ngày và cảnh báo khi còn ≤ 3 ngày; hết hạn thì tự cách ly vào `~/.cliproxy/auth-paused`.
   - **Setup-token (`claude setup-token`)**: access token sống 1 năm, không có refresh token. Đặt token vào `access_token` của auth file, để trống `refresh_token`/`id_token`, đặt `expired` = ngày tạo + 365 ngày. Token Keeper cảnh báo khi còn ≤ 30 ngày.
   - Setup-token không có quyền đọc usage API, nên bridge lấy % quota cho các tài khoản này theo thứ tự: (1) tín hiệu passive từ request đi qua proxy nếu còn mới (< 30 phút); (2) một OAuth "usage reader" cùng email nằm trong `~/.cliproxy/auth` (có `refresh_token`, không nằm trong `accounts.json`, priority 1), được CLIProxy/Keeper refresh như OAuth thường; (3) khi reader chết, bridge gửi request Haiku 1 token bằng chính setup-token và đọc header `anthropic-ratelimit-unified-*`, tối đa 5 phút/lần.
 

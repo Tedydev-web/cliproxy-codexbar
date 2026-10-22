@@ -29,6 +29,7 @@ LOG_FILE = os.path.expanduser("~/.cliproxy/logs/token-keeper.log")
 CONFIG_FILE = os.path.expanduser("~/.cliproxy/config.yaml")
 MANAGEMENT_SECRET = os.environ.get("CLIPROXY_MANAGEMENT_SECRET")
 MGMT_PORT = int(os.environ.get("CLIPROXY_MGMT_PORT", 8317))
+OAUTH_RT_LIFETIME_DAYS = 28
 
 def load_console_api_key():
     """Read the Console API key from CLIProxy's own config.yaml (single source of truth)."""
@@ -316,22 +317,22 @@ def check_30day_consent_lifecycle(verbose=False):
             except Exception:
                 pass
 
-        rt_exp_dt = created_dt + datetime.timedelta(days=30) if created_dt else None
-            
+        rt_exp_dt = created_dt + datetime.timedelta(days=OAUTH_RT_LIFETIME_DAYS) if created_dt else None
+
         if rt_exp_dt:
             diff = rt_exp_dt - now
             days_left = diff.days
             hours_left = diff.seconds // 3600
-            
+
             if diff.total_seconds() <= 0:
-                log(f"🚨 [CẢNH BÁO 30 NGÀY] {email} ({'ACTIVE' if active else 'PAUSED'}): ĐÃ QUÁ HẠN 30 NGÀY! Cần chạy 'claude-reauth'.")
+                log(f"🚨 [CẢNH BÁO {OAUTH_RT_LIFETIME_DAYS} NGÀY] {email} ({'ACTIVE' if active else 'PAUSED'}): ĐÃ QUÁ HẠN {OAUTH_RT_LIFETIME_DAYS} NGÀY! Cần chạy 'claude-reauth'.")
             elif days_left <= 3:
-                log(f"⚠️ [CẢNH BÁO KHẨN] {email}: Chỉ còn {days_left} ngày {hours_left}h là hết hạn 30 ngày (Hạn: {rt_exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}). Cần chạy 'claude-reauth'!")
-                alert_herdr("Sắp hết hạn OAuth 30 ngày", f"Tài khoản {email} còn {days_left} ngày nữa là chạm mốc 30 ngày của Anthropic. Hãy chạy claude-reauth.")
+                log(f"⚠️ [CẢNH BÁO KHẨN] {email}: Chỉ còn {days_left} ngày {hours_left}h là hết hạn {OAUTH_RT_LIFETIME_DAYS} ngày (Hạn: {rt_exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}). Cần chạy 'claude-reauth'!")
+                alert_herdr(f"Sắp hết hạn OAuth {OAUTH_RT_LIFETIME_DAYS} ngày", f"Tài khoản {email} còn {days_left} ngày nữa là chạm mốc {OAUTH_RT_LIFETIME_DAYS} ngày của refresh token. Hãy chạy claude-reauth.")
             elif days_left <= 5:
-                log(f"ℹ️ [CẢNH BÁO SỚM] {email}: Còn {days_left} ngày nữa tới mốc 30 ngày của Anthropic.")
+                log(f"ℹ️ [CẢNH BÁO SỚM] {email}: Còn {days_left} ngày nữa tới mốc {OAUTH_RT_LIFETIME_DAYS} ngày của refresh token.")
             elif verbose:
-                log(f"✅ [AN TOÀN] {email}: Còn {days_left} ngày {hours_left}h tới mốc 30 ngày (Hạn: {rt_exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}).")
+                log(f"✅ [AN TOÀN] {email}: Còn {days_left} ngày {hours_left}h tới mốc {OAUTH_RT_LIFETIME_DAYS} ngày (Hạn: {rt_exp_dt.astimezone().strftime('%d/%m/%Y %H:%M')}).")
 
 def refresh_tokens():
     """Trigger adaptive token refresh with anti-burst sequential staggering."""
