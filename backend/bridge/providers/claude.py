@@ -53,6 +53,8 @@ class ClaudePoolProvider:
         auth_file = os.path.join(AUTH_DIR, token_file)
         if not os.path.exists(auth_file):
             return "Max"
+        if self._token_file_disabled(token_file):
+            return "Max 20x" if "project" in email else "Max"
 
         try:
             with open(auth_file, "r", encoding="utf-8") as f:
@@ -172,6 +174,8 @@ class ClaudePoolProvider:
         cached = self._header_probe_cache.get(token_file)
         if cached and now - cached[0] < HEADER_PROBE_SEC:
             return cached[1]
+        if self._token_file_disabled(token_file):
+            return cached[1] if cached else None
         p = None
         try:
             with open(os.path.join(AUTH_DIR, token_file), "r", encoding="utf-8") as f:
@@ -544,6 +548,13 @@ class ClaudePoolProvider:
         with urllib.request.urlopen(req, timeout=2.5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         return {f.get("name", ""): bool(f.get("disabled")) for f in data.get("files", [])}
+
+    def _token_file_disabled(self, token_file):
+        try:
+            return self._auth_disabled_map().get(token_file, False)
+        except Exception as e:
+            print(f"disabled flag unavailable for {token_file}, treating as disabled: {e}", file=sys.stderr)
+            return True
 
     def set_account_enabled(self, email, enabled):
         try:
