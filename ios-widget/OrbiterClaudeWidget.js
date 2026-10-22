@@ -360,6 +360,17 @@ function buildLargeWidget(w, data) {
       const s = statusStack.addText("Tạm dừng");
       s.font = Font.boldSystemFont(10);
       s.textColor = TOKENS.redAlert;
+    } else if (acc.is_disabled) {
+      try {
+        const offSym = SFSymbol.named("pause.circle.fill");
+        offSym.applyFont(Font.systemFont(9.5));
+        const offImg = statusStack.addImage(offSym.image);
+        offImg.imageSize = new Size(9.5, 9.5);
+        offImg.tintColor = TOKENS.textMuted;
+      } catch (_) {}
+      const s = statusStack.addText("Đã tắt");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = TOKENS.textMuted;
     } else {
       try {
         const okSym = SFSymbol.named("checkmark.circle.fill");
