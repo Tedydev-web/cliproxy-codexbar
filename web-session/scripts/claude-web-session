@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+import sys, os, re, json, time, getpass, argparse, subprocess
+
+sys.path.insert(0, os.path.expanduser("~/.local/share/claude-web/lib"))
+from cw_store import WebError, nick_of, now_iso, load_session, read_session, update_session, stored_emails, pool_emails, session_path
+from cw_api import request, renewed_key, verify_owner, DEFAULT_COOLDOWN
+from cw_parse import parse_usage
+
+SYNC_BIN = os.path.expanduser("~/.local/bin/claude-web-sync")
+RECOVER_COOLDOWN = 900
+TRANSIENT = ("cloudflare", "rate_limited", "server", "network")
+KEY_RE = re.compile(r"sk-ant-sid\d+-[A-Za-z0-9_\-]+")
+HEADER_PATTERNS = [
+    r"(?i)-H\s*'Cookie:\s*([^']+)'",
+    r'(?i)-H\s*"Cookie:\s*([^"]+)"',
+    r"(?i)(?:--cookie|-b)\s*'([^']+)'",
+    r'(?i)(?:--cookie|-b)\s*"([^"]+)"',
+    r"(?i)\bcookie:\s*([^\r\n]+)",
+]
+
+
+def extract_session_key(raw):
+    text = raw.strip()
+    for pattern in HEADER_PATTERNS:
+        m = re.search(pattern, text)
+        if m:
+            text = m.group(1)
+            break
+    for part in text.split(";"):
+        name, _, value = part.strip().partition("=")
+        if name.strip() == "sessionKey" and value.strip():
+            return value.strip().strip("'\"")
+    m = KEY_RE.search(text)
+    return m.group(0) if m else None
+
+
+def fetch_usage(email, force=False):
+    s = load_session(email)
+    blocked = s.get("blocked_until") or 0
+    if not force and blocked > time.time():
+        raise WebError("rate_limited", "gated after HTTP 429", retry_after=blocked)
+    key = s["session_key"]
+    try:
+        r = request(f"/organizations/{s['org_uuid']}/usage", key)
+    except WebError as e:
+        if e.code == "rate_limited":
+            until = max(blocked, e.retry_after or 0, time.time() + DEFAULT_COOLDOWN)
+            update_session(email, lambda d: d.update(blocked_until=until))
+        raise
+    new = renewed_key(r, key)
+    result = parse_usage(email, r.json())
+    result["session_renewed"] = bool(new)
+
+    def apply(d):
+        if new and d.get("session_key") == key:
+            d["session_key"] = new
+            d["renewed_at"] = now_iso()
+        d["last_ok_at"] = now_iso()
+        d["last_result"] = {"at": now_iso(), "data": result}
+        d.pop("blocked_until", None)
+        d.pop("needs_reauth", None)
+
+    update_session(email, apply)
+    return result
+
+
+def recover(email):
+    s = load_session(email)
+    if time.time() - (s.get("last_recover_at") or 0) < RECOVER_COOLDOWN:
+        return False
+    update_session(email, lambda d: d.update(last_recover_at=time.time()))
+    before = s["session_key"]
+    try:
+        subprocess.run([SYNC_BIN, email], timeout=150, capture_output=True)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return load_session(email)["session_key"] != before
+
+
+def fetch_with_recovery(email, force=False, allow_recover=True):
+    try:
+        return fetch_usage(email, force)
+    except WebError as first:
+        if first.code != "unauthorized":
+            raise
+        if allow_recover and recover(email):
+            try:
+                return fetch_usage(email, force)
+            except WebError as second:
+                first = second
+        if first.code == "unauthorized":
+            update_session(email, lambda d: d.update(needs_reauth=True))
+        raise first
+
+
+def fetch_usage_or_stale(email, force=False, allow_recover=True):
+    try:
+        return fetch_with_recovery(email, force, allow_recover)
+    except WebError as e:
+        if e.code not in TRANSIENT:
+            raise
+        last = load_session(email).get("last_result")
+        if not last:
+            raise
+        data = dict(last["data"])
+        data.update({"stale": True, "stale_since": last["at"], "stale_reason": e.code})
+        if e.retry_after:
+            data["retry_after"] = e.retry_after
+        return data
+
+
+def adopt(email, key, source, expires):
+    org = verify_owner(email, key)
+
+    def apply(d):
+        d.update(email=email, session_key=key, org_uuid=org, source=source, browser_expires=expires)
+        d.setdefault("added_at", now_iso())
+        d.pop("needs_reauth", None)
+        d.pop("blocked_until", None)
+
+    update_session(email, apply)
+
+
+def cmd_add(args):
+    if args.stdin or not sys.stdin.isatty():
+        raw = sys.stdin.read()
+    else:
+        raw = getpass.getpass("Paste sessionKey, Cookie header or Copy-as-cURL line: ")
+    key = extract_session_key(raw)
+    if not key:
+        raise WebError("no_session_key", "no sessionKey (sk-ant-sid...) found in input")
+    adopt(args.email, key, "manual", None)
+    print(f"stored web session for {args.email}")
+    print(json.dumps(fetch_usage(args.email, force=True)))
+
+
+def cmd_ingest(_):
+    pool = pool_emails()
+    code = 0
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        label = f"{item.get('browser')}/{item.get('profile')}"
+        try:
+            acct = request("/account", item["session_key"]).json()
+            email = pool.get((acct.get("email_address") or "").lower())
+            if not email:
+                print(f"skip {label}: account not in pool")
+                continue
+            current = read_session(email)
+            if current and current.get("session_key") == item["session_key"]:
+                print(f"unchanged {label} -> {email}")
+                continue
+            adopt(email, item["session_key"], label, item.get("expires"))
+            print(f"stored {label} -> {email}")
+        except WebError as e:
+            code = 1
+            print(f"error {label}: {e.code}")
+    return code
+
+
+def cmd_check(args):
+    emails = [args.email] if args.email else stored_emails()
+    code = 0
+    for email in emails:
+        try:
+            print(json.dumps(fetch_usage_or_stale(email, args.force, not args.no_recover)))
+        except WebError as e:
+            code = 1
+            print(json.dumps({"email": email, "source": "web-session", "error": e.code, "message": str(e)}))
+    return code
+
+
+def cmd_list(_):
+    for email in stored_emails():
+        s = read_session(email)
+        flags = [k for k in ("needs_reauth",) if s.get(k)]
+        gate = s.get("blocked_until")
+        if gate and gate > time.time():
+            flags.append(f"gated {int(gate - time.time())}s")
+        print(email, "src", s.get("source"), "added", s.get("added_at"), "last_ok", s.get("last_ok_at"), "renewed", s.get("renewed_at"), *flags)
+
+
+def cmd_remove(args):
+    path = session_path(args.email)
+    if os.path.exists(path):
+        os.remove(path)
+        print(f"removed {args.email}")
+
+
+def main():
+    p = argparse.ArgumentParser(prog="claude-web-session")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    a = sub.add_parser("add")
+    a.add_argument("email")
+    a.add_argument("--stdin", action="store_true")
+    a.set_defaults(fn=cmd_add)
+    sub.add_parser("ingest").set_defaults(fn=cmd_ingest)
+    c = sub.add_parser("check")
+    c.add_argument("email", nargs="?")
+    c.add_argument("--force", action="store_true")
+    c.add_argument("--no-recover", action="store_true")
+    c.set_defaults(fn=cmd_check)
+    sub.add_parser("list").set_defaults(fn=cmd_list)
+    r = sub.add_parser("remove")
+    r.add_argument("email")
+    r.set_defaults(fn=cmd_remove)
+    args = p.parse_args()
+    try:
+        sys.exit(args.fn(args) or 0)
+    except WebError as e:
+        print(f"error[{e.code}]: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

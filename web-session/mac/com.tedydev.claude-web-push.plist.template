@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>com.tedydev.claude-web-push</string>
+<key>ProgramArguments</key><array><string>/bin/zsh</string><string>-c</string><string>set -o pipefail; echo "--- $(date)"; /usr/bin/ssh -o BatchMode=yes -o ConnectTimeout=10 __UBUNTU_HOST__ "cat __REMOTE_HOME__/.local/share/claude-web/mac_cookie_reader.py" | __PYTHON3__ - --browsers chrome | /usr/bin/ssh -o BatchMode=yes -o ConnectTimeout=10 __UBUNTU_HOST__ __REMOTE_HOME__/.local/bin/claude-web-session ingest</string></array>
+<key>RunAtLoad</key><true/>
+<key>StartInterval</key><integer>7200</integer>
+<key>ProcessType</key><string>Background</string>
+<key>StandardOutPath</key><string>__HOME__/Library/Logs/claude-web-push.log</string>
+<key>StandardErrorPath</key><string>__HOME__/Library/Logs/claude-web-push.log</string>
+</dict></plist>

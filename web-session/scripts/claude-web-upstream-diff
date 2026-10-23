@@ -1,0 +1,9 @@
+#!/bin/zsh
+set -e
+U=$HOME/.local/share/claude-web/upstream
+T=$(mktemp -d)
+trap 'rm -rf $T' EXIT
+git clone -q --filter=blob:none --no-checkout https://github.com/steipete/CodexBar.git $T/r
+cd $T/r
+PIN=$(cat $U/PINNED_SHA)
+git log --oneline $PIN..origin/main -- Sources/CodexBarCore/CookieHeaderNormalizer.swift Sources/CodexBarCore/Providers/Claude/ClaudeWeb Sources/CodexBarCore/Providers/Claude/ClaudeScopedWeeklyLimitMapper.swift Sources/CodexBarCore/Providers/Claude/ClaudeCloudCreditsSnapshot.swift docs/claude.md | head -${1:-40}

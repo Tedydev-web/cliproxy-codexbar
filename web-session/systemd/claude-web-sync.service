@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync claude.ai web sessions from Mac browsers into CLIProxy web-sessions
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/claude-web-sync
+TimeoutStartSec=300
+Nice=10
+UMask=0077

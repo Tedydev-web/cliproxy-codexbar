@@ -17,6 +17,7 @@ echo "--------------------------------------------------"
 echo "[1/2] Đồng bộ Backend trên máy chủ cục bộ..."
 mkdir -p ~/.local/lib/cliproxy-bridge ~/.local/bin
 cp -r "${SCRIPT_DIR}/backend/bridge/"* ~/.local/lib/cliproxy-bridge/
+"${SCRIPT_DIR}/web-session/install.sh"
 mkdir -p ~/.local/lib/cliproxy-bridge/widgets
 cp "${SCRIPT_DIR}/ios-widget/OrbiterClaudeWidget.js" "${SCRIPT_DIR}/ios-widget/OrbiterAGYWidget.js" "${SCRIPT_DIR}/ios-widget/OrbiterControl.js" ~/.local/lib/cliproxy-bridge/widgets/
 cat << 'EOF' > ~/.local/bin/cliproxy-quota-bridge
@@ -32,6 +33,7 @@ echo "--------------------------------------------------"
 echo "[2/2] Đồng bộ các thiết bị macOS..."
 
 BRIDGE_SECRET=$(grep CLIPROXY_MANAGEMENT_SECRET "${HOME}/.cliproxy/bridge.env" | cut -d= -f2-)
+UBUNTU_HOST="${UBUNTU_HOST:-${USER}@$(tailscale ip -4 2>/dev/null | head -1)}"
 
 for host in "${MACOS_HOSTS[@]}"; do
     echo ">> Đang kiểm tra kết nối tới: ${host}..."
@@ -40,6 +42,12 @@ for host in "${MACOS_HOSTS[@]}"; do
         rsync -az --delete "${CLIENT_DIR}/" "${host}:/tmp/client-macos/"
         ssh "${host}" "cd /tmp/client-macos && CLIPROXY_BRIDGE_SECRET='${BRIDGE_SECRET}' ./install-client.sh"
         echo "   ✅ Đã đồng bộ và khởi chạy phiên bản mới nhất trên ${host}!"
+        rsync -az --delete "${SCRIPT_DIR}/web-session/mac/" "${host}:/tmp/cw-mac/"
+        if ssh "${host}" "UBUNTU_HOST='${UBUNTU_HOST}' bash /tmp/cw-mac/install-mac-push.sh"; then
+            echo "   ✅ Đã cài LaunchAgent đẩy cookie claude.ai trên ${host}!"
+        else
+            echo "   ⚠️ Không cài được LaunchAgent cookie trên ${host} (xem thông báo ở trên)."
+        fi
     else
         echo "   ⚠️ ${host} hiện đang OFFLINE hoặc ngủ (sleep) - Đã bỏ qua."
         echo "      (Khi máy online trở lại, chỉ cần chạy lại: ./sync-all.sh)"

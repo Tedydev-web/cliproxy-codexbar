@@ -1,0 +1,5 @@
+claude-web-session and mac_cookie_reader.py port behaviour from CodexBar (https://github.com/steipete/CodexBar),
+Copyright (c) 2026 Peter Steinberger, MIT License. The full licence text is in upstream/LICENSE-CodexBar-MIT.
+Ported behaviour: sessionKey/cookie header normalisation, claude.ai usage response mapping, organisation ownership check,
+Cloudflare challenge detection, sessionKey renewal via Set-Cookie, browser cookie store layout (Safari binarycookies,
+Chromium Safe Storage v10 decryption). Pinned upstream commit: see upstream/PINNED_SHA.

@@ -1,0 +1,19 @@
+#!/bin/zsh
+LABEL=com.tedydev.claude-web-push
+READER=$HOME/.local/share/claude-web/mac_cookie_reader.py
+INGEST=$HOME/.local/bin/claude-web-session
+HOSTS=(${=CLAUDE_WEB_HOSTS:-tedydev@100.127.1.235 tedydev@100.127.1.236})
+SSH=(ssh -o BatchMode=yes -o ConnectTimeout=5)
+
+for host in $HOSTS; do
+  $SSH $host true 2>/dev/null || continue
+  $SSH $host 'python3 - --browsers safari' < $READER 2>/dev/null | $INGEST ingest
+  $SSH $host "launchctl kickstart -k gui/\$(id -u)/$LABEL" 2>/dev/null || exit 1
+  for _ in {1..40}; do
+    sleep 2
+    state=$($SSH $host "launchctl print gui/\$(id -u)/$LABEL 2>/dev/null | awk '/^[[:space:]]*state =/{print \$3; exit}'")
+    [[ "$state" != "running" ]] && exit 0
+  done
+  exit 1
+done
+exit 1
