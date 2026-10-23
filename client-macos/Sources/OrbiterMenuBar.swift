@@ -1235,6 +1235,12 @@ class QuotaState: ObservableObject {
         }.resume()
     }
 
+    static func currentAccount(in accounts: [PoolAccountItem]) -> PoolAccountItem? {
+        accounts.first { !$0.isDisabled && !$0.isPaused && $0.isAvailable }
+            ?? accounts.first { !$0.isDisabled && !$0.isPaused }
+            ?? accounts.first
+    }
+
     func moveAccount(fromIndex: Int, toIndex: Int) {
         guard fromIndex >= 0, fromIndex < claudeAccounts.count,
               toIndex >= 0, toIndex < claudeAccounts.count,
@@ -1246,7 +1252,7 @@ class QuotaState: ObservableObject {
         self.claudeAccounts = accounts
         
         // If the top account changed, immediately update claudeEmail to follow the new #1 priority
-        if let topAcc = accounts.first {
+        if let topAcc = Self.currentAccount(in: accounts) {
             self.claudeEmail = topAcc.email
             self.claudePlan = topAcc.plan
             self.claude5h = topAcc.used5h
@@ -1434,7 +1440,7 @@ class QuotaState: ObservableObject {
                     }
                     self.claudeAccounts = parsedList
 
-                    let targetAccount = parsedList.first { !$0.isDisabled && !$0.isPaused } ?? parsedList.first
+                    let targetAccount = Self.currentAccount(in: parsedList)
                     
                     if let current = targetAccount {
                         self.claudeEmail = current.email
@@ -2992,7 +2998,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func confirmSwitch(to email: String) {
-        if state.claudeEmail == email { return }
+        if state.claudeAccounts.first?.email == email { return }
         if state.claudeAccounts.first(where: { $0.email == email })?.isDisabled == true {
             let alert = NSAlert()
             alert.messageText = "Account đang tắt"

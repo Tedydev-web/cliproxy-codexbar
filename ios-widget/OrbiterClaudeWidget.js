@@ -240,7 +240,10 @@ function buildLargeWidget(w, data) {
   const contentW = getWidgetContentWidth("large", hPadding);
 
   // --- 1. WIDGET HEADER (100% ORBITER MACOS DESKTOP) ---
-  const firstAcc = accounts[0] || {};
+  const isUsableAcc = (a) => !a.is_disabled && !a.is_paused && a.is_available !== false;
+  const usableIdx = accounts.findIndex(isUsableAcc);
+  const currentIdx = usableIdx >= 0 ? usableIdx : 0;
+  const firstAcc = accounts[currentIdx] || {};
 
   const hRow1 = w.addStack();
   hRow1.layoutHorizontally();
@@ -293,7 +296,7 @@ function buildLargeWidget(w, data) {
   const displayAccounts = accounts.slice(0, 3);
 
   displayAccounts.forEach((acc, idx) => {
-    const isFirst = idx === 0;
+    const isFirst = idx === currentIdx;
     const realNum = idx + 1;
     const isPaused = acc.is_available === false;
 
@@ -317,7 +320,7 @@ function buildLargeWidget(w, data) {
       } catch (_) {}
     }
 
-    const idBadge = accHead.addText(isFirst ? "#1 " : `#${realNum} `);
+    const idBadge = accHead.addText(`#${realNum} `);
     idBadge.font = Font.boldMonospacedSystemFont(isFirst ? 13 : 12);
     idBadge.textColor = isFirst ? TOKENS.orangeFill : TOKENS.textSecondary;
 
