@@ -1,0 +1,361 @@
+#!/usr/bin/env python3
+import sys, os, re, json, time, shutil, socket, signal, argparse, tempfile, subprocess, datetime, urllib.request, urllib.error
+import yaml
+
+sys.path.insert(0, os.path.expanduser("~/.local/share/cliproxy-update/lib"))
+import cpu_release as cr
+
+HOME = os.path.expanduser("~/.cliproxy")
+BIN = f"{HOME}/bin/original/cli-proxy-api"
+CONFIG = f"{HOME}/config.yaml"
+BACKUPS = f"{HOME}/backups"
+REPORTS = f"{HOME}/update-reports"
+HOLD = f"{HOME}/update.hold"
+SHARE = os.path.expanduser("~/.local/share/cliproxy-update")
+CACHE = f"{SHARE}/cache"
+STATE = f"{SHARE}/state.json"
+UNIT = "cliproxy.service"
+MIN_AGE_HOURS = float(os.environ.get("CLIPROXY_UPDATE_MIN_AGE_HOURS", "24"))
+IDLE_SEC = int(os.environ.get("CLIPROXY_UPDATE_IDLE_SEC", "120"))
+FLAVOR = os.environ.get("CLIPROXY_UPDATE_FLAVOR", "default")
+MODE = os.environ.get("CLIPROXY_UPDATE_MODE", "auto")
+KEEP_BACKUPS = 3
+EX_BUSY = 75
+
+
+def say(msg):
+    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+
+
+def notify(title, body):
+    try:
+        subprocess.run(["herdr", "notification", "show", title, "--body", body, "--sound", "done"], timeout=4, capture_output=True)
+    except Exception:
+        pass
+
+
+def load_state():
+    try:
+        with open(STATE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(**kw):
+    s = load_state()
+    s.update(kw)
+    os.makedirs(SHARE, exist_ok=True)
+    with open(STATE, "w", encoding="utf-8") as f:
+        json.dump(s, f, indent=2)
+
+
+def banner(binary):
+    r = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=15)
+    return (r.stdout + r.stderr).splitlines()[0] if (r.stdout + r.stderr) else ""
+
+
+def current_version():
+    return cr.installed_version(banner(BIN))
+
+
+def config():
+    with open(CONFIG, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def mgmt_secret():
+    with open(f"{HOME}/bridge.env", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("CLIPROXY_MANAGEMENT_SECRET="):
+                return line.split("=", 1)[1].strip().strip("\"'")
+    return ""
+
+
+def api(path, method="GET", body=None, port=None, key=None, secret=None, timeout=20):
+    port = port or (config().get("server") or {}).get("port") or 8317
+    headers = {"Content-Type": "application/json", "anthropic-version": "2023-06-01"}
+    if secret:
+        headers["Authorization"] = f"Bearer {secret}"
+    if key:
+        headers["x-api-key"] = key
+    req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, headers=headers, data=json.dumps(body).encode() if body is not None else None)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+    except Exception as e:
+        return 0, str(e).encode()
+
+
+def idle_age_sec():
+    code, raw = api("/v0/management/auth-files", secret=mgmt_secret())
+    if code != 200:
+        return None
+    now, newest = datetime.datetime.now(datetime.timezone.utc), None
+    for f in json.loads(raw).get("files", []):
+        obs = (f.get("quota") or {}).get("observed_at")
+        if obs and not obs.startswith("0001"):
+            age = (now - datetime.datetime.fromisoformat(obs)).total_seconds()
+            newest = age if newest is None else min(newest, age)
+    return newest
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def smoke(binary):
+    work = tempfile.mkdtemp(prefix="cliproxy-smoke-")
+    try:
+        cfg = config()
+        port = free_port()
+        cfg["server"] = {"host": "127.0.0.1", "port": port}
+        cfg.setdefault("oauth", {})["auth-dir"] = os.path.join(work, "auth")
+        os.makedirs(cfg["oauth"]["auth-dir"])
+        cfg["management"] = {"allow-remote": False, "secret-key": "smoke", "disable-control-panel": True}
+        cfg.setdefault("observability", {}).setdefault("logs", {})["logging-to-file"] = False
+        path = os.path.join(work, "config.yaml")
+        with open(path, "w") as f:
+            yaml.safe_dump(cfg, f)
+        os.chmod(path, 0o600)
+        log = open(os.path.join(work, "log"), "w")
+        p = subprocess.Popen([binary, "--config", path], stdout=log, stderr=subprocess.STDOUT, cwd=work, start_new_session=True)
+        key = (cfg.get("access") or {}).get("api-keys", [""])[0]
+        ok, detail = False, "did not start"
+        for _ in range(60):
+            time.sleep(0.5)
+            code, raw = api("/v1/models", port=port, key=key, timeout=3)
+            if code == 200:
+                ok, detail = True, f"{len(json.loads(raw).get('data', []))} models listed"
+                break
+            if p.poll() is not None:
+                detail = "exited early"
+                break
+        os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+        p.wait(timeout=15)
+        problems = [l for l in open(os.path.join(work, "log")).read().splitlines() if re.search(r"unknown field|failed to load|yaml:|panic", l, re.I)]
+        return ok and not problems, detail if not problems else problems[0][:140]
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def restart_and_wait(timeout=45):
+    subprocess.run(["systemctl", "--user", "restart", UNIT], check=True)
+    secret = mgmt_secret()
+    for _ in range(timeout * 2):
+        time.sleep(0.5)
+        if api("/v0/management/latest-version", secret=secret, timeout=3)[0] == 200:
+            return True
+    return False
+
+
+def inference_check():
+    key = (config().get("access") or {}).get("api-keys", [""])[0]
+    code, _ = api("/v1/messages", "POST", {"model": "claude-haiku-4-5-20251001", "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]}, key=key, timeout=60)
+    return code
+
+
+def list_backups():
+    found = []
+    for f in os.listdir(os.path.dirname(BIN)):
+        m = re.fullmatch(r"cli-proxy-api\.bak_v(\d+\.\d+\.\d+)", f)
+        if m:
+            found.append((cr.parse_version(m.group(1)), os.path.join(os.path.dirname(BIN), f)))
+    return sorted(found)
+
+
+def prune_backups():
+    for _, path in list_backups()[:-KEEP_BACKUPS]:
+        os.remove(path)
+
+
+def baseline_example(version):
+    path = f"{CACHE}/config.example.{cr.fmt_version(version)}.yaml"
+    if os.path.exists(path):
+        return open(path).read()
+    tag = "v" + cr.fmt_version(version)
+    text = cr.http_bytes(f"https://raw.githubusercontent.com/{cr.REPO}/{tag}/config.example.yaml", 60).decode()
+    os.makedirs(CACHE, exist_ok=True)
+    open(path, "w").write(text)
+    return text
+
+
+def build_report(installed, releases, example_new, action):
+    buckets, other = cr.summarize(releases)
+    opts = cr.new_options(baseline_example(installed), example_new) if example_new else []
+    unset = {(o["section"], o["key"]) for o in cr.unset_options(opts, config())}
+    lines = [f"# CLIProxyAPI {cr.fmt_version(installed)} -> {cr.fmt_version(releases[-1]['version'])}", "", f"Action: {action}", "",
+             f"Releases: {cr.fmt_version(releases[0]['version'])} to {cr.fmt_version(releases[-1]['version'])} ({len(releases)})", "", "## New configuration options", ""]
+    if not opts:
+        lines.append("None.")
+    for o in opts:
+        mark = "NOT SET in config.yaml" if (o["section"], o["key"]) in unset else "already set"
+        title = f"`{o['section']}.{o['key']}`" + (f" with {', '.join(o['children'])}" if o["children"] else "")
+        lines += [f"- {title} ({mark})", f"  - `{o['line']}`"] + [f"  - {d}" for d in o["doc"]]
+    shown = sum(len(v) for v in buckets.values())
+    lines += ["", f"## Changes that may matter to this setup ({shown} listed, {other} other fixes and features omitted)"]
+    for name, items in buckets.items():
+        lines += ["", f"### {name} ({len(items)})", ""]
+        lines += [f"- {v}: {i}" for v, i in items[:25]] or ["None."]
+        if len(items) > 25:
+            lines.append(f"- ... and {len(items) - 25} more")
+    return "\n".join(lines) + "\n", opts
+
+
+def write_report(text, version):
+    os.makedirs(REPORTS, exist_ok=True)
+    path = f"{REPORTS}/{cr.fmt_version(version)}.md"
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return path
+
+
+def eligible(releases, installed):
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=MIN_AGE_HOURS)
+    newer = [r for r in releases if r["version"] > installed]
+    ready = [r for r in newer if datetime.datetime.fromisoformat(r["published_at"].replace("Z", "+00:00")) <= cutoff]
+    return newer, (ready[-1] if ready else None)
+
+
+def apply_release(release, force=False):
+    installed = current_version()
+    if not installed:
+        say("cannot determine the installed version, aborting")
+        return 2
+    age = idle_age_sec()
+    if not force and age is not None and age < IDLE_SEC:
+        say(f"busy: last request {int(age)}s ago (< {IDLE_SEC}s), deferring")
+        return EX_BUSY
+    work = tempfile.mkdtemp(prefix="cliproxy-update-")
+    try:
+        say(f"downloading {release['tag']} and verifying sha256")
+        new_bin, new_example = cr.download_release(release, work, FLAVOR)
+        ok, detail = smoke(new_bin)
+        say(f"smoke test of new binary with the live config: {'OK' if ok else 'FAILED'} ({detail})")
+        if not ok:
+            notify("CLIProxy update aborted", f"{cr.fmt_version(release['version'])}: smoke test failed: {detail}")
+            return 2
+        stamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
+        bdir = f"{BACKUPS}/cliproxy-{cr.fmt_version(installed)}-{stamp}"
+        os.makedirs(bdir, exist_ok=True)
+        shutil.copy2(CONFIG, bdir)
+        keep = f"{BIN}.bak_v{cr.fmt_version(installed)}"
+        shutil.copy2(BIN, keep)
+        tmp = BIN + ".new"
+        shutil.copy2(new_bin, tmp)
+        os.chmod(tmp, 0o755)
+        os.replace(tmp, BIN)
+        say("binary replaced, restarting service")
+        healthy = restart_and_wait()
+        code = inference_check() if healthy else 0
+        if not healthy or code == 0 or code >= 500:
+            say(f"post-update check failed (healthy={healthy}, inference={code}); rolling back")
+            shutil.copy2(keep, tmp)
+            os.replace(tmp, BIN)
+            restart_and_wait()
+            notify("CLIProxy update rolled back", f"{cr.fmt_version(release['version'])} failed health check; restored {cr.fmt_version(installed)}")
+            return 3
+        say(f"post-update check OK (inference HTTP {code})")
+        os.makedirs(CACHE, exist_ok=True)
+        shutil.copy2(new_example, f"{CACHE}/config.example.{cr.fmt_version(release['version'])}.yaml")
+        prune_backups()
+        save_state(installed=cr.fmt_version(release["version"]), updated_at=datetime.datetime.now().isoformat(), previous=cr.fmt_version(installed))
+        return 0
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def cmd_status(_):
+    s = load_state()
+    print(f"installed: {cr.fmt_version(current_version())}\nhold: {'yes' if os.path.exists(HOLD) else 'no'}\nmode: {MODE}, soak: {MIN_AGE_HOURS}h, idle: {IDLE_SEC}s\nstate: {json.dumps(s)}")
+
+
+def cmd_check(args):
+    installed = current_version()
+    releases = cr.list_releases()
+    newer, ready = eligible(releases, installed)
+    if not newer:
+        say(f"up to date ({cr.fmt_version(installed)})")
+        save_state(last_checked=datetime.datetime.now().isoformat())
+        return 0
+    latest = newer[-1]
+    example = cr.http_bytes(f"https://raw.githubusercontent.com/{cr.REPO}/{latest['tag']}/config.example.yaml", 60).decode()
+    text, opts = build_report(installed, newer, example, "report only (check)")
+    print(text)
+    save_state(last_checked=datetime.datetime.now().isoformat())
+    return 0
+
+
+def cmd_run(args):
+    installed = current_version()
+    releases = cr.list_releases()
+    newer, ready = eligible(releases, installed)
+    save_state(last_checked=datetime.datetime.now().isoformat())
+    if not newer:
+        say(f"up to date ({cr.fmt_version(installed)})")
+        return 0
+    latest = newer[-1]
+    target = ready if (ready and MODE == "auto" and not os.path.exists(HOLD)) else None
+    example = cr.http_bytes(f"https://raw.githubusercontent.com/{cr.REPO}/{latest['tag']}/config.example.yaml", 60).decode()
+    reason = "held" if os.path.exists(HOLD) else ("notify-only mode" if MODE != "auto" else (f"soak: newest release is younger than {MIN_AGE_HOURS}h" if not ready else ""))
+    action = f"will install {cr.fmt_version(target['version'])}" if target else f"report only ({reason})"
+    text, opts = build_report(installed, newer, example, action)
+    path = write_report(text, latest["version"])
+    if load_state().get("reported") != cr.fmt_version(latest["version"]):
+        unset = [o for o in cr.unset_options(opts, config())]
+        notify(f"CLIProxy {cr.fmt_version(latest['version'])} available", f"{len(opts)} new options ({len(unset)} not set). Report: {path}")
+        save_state(reported=cr.fmt_version(latest["version"]))
+    say(f"{action}; report: {path}")
+    if not target:
+        return 0
+    code = apply_release(target)
+    if code == 0:
+        final = write_report(text.replace(action, f"installed {cr.fmt_version(target['version'])}"), latest["version"])
+        notify(f"CLIProxy updated to {cr.fmt_version(target['version'])}", f"Report: {final}")
+    return code
+
+
+def cmd_apply(args):
+    releases = cr.list_releases()
+    tag = args.version or cr.fmt_version(releases[-1]["version"])
+    release = next((r for r in releases if cr.fmt_version(r["version"]) == tag.lstrip("v")), None)
+    if not release:
+        say(f"release {tag} not found")
+        return 1
+    return apply_release(release, args.force)
+
+
+def cmd_rollback(_):
+    baks = list_backups()
+    if not baks:
+        say("no backup binary found")
+        return 1
+    version, chosen = baks[-1]
+    tmp = BIN + ".new"
+    shutil.copy2(chosen, tmp)
+    os.replace(tmp, BIN)
+    say(f"restored {cr.fmt_version(version)}; restarting")
+    return 0 if restart_and_wait() else 1
+
+
+def main():
+    p = argparse.ArgumentParser(prog="cliproxy-update")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("status").set_defaults(fn=cmd_status)
+    sub.add_parser("check").set_defaults(fn=cmd_check)
+    sub.add_parser("run").set_defaults(fn=cmd_run)
+    a = sub.add_parser("apply")
+    a.add_argument("version", nargs="?")
+    a.add_argument("--force", action="store_true")
+    a.set_defaults(fn=cmd_apply)
+    sub.add_parser("rollback").set_defaults(fn=cmd_rollback)
+    args = p.parse_args()
+    sys.exit(args.fn(args) or 0)
+
+
+if __name__ == "__main__":
+    main()

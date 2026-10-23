@@ -18,6 +18,7 @@ echo "[1/2] Đồng bộ Backend trên máy chủ cục bộ..."
 mkdir -p ~/.local/lib/cliproxy-bridge ~/.local/bin
 cp -r "${SCRIPT_DIR}/backend/bridge/"* ~/.local/lib/cliproxy-bridge/
 "${SCRIPT_DIR}/web-session/install.sh"
+"${SCRIPT_DIR}/cliproxy-update/install.sh"
 mkdir -p ~/.local/lib/cliproxy-bridge/widgets
 cp "${SCRIPT_DIR}/ios-widget/OrbiterClaudeWidget.js" "${SCRIPT_DIR}/ios-widget/OrbiterAGYWidget.js" "${SCRIPT_DIR}/ios-widget/OrbiterControl.js" ~/.local/lib/cliproxy-bridge/widgets/
 cat << 'EOF' > ~/.local/bin/cliproxy-quota-bridge

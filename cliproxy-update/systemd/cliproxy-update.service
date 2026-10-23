@@ -1,0 +1,11 @@
+[Unit]
+Description=CLIProxyAPI release check, config drift report and guarded update
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/cliproxy-update run
+SuccessExitStatus=75
+TimeoutStartSec=900
+Nice=10
+UMask=0077

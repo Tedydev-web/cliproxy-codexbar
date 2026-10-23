@@ -177,6 +177,10 @@ cliproxy-codexbar/
 
 Bổ sung cho quota OAuth, không phụ thuộc refresh token: đọc cookie `sessionKey` từ trình duyệt trên Mac, đẩy về Ubuntu qua SSH và lấy quota 5 giờ, 7 ngày, quota theo model, cloud credits. Cài đặt, kiến trúc và hành vi: xem [`web-session/README.md`](web-session/README.md). `sync-all.sh` cài cả hai phía.
 
+## ⬆️ Tự động cập nhật CLIProxyAPI (cliproxy-update)
+
+Mỗi ngày kiểm tra bản phát hành mới, báo trước các tùy chọn cấu hình mới chưa được đặt, rồi tự cập nhật có rào chắn (kiểm tra SHA-256, smoke test, chỉ khi rảnh, tự khôi phục nếu hỏng). Xem [`cliproxy-update/README.md`](cliproxy-update/README.md).
+
 ## 🔄 Đồng bộ đa máy (Multi-Machine Sync)
 
 Thư mục này là **nguồn chân lý duy nhất (Single Source of Truth)**. Mỗi khi nâng cấp tính năng, chỉ cần chạy:
