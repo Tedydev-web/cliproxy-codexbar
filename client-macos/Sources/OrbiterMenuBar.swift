@@ -322,6 +322,13 @@ struct MenuActionRow: View {
 }
 
 // Account Data Model
+struct ScopedQuota: Identifiable {
+    var id: String { model }
+    let model: String
+    let used: Int
+    let resetText: String
+}
+
 struct PoolAccountItem: Identifiable {
     var id: String { email }
     let email: String
@@ -338,6 +345,11 @@ struct PoolAccountItem: Identifiable {
     let resetWeekly: String
     var isDisabled: Bool = false
     var isPaused: Bool = false
+    var scoped: [ScopedQuota] = []
+
+    var scopedSummary: String {
+        scoped.isEmpty ? "" : " · " + scoped.map { "\($0.model): \($0.used)%" }.joined(separator: " · ")
+    }
 
     var subDetailsText: String {
         if isPaused {
@@ -352,11 +364,11 @@ struct PoolAccountItem: Identifiable {
         if !isAvailable {
             let rTime = resetWeekly.isEmpty ? "18h" : resetWeekly
             let est = formatResetWithEst(raw: rTime)
-            return "\(plan) · Hết hạn tuần · \(est)"
+            return "\(plan) · Hết hạn tuần\(scopedSummary) · \(est)"
         }
         let rTime = reset5h.isEmpty ? resetWeekly : reset5h
         let est = formatResetWithEst(raw: rTime)
-        return "\(plan) · 5h: \(used5h)% · Tuần: \(usedWeekly)% · \(est)"
+        return "\(plan) · 5h: \(used5h)% · Tuần: \(usedWeekly)%\(scopedSummary) · \(est)"
     }
 }
 
@@ -506,6 +518,16 @@ struct ClaudeFullCardView: View {
                     resetText: formatResetWithEst(raw: self.state.claude7dReset),
                     tint: Color(red: 218/255, green: 119/255, blue: 86/255)
                 )
+                
+                ForEach(self.state.claudeScoped) { scoped in
+                    let sVal = isUsedMode ? scoped.used : max(0, 100 - scoped.used)
+                    MetricRow(
+                        title: isUsedMode ? "\(scoped.model) hàng tuần: \(sVal)% đã dùng" : "\(scoped.model) hàng tuần: \(sVal)% còn lại",
+                        percent: Double(sVal),
+                        resetText: formatResetWithEst(raw: scoped.resetText),
+                        tint: Color(red: 218/255, green: 119/255, blue: 86/255)
+                    )
+                }
             }
             
             Divider()
@@ -1117,6 +1139,7 @@ class QuotaState: ObservableObject {
     @Published var claudePaceReserve = 89
     @Published var switchingMessage = ""
     @Published var claudeAccounts: [PoolAccountItem] = []
+    @Published var claudeScoped: [ScopedQuota] = []
     
     @Published var agyEmail = "hieudat2310.bh@gmail.com"
     @Published var agyProject = "hazel-dock"
@@ -1260,6 +1283,7 @@ class QuotaState: ObservableObject {
             self.claude5hReset = topAcc.reset5h.isEmpty ? "Đầy đủ" : topAcc.reset5h
             self.claude7dReset = topAcc.resetWeekly
             self.claudePaceReserve = topAcc.remaining5h
+            self.claudeScoped = topAcc.scoped
             self.onUpdate?()
         }
         
@@ -1420,6 +1444,10 @@ class QuotaState: ObservableObject {
                         let pln = a["plan"] as? String ?? "Max"
                         let disabled = a["is_disabled"] as? Bool ?? false
                         let paused = a["is_paused"] as? Bool ?? false
+                        let scopedList: [ScopedQuota] = (a["scoped_weekly"] as? [[String: Any]] ?? []).compactMap { w in
+                            guard let model = w["model"] as? String, let used = w["used"] as? Double else { return nil }
+                            return ScopedQuota(model: model, used: Int(used.rounded()), resetText: w["reset_text"] as? String ?? "")
+                        }
 
                         parsedList.append(PoolAccountItem(
                             email: em,
@@ -1435,7 +1463,8 @@ class QuotaState: ObservableObject {
                             usedWeekly: uWk,
                             resetWeekly: rWk,
                             isDisabled: disabled,
-                            isPaused: paused
+                            isPaused: paused,
+                            scoped: scopedList
                         ))
                     }
                     self.claudeAccounts = parsedList
@@ -1455,6 +1484,7 @@ class QuotaState: ObservableObject {
                             self.claude7dReset = current.resetWeekly
                         }
                         self.claudePaceReserve = current.remaining5h
+                        self.claudeScoped = current.scoped
                     }
                     
                     // Parse Gateway Telemetry

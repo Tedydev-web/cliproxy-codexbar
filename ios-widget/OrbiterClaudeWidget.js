@@ -467,6 +467,23 @@ function buildLargeWidget(w, data) {
       const vWk = accStack.addImage(barWk);
       vWk.imageSize = new Size(contentW, barWkHeight);
       vWk.leftAlignImage();
+
+      if (isFirst && Array.isArray(acc.scoped_weekly) && acc.scoped_weekly.length) {
+        for (const sw of acc.scoped_weekly.slice(0, 2)) {
+          accStack.addSpacer(3.5);
+          const swRow = accStack.addStack();
+          swRow.layoutHorizontally();
+          swRow.centerAlignContent();
+          const swLabel = swRow.addText(`${sw.model} hàng tuần: ${Math.round(sw.used ?? 0)}% đã dùng`);
+          swLabel.font = Font.boldSystemFont(10.5);
+          swLabel.textColor = TOKENS.textPrimary;
+          swRow.addSpacer();
+          const swEst = formatResetWithEst(sw.reset_text);
+          const swReset = swRow.addText(swEst || "");
+          swReset.font = Font.systemFont(10);
+          swReset.textColor = TOKENS.textSecondary;
+        }
+      }
     }
 
     // Hairline Divider giữa các tài khoản
