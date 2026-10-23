@@ -21,7 +21,7 @@ from core.config import (
     WEB_SUBPROCESS_TIMEOUT_SEC,
     WEB_USE_MAX_AGE_SEC,
 )
-from core.utils import parse_iso_datetime, fmt_relative_reset_from_ts
+from core.utils import parse_iso_datetime, fmt_relative_reset_from_ts, fmt_relative_reset_from_iso
 
 WEB_STORE = os.path.join(CLIPROXY_HOME, "web-sessions")
 EXTRA_KEYS = ("scoped_weekly", "cloud_credits", "extra_usage")
@@ -133,6 +133,8 @@ def extras(web):
     if not web or web.get("error"):
         return {}
     out = {k: web.get(k) for k in EXTRA_KEYS if web.get(k)}
+    if out.get("scoped_weekly"):
+        out["scoped_weekly"] = [dict(w, reset_text=fmt_relative_reset_from_iso(w.get("reset")) if w.get("reset") else "") for w in out["scoped_weekly"]]
     if web.get("stale"):
         out["web_stale"] = True
     return out
