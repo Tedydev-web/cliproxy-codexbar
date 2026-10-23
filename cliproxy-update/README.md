@@ -79,8 +79,8 @@ Các file `.cds` nằm cạnh file token: các công cụ đọc thư mục auth
 
 | Chủ đề | Kết quả | Khuyến nghị |
 |---|---|---|
-| `session-affinity: true` cùng Console làm phương án cuối | Phiên đã chuyển sang Console **vẫn ở Console** sau khi pool hồi lại (kiểm tra 65 giây sau), trong khi phiên mới và request không phiên quay về pool ngay sau cooldown (khoảng 30 giây). Giảm `session-affinity-ttl` **không giúp** (phiên đang hoạt động liên tục gia hạn TTL). Tắt affinity thì phiên quay về pool ngay | Tắt `session-affinity` nếu Console trả tiền theo mức dùng nằm trong pool |
+| `session-affinity: true` cùng Console làm phương án cuối | Phiên đã chuyển sang Console **vẫn ở Console** sau khi pool hồi lại (kiểm tra 65 giây sau), trong khi phiên mới và request không phiên quay về pool ngay sau cooldown (khoảng 30 giây). Giảm `session-affinity-ttl` **không giúp** (phiên đang hoạt động liên tục gia hạn TTL). Tắt affinity thì phiên quay về pool ngay | Tắt `session-affinity` nếu Console trả tiền theo mức dùng nằm trong pool. **Quyết định hiện tại: giữ bật**, vì lợi ích prompt cache lớn hơn và các tác vụ thường ngắn (phiên nghỉ 1 giờ sẽ tự rời Console) |
 | `save-cooldown-status` | Thay file token bằng token chạy được thì cooldown cũ **được xóa ngay** | Không xung đột khi đổi token |
-| `model-level-cooling` | Không tạo khác biệt trong mọi lỗi giả lập được. Lợi ích chưa được chứng minh | Để mặc định (`false`) trừ khi gặp giới hạn riêng theo model |
+| `model-level-cooling` | Không tạo khác biệt trong mọi lỗi giả lập được (không giả lập được lỗi quota 429 thật trên credential dạng file) | **Quyết định hiện tại: giữ bật**, vì có hạn mức riêng theo model (Fable) |
 | `~/.ccs/cliproxy` là liên kết tới `~/.cliproxy`, CCS có `session_affinity: true` và `preferences.auto_update: true` | Nếu CCS được cài và chạy, nó có thể ghi đè `config.yaml` và thay binary, giẫm lên `cliproxy-update` | Giữ một bộ cập nhật duy nhất; đặt `preferences.auto_update: false` và đồng bộ `session_affinity` trong `~/.ccs/config.yaml` |
 
