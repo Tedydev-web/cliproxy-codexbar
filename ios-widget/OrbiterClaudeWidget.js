@@ -298,7 +298,9 @@ function buildLargeWidget(w, data) {
   displayAccounts.forEach((acc, idx) => {
     const isFirst = idx === currentIdx;
     const realNum = idx + 1;
-    const isPaused = acc.is_available === false;
+    const isPaused = acc.is_paused === true;
+    const isDisabled = acc.is_disabled === true && !isPaused;
+    const isExhausted = !isPaused && !isDisabled && acc.is_available === false;
 
     const accStack = w.addStack();
     accStack.layoutVertically();
@@ -327,7 +329,7 @@ function buildLargeWidget(w, data) {
     const displayEmail = (acc.email || acc.name || "").replace("@gmail.com", "");
     const emailTxt = accHead.addText(displayEmail);
     emailTxt.font = Font.boldSystemFont(isFirst ? 12.5 : 12);
-    emailTxt.textColor = isPaused ? TOKENS.textMuted : TOKENS.textPrimary;
+    emailTxt.textColor = isPaused || isDisabled ? TOKENS.textMuted : (isExhausted ? TOKENS.textSecondary : TOKENS.textPrimary);
     emailTxt.lineLimit = 1;
 
     accHead.addSpacer(4);
@@ -344,11 +346,11 @@ function buildLargeWidget(w, data) {
     statusStack.centerAlignContent();
     statusStack.spacing = 3.5;
 
-    if (acc.lifecycle_status === "critical") {
+    if (!isPaused && !isDisabled && !isExhausted && acc.lifecycle_status === "critical") {
       const warnTxt = statusStack.addText(`⚠️ ${acc.lifecycle_label || "Sắp hết hạn"}`);
       warnTxt.font = Font.boldSystemFont(10);
       warnTxt.textColor = TOKENS.amberWarn;
-    } else if (acc.lifecycle_status === "warning") {
+    } else if (!isPaused && !isDisabled && !isExhausted && acc.lifecycle_status === "warning") {
       const warnTxt = statusStack.addText(`ℹ️ ${acc.lifecycle_label || "Còn 5d"}`);
       warnTxt.font = Font.systemFont(9.5);
       warnTxt.textColor = TOKENS.textSecondary;
@@ -360,10 +362,10 @@ function buildLargeWidget(w, data) {
         errImg.imageSize = new Size(9.5, 9.5);
         errImg.tintColor = TOKENS.redAlert;
       } catch (_) {}
-      const s = statusStack.addText("Tạm dừng");
+      const s = statusStack.addText("Đã cách ly");
       s.font = Font.boldSystemFont(10);
       s.textColor = TOKENS.redAlert;
-    } else if (acc.is_disabled) {
+    } else if (isDisabled) {
       try {
         const offSym = SFSymbol.named("pause.circle.fill");
         offSym.applyFont(Font.systemFont(9.5));
@@ -374,6 +376,17 @@ function buildLargeWidget(w, data) {
       const s = statusStack.addText("Đã tắt");
       s.font = Font.boldSystemFont(10);
       s.textColor = TOKENS.textMuted;
+    } else if (isExhausted) {
+      try {
+        const exSym = SFSymbol.named("xmark.circle.fill");
+        exSym.applyFont(Font.systemFont(9.5));
+        const exImg = statusStack.addImage(exSym.image);
+        exImg.imageSize = new Size(9.5, 9.5);
+        exImg.tintColor = TOKENS.redAlert;
+      } catch (_) {}
+      const s = statusStack.addText((acc.used_weekly ?? 0) >= 100 ? "Hết hạn tuần" : "Hết phiên 5h");
+      s.font = Font.boldSystemFont(10);
+      s.textColor = TOKENS.redAlert;
     } else {
       try {
         const okSym = SFSymbol.named("checkmark.circle.fill");
