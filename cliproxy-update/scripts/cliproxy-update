@@ -159,6 +159,24 @@ def inference_check():
     return code
 
 
+SIGNALS = ["Anthropic-Ratelimit-Unified-5h-Utilization", "Anthropic-Ratelimit-Unified-7d-Utilization", "Anthropic-Ratelimit-Unified-5h-Reset", "Anthropic-Ratelimit-Unified-7d-Reset"]
+FILE_FIELDS = ["name", "type", "disabled", "quota"]
+
+
+def contract_check():
+    code, raw = api("/v0/management/auth-files", secret=mgmt_secret())
+    if code != 200:
+        return [f"auth-files endpoint answered HTTP {code}"]
+    files = [f for f in json.loads(raw).get("files", []) if f.get("type") == "claude"]
+    problems = [f"{f.get('name', '?')}: missing field {k}" for f in files for k in FILE_FIELDS if k not in f]
+    for f in files:
+        signals = (f.get("quota") or {}).get("signals") or {}
+        missing = [k for k in SIGNALS if signals and k not in signals]
+        if missing:
+            problems.append(f"{f.get('name', '?')}: quota.signals lacks {', '.join(missing)}")
+    return problems
+
+
 def list_backups():
     found = []
     for f in os.listdir(os.path.dirname(BIN)):
@@ -260,6 +278,11 @@ def apply_release(release, force=False):
             notify("CLIProxy update rolled back", f"{cr.fmt_version(release['version'])} failed health check; restored {cr.fmt_version(installed)}")
             return 3
         say(f"post-update check OK (inference HTTP {code})")
+        problems = contract_check()
+        if problems:
+            say("bridge data contract changed: " + "; ".join(problems[:3]))
+            notify("CLIProxy update: bridge contract changed", "; ".join(problems[:3]))
+            save_state(contract_problems=problems)
         os.makedirs(CACHE, exist_ok=True)
         shutil.copy2(new_example, f"{CACHE}/config.example.{cr.fmt_version(release['version'])}.yaml")
         prune_backups()

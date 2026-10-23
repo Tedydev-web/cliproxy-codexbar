@@ -12,6 +12,7 @@ Mỗi ngày kiểm tra bản phát hành mới của [CLIProxyAPI](https://githu
 6. **Chỉ chạy khi rảnh**: nếu có request trong 120 giây gần nhất thì hoãn (mã thoát 75, lần hẹn sau thử lại).
 7. Sao lưu binary (`cli-proxy-api.bak_v<phiên bản>`, giữ 3 bản) và cấu hình (`~/.cliproxy/backups/`), thay binary nguyên tử, khởi động lại dịch vụ.
 8. **Kiểm tra sau cập nhật**: API quản lý phải trả 200 và một request suy luận thật không được lỗi 5xx. Hỏng thì **tự khôi phục** bản cũ và thông báo.
+9. **Kiểm tra hợp đồng dữ liệu của bridge** (không khôi phục, chỉ thông báo): `auth-files` còn đủ `name/type/disabled/quota` và `quota.signals` còn đủ 4 tín hiệu Anthropic mà bridge đọc.
 
 ## Lệnh
 
@@ -73,3 +74,13 @@ Các file `.cds` nằm cạnh file token: các công cụ đọc thư mục auth
 
 - Cổng 8317 đang nghe trên mọi giao diện và `management.allow-remote: true`. Nếu không máy nào khác dùng cổng này, nên đặt `server.host: "127.0.0.1"` và `allow-remote: false`.
 - `management.disable-auto-update-panel`: bảng điều khiển tự tải bản mới từ GitHub.
+
+## Xung đột và lưu ý đã kiểm chứng bằng thực nghiệm (CLIProxyAPI 8.0.40, sandbox)
+
+| Chủ đề | Kết quả | Khuyến nghị |
+|---|---|---|
+| `session-affinity: true` cùng Console làm phương án cuối | Phiên đã chuyển sang Console **vẫn ở Console** sau khi pool hồi lại (kiểm tra 65 giây sau), trong khi phiên mới và request không phiên quay về pool ngay sau cooldown (khoảng 30 giây). Giảm `session-affinity-ttl` **không giúp** (phiên đang hoạt động liên tục gia hạn TTL). Tắt affinity thì phiên quay về pool ngay | Tắt `session-affinity` nếu Console trả tiền theo mức dùng nằm trong pool |
+| `save-cooldown-status` | Thay file token bằng token chạy được thì cooldown cũ **được xóa ngay** | Không xung đột khi đổi token |
+| `model-level-cooling` | Không tạo khác biệt trong mọi lỗi giả lập được. Lợi ích chưa được chứng minh | Để mặc định (`false`) trừ khi gặp giới hạn riêng theo model |
+| `~/.ccs/cliproxy` là liên kết tới `~/.cliproxy`, CCS có `session_affinity: true` và `preferences.auto_update: true` | Nếu CCS được cài và chạy, nó có thể ghi đè `config.yaml` và thay binary, giẫm lên `cliproxy-update` | Giữ một bộ cập nhật duy nhất; đặt `preferences.auto_update: false` và đồng bộ `session_affinity` trong `~/.ccs/config.yaml` |
+
