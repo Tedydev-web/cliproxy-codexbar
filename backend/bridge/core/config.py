@@ -49,6 +49,7 @@ AGY_CACHE_SEC = 60
 PROBE_STAGGER_SEC = 0.35        # Delay between sequential probes
 PROBE_USER_AGENT = "claude-cli/2.1.296 (external, cli)"
 AGY_USER_AGENT = "antigravity/cli/1.0.13 (aidev_client; os_type=darwin; arch=arm64)"
+AGY_HUB_USER_AGENT = "antigravity/hub/2.23.0 darwin/arm64"
 
 # claude.ai web-session source (ported from CodexBar behaviour)
 WEB_SESSION_BIN = os.path.expanduser("~/.local/bin/claude-web-session")

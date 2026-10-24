@@ -11,8 +11,49 @@ import urllib.request
 import urllib.error
 import base64
 
-from core.config import get_agy_auth_file, AGY_CACHE_SEC, AGY_USER_AGENT
-from core.utils import fmt_relative_reset_from_iso, fmt_local_datetime
+from core.config import get_agy_auth_file, AGY_CACHE_SEC, AGY_USER_AGENT, AGY_HUB_USER_AGENT
+from core.utils import fmt_relative_reset_from_iso, fmt_local_datetime, parse_iso_datetime
+
+WEEKLY_HORIZON_HOURS = 36
+
+
+def hours_until(raw_reset, now=None):
+    dt = parse_iso_datetime(raw_reset) if raw_reset else None
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return (dt - now).total_seconds() / 3600
+
+
+def fold_quota(groups, buckets, now=None):
+    out = {"g5": None, "gw": None, "c5": None, "cw": None}
+    for grp in groups:
+        grp_name = grp.get("displayName", "").lower()
+        for b in grp.get("buckets", []):
+            b_id = b.get("bucketId", "")
+            window = b.get("window")
+            value = (int(round(b.get("remainingFraction", 1.0) * 100)), fmt_relative_reset_from_iso(b.get("resetTime", "")))
+            if b_id == "gemini-5h" or ("gemini" in grp_name and window == "5h"):
+                out["g5"] = value
+            elif b_id == "gemini-weekly" or ("gemini" in grp_name and window == "weekly"):
+                out["gw"] = value
+            elif b_id == "3p-5h" or (("claude" in grp_name or "gpt" in grp_name) and window == "5h"):
+                out["c5"] = value
+            elif b_id == "3p-weekly" or (("claude" in grp_name or "gpt" in grp_name) and window == "weekly"):
+                out["cw"] = value
+    if out["g5"] is None or out["gw"] is None:
+        for b in buckets:
+            if "gemini" not in b.get("modelId", ""):
+                continue
+            hours = hours_until(b.get("resetTime"), now)
+            if hours is None:
+                continue
+            key = "gw" if hours >= WEEKLY_HORIZON_HOURS else "g5"
+            if out[key] is None:
+                out[key] = (int(round(b.get("remainingFraction", 1.0) * 100)), fmt_relative_reset_from_iso(b.get("resetTime", "")))
+    return out
 
 class AntigravityProvider:
     def __init__(self):
@@ -137,75 +178,41 @@ class AntigravityProvider:
             claude_wk_rem = 100
             claude_wk_rel = ""
 
-            # Concurrent probe across Google CloudCode internal endpoints
-            from concurrent.futures import ThreadPoolExecutor
-
-            def _fetch_endpoint(url_target):
+            def _fetch_endpoint(target):
+                url_target, headers = target
                 try:
-                    req = urllib.request.Request(url_target, data=body, headers=req_headers)
+                    req = urllib.request.Request(url_target, data=body, headers=headers)
                     with urllib.request.urlopen(req, timeout=5) as resp:
                         return json.loads(resp.read().decode("utf-8"))
                 except Exception:
                     return None
 
-            urls = [
-                f"{endpoint}/v1internal:retrieveUserQuotaSummary",
-                f"{endpoint}/v1internal:retrieveUserQuota",
-                f"{endpoint}/v1internal:fetchAvailableModels"
+            hub_headers = dict(req_headers, **{"User-Agent": AGY_HUB_USER_AGENT})
+            targets = [
+                (f"{endpoint}/v1internal:retrieveUserQuotaSummary", hub_headers),
+                (f"{endpoint}/v1internal:retrieveUserQuota", req_headers),
+                (f"{endpoint}/v1internal:fetchAvailableModels", req_headers),
             ]
             include_prod_summary = "cloudcode-pa.googleapis.com" not in endpoint
             if include_prod_summary:
-                urls.append("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary")
+                targets.append(("https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary", hub_headers))
 
+            from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=4) as executor:
-                fetch_results = list(executor.map(_fetch_endpoint, urls))
+                fetch_results = list(executor.map(_fetch_endpoint, targets))
 
             summary_data = fetch_results[0] or {}
             quota_data = fetch_results[1] or {}
             raw_models = fetch_results[2] or {}
             prod_summary = fetch_results[3] if include_prod_summary and len(fetch_results) > 3 and fetch_results[3] else {}
 
-            # 1. Quota Summary (Groups & 3P Claude/GPT limits)
-            # Combine groups so Gemini 5h/Weekly buckets from production are included even on daily endpoint
             all_groups = (summary_data.get("groups", []) or []) + (prod_summary.get("groups", []) or [])
-            for grp in all_groups:
-                grp_name = grp.get("displayName", "").lower()
-                for b in grp.get("buckets", []):
-                    b_id = b.get("bucketId", "")
-                    rem_pct = int(round(b.get("remainingFraction", 1.0) * 100))
-                    rel_time = fmt_relative_reset_from_iso(b.get("resetTime", ""))
-
-                    if b_id == "gemini-5h" or ("gemini" in grp_name and b.get("window") == "5h"):
-                        gemini_5h_rem = rem_pct
-                        gemini_5h_rel = rel_time
-                    elif b_id == "gemini-weekly" or ("gemini" in grp_name and b.get("window") == "weekly"):
-                        gemini_wk_rem = rem_pct
-                        gemini_wk_rel = rel_time
-                    elif b_id == "3p-5h" or (("claude" in grp_name or "gpt" in grp_name) and b.get("window") == "5h"):
-                        claude_5h_rem = rem_pct
-                        claude_5h_rel = rel_time or "5h 0m"
-                    elif b_id == "3p-weekly" or (("claude" in grp_name or "gpt" in grp_name) and b.get("window") == "weekly"):
-                        claude_wk_rem = rem_pct
-                        claude_wk_rel = rel_time
-
-            # 2. Per-model Quota (retrieveUserQuota: gets real Gemini consumed limit & reset)
-            for b in quota_data.get("buckets", []):
-                m_id = b.get("modelId", "")
-                if "gemini" in m_id:
-                    rem = b.get("remainingFraction", 1.0)
-                    rem_pct = int(round(rem * 100))
-                    raw_reset = b.get("resetTime", "")
-                    rel_time = fmt_relative_reset_from_iso(raw_reset)
-                    token_type = b.get("tokenType", "")
-
-                    # WTUS stands for Weekly Token Usage Share. It represents the weekly limit!
-                    if token_type == "WTUS":
-                        gemini_wk_rem = rem_pct
-                        gemini_wk_rel = rel_time
-                    else:
-                        gemini_5h_rem = rem_pct
-                        gemini_5h_rel = rel_time
-                    break
+            folded = fold_quota(all_groups, quota_data.get("buckets", []))
+            gemini_5h_rem, gemini_5h_rel = folded["g5"] or (gemini_5h_rem, gemini_5h_rel)
+            gemini_wk_rem, gemini_wk_rel = folded["gw"] or (gemini_wk_rem, gemini_wk_rel)
+            claude_5h_rem, claude_5h_rel = folded["c5"] or (claude_5h_rem, claude_5h_rel)
+            claude_wk_rem, claude_wk_rel = folded["cw"] or (claude_wk_rem, claude_wk_rel)
+            claude_5h_rel = claude_5h_rel or "5h 0m"
 
             # 3. Detailed Models (fetchAvailableModels)
             models_list = []
