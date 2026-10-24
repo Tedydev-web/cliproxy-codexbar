@@ -241,17 +241,11 @@ function buildMediumWidget(w, data) {
   };
 
   const g5Rem = agy.gemini?.five_hour_remaining ?? 97;
-  const g5Used = 100 - g5Rem;
-  const g5ResetFormatted = formatResetWithEst(agy.gemini?.five_hour_refresh || "4h 56m");
 
   const gWkRem = agy.gemini?.weekly_remaining ?? 92;
-  const gWkUsed = 100 - gWkRem;
-  const gWkResetFormatted = formatResetWithEst(agy.gemini?.weekly_refresh || "6d 21h");
 
   const cg5Rem = agy.claude_gpt?.five_hour_remaining ?? 100;
-  const cg5Used = 100 - cg5Rem;
   const cgWkRem = agy.claude_gpt?.weekly_remaining ?? 100;
-  const cgWkUsed = 100 - cgWkRem;
 
   // --- HEADER: 100% NHƯ ORBITER MACOS ---
   const row1 = w.addStack();
@@ -302,75 +296,48 @@ function buildMediumWidget(w, data) {
 
   w.addSpacer(6);
 
-  // --- METRIC 1: GIỚI HẠN 5H (TEAL GREEN) ---
-  const g5Head = w.addStack();
-  g5Head.layoutHorizontally();
-  g5Head.centerAlignContent();
-
-  const g5Title = g5Head.addText(`Giới hạn 5h: ${g5Used}% đã dùng`);
-  g5Title.font = Font.boldSystemFont(12.5);
-  g5Title.textColor = TOKENS.textPrimary;
-
-  g5Head.addSpacer();
-
-  const g5Rst = g5Head.addText(g5ResetFormatted);
-  g5Rst.font = Font.systemFont(10);
-  g5Rst.textColor = TOKENS.textSecondary;
-
-  w.addSpacer(3.5);
-
   const barW = getWidgetContentWidth("medium", hPadding);
-  const bar5 = drawSegmentedBar(barW, 5, g5Used, TOKENS.geminiTeal);
-  const v5 = w.addImage(bar5);
-  v5.imageSize = new Size(barW, 5);
-  v5.leftAlignImage();
+  const gap = 14;
+  const colW = Math.floor((barW - gap) / 2);
 
-  w.addSpacer(2.5);
+  const body = w.addStack();
+  body.layoutHorizontally();
+  body.topAlignContent();
 
-  const sub5 = w.addText(`Còn lại ${g5Rem}%`);
-  sub5.font = Font.systemFont(9.5);
-  sub5.textColor = TOKENS.textMuted;
+  const addGroup = (parent, caption, five, week) => {
+    const col = parent.addStack();
+    col.layoutVertically();
+    col.size = new Size(colW, 0);
+    const cap = col.addText(caption);
+    cap.font = Font.boldSystemFont(9);
+    cap.textColor = TOKENS.textMuted;
+    cap.lineLimit = 1;
+    col.addSpacer(4);
+    [["5h", five, TOKENS.geminiTeal], ["Tuần", week, TOKENS.geminiAmber]].forEach(([label, m, color], i) => {
+      const used = Math.max(0, Math.min(100, 100 - (m.remaining ?? 100)));
+      const head = col.addStack();
+      head.layoutHorizontally();
+      head.centerAlignContent();
+      const t = head.addText(`${label}: ${used}% đã dùng`);
+      t.font = Font.boldSystemFont(10.5);
+      t.textColor = used >= 90 ? TOKENS.amberWarn : TOKENS.textPrimary;
+      t.lineLimit = 1;
+      head.addSpacer();
+      const r = head.addText(m.refresh || "");
+      r.font = Font.systemFont(9);
+      r.textColor = TOKENS.textSecondary;
+      r.lineLimit = 1;
+      col.addSpacer(3);
+      const img = col.addImage(drawSegmentedBar(colW, 5, used, color));
+      img.imageSize = new Size(colW, 5);
+      img.leftAlignImage();
+      if (i === 0) col.addSpacer(7);
+    });
+  };
 
-  w.addSpacer(6);
-
-  // --- METRIC 2: GIỚI HẠN TUẦN (AMBER YELLOW) ---
-  const gWkHead = w.addStack();
-  gWkHead.layoutHorizontally();
-  gWkHead.centerAlignContent();
-
-  const gWkTitle = gWkHead.addText(`Giới hạn tuần: ${gWkUsed}% đã dùng`);
-  gWkTitle.font = Font.boldSystemFont(12.5);
-  gWkTitle.textColor = TOKENS.textPrimary;
-
-  gWkHead.addSpacer();
-
-  const gWkRst = gWkHead.addText(gWkResetFormatted);
-  gWkRst.font = Font.systemFont(10);
-  gWkRst.textColor = TOKENS.textSecondary;
-
-  w.addSpacer(3.5);
-
-  const barWk = drawSegmentedBar(barW, 5, gWkUsed, TOKENS.geminiAmber);
-  const vWk = w.addImage(barWk);
-  vWk.imageSize = new Size(barW, 5);
-  vWk.leftAlignImage();
-
-  w.addSpacer(2.5);
-
-  // Sub row: Còn lại tuần (trái) + Claude/GPT status pill (phải - đồng bộ Orbiter macOS)
-  const subRow = w.addStack();
-  subRow.layoutHorizontally();
-  subRow.centerAlignContent();
-
-  const subWk = subRow.addText(`Còn lại ${gWkRem}%`);
-  subWk.font = Font.systemFont(9.5);
-  subWk.textColor = TOKENS.textMuted;
-
-  subRow.addSpacer();
-
-  const cgTxt = subRow.addText(`Claude & GPT: ${cg5Used}% đã dùng`);
-  cgTxt.font = Font.systemFont(9.5);
-  cgTxt.textColor = cg5Used > 80 ? TOKENS.amberWarn : TOKENS.geminiTeal;
+  addGroup(body, "GEMINI (Flash, Pro)", { remaining: g5Rem, refresh: agy.gemini?.five_hour_refresh }, { remaining: gWkRem, refresh: agy.gemini?.weekly_refresh });
+  body.addSpacer(gap);
+  addGroup(body, "CLAUDE & GPT (Opus, Sonnet)", { remaining: cg5Rem, refresh: agy.claude_gpt?.five_hour_refresh }, { remaining: cgWkRem, refresh: agy.claude_gpt?.weekly_refresh });
 }
 
 // ==========================================
