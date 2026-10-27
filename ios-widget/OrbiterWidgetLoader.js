@@ -44,7 +44,7 @@ async function settings(message) {
   return Boolean(s || secret());
 }
 
-async function send(path, { method = "GET", body, timeout = 12 } = {}) {
+async function send(path, { method = "GET", body, timeout = 8 } = {}) {
   const req = new Request(`${host()}${path}`);
   req.method = method;
   req.timeoutInterval = timeout;
@@ -82,7 +82,7 @@ async function fetchCode(file, retried = false) {
   let status = null;
   let error = null;
   try {
-    const head = await send(`/v1/widget/${file}`, { method: "HEAD", timeout: 8 });
+    const head = await send(`/v1/widget/${file}`, { method: "HEAD", timeout: 4 });
     status = head.status;
     const tag = headerOf(head.headers, "etag");
     if (status === 200 && tag && tag === cachedTag) return { code: cached, stale: false };
@@ -91,7 +91,7 @@ async function fetchCode(file, retried = false) {
   }
   if (status !== 401) {
     try {
-      const r = await send(`/v1/widget/${file}`, { timeout: 15 });
+      const r = await send(`/v1/widget/${file}`, { timeout: 8 });
       status = r.status;
       if (status === 200 && r.text) {
         fm.writeString(codePath, r.text);

@@ -10,7 +10,7 @@ import os
 # Ensure package modules can be imported
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from http.server import HTTPServer
+from http.server import ThreadingHTTPServer
 from core.config import BRIDGE_PORT
 from providers.claude import ClaudePoolProvider
 from providers.antigravity import AntigravityProvider
@@ -33,7 +33,8 @@ def main():
     BridgeApiHandler.gateway_provider = gateway_prov
     BridgeApiHandler.system_provider = system_prov
 
-    server = HTTPServer(("0.0.0.0", BRIDGE_PORT), BridgeApiHandler)
+    ThreadingHTTPServer.daemon_threads = True
+    server = ThreadingHTTPServer(("0.0.0.0", BRIDGE_PORT), BridgeApiHandler)
     print(f"🚀 CLIProxy Quota Bridge v2 running on port {BRIDGE_PORT}...")
     try:
         server.serve_forever()

@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler
 from core.config import MGMT_SECRET, WIDGET_DIR, WIDGET_FILES
 
 class BridgeApiHandler(BaseHTTPRequestHandler):
+    timeout = 15
     claude_provider = None
     agy_provider = None
     keeper_provider = None
