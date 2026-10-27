@@ -35,6 +35,7 @@ function summary(p) {
   const lines = [act ? `Đang chạy: ${shortName(act)}, 5h ${pct(act.used_5h)}, tuần ${pct(act.used_weekly)}` : "Không có account nào đang bật"];
   live.forEach((a, i) => lines.push(accountLine(a, i)));
   paused.forEach((a) => lines.push(accountLine(a)));
+  if (p.console) lines.push(`capi: ${p.console.mode === "primary" ? "đang ưu tiên" : "dự phòng tự động"} (${p.console.keys} key)`);
   return lines.join("\n");
 }
 
@@ -115,6 +116,26 @@ async function info(title, message) {
 
 async function setFirst(a) {
   return orbiter.api("/v1/set-priority", { method: "POST", body: { email: a.email } });
+}
+
+async function setConsoleMode(mode) {
+  return orbiter.api("/v1/set-console-mode", { method: "POST", body: { mode } });
+}
+
+async function toggleConsole(c) {
+  const primary = c.mode !== "primary";
+  const title = primary ? "Chuyển sang dùng capi?" : "Quay về pool account?";
+  const message = primary
+    ? "Mọi request mới đi qua key Console (tính tiền theo token) trước các account pool. Nếu capi hết credit, proxy tự rơi về pool."
+    : "capi trở lại làm dự phòng: dùng pool trước, tự sang capi khi tất cả account pool hết hạn mức, và tự quay về khi có account khả dụng.";
+  if (!(await confirm(title, message, primary ? "Dùng capi" : "Về pool"))) return false;
+  try {
+    await setConsoleMode(primary ? "primary" : "fallback");
+    return true;
+  } catch (e) {
+    await info("Không đổi được chế độ capi", e.message || String(e));
+    return false;
+  }
 }
 
 async function setEnabled(a, enabled) {
@@ -215,6 +236,18 @@ async function controlPanel({ preview } = {}) {
         await accountActions(a, false);
       });
     });
+
+    if (p.console) {
+      const primary = p.console.mode === "primary";
+      addTextRow(
+        table,
+        `${primary ? "●" : "◦"} Console API (capi) · ${p.console.keys} key`,
+        primary ? "Đang ưu tiên capi · bấm để về pool" : "Dự phòng, tự chuyển hai chiều · bấm để dùng capi",
+        async () => {
+          if (await toggleConsole(p.console)) await refresh();
+        }
+      );
+    }
 
     addTextRow(table, "Làm mới", null, () => refresh(false));
     if (preview) addTextRow(table, "Xem trước widget", null, async () => preview());
