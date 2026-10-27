@@ -1372,7 +1372,7 @@ class QuotaState: ObservableObject {
             byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetails(isUsedMode: isUsedMode), remainingPercent: isUsedMode ? a.usedWeekly : a.remainingWeekly, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, unavailableLabel: a.isPaused ? "Cách ly" : "Hết hạn", badge: a.plan)
         }
         for k in consoleKeys {
-            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, remainingPercent: 100, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: k.state == "ok" ? "Còn credit" : nil, title: k.displayName, secondaryTitle: k.id, badge: "Console API")
+            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, remainingPercent: 100, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: k.state == "ok" ? "Còn credit" : nil, title: k.displayName, badge: k.id)
         }
         var rows = routingOrder.compactMap { byId[$0] }
         let seen = Set(rows.map { $0.id })

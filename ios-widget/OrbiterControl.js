@@ -46,7 +46,7 @@ const activeAccount = (p) => liveAccounts(p).find((a) => !a.is_disabled) || null
 
 const rowTitle = (a) =>
   a.is_console
-    ? `${a.console.org || a.email} · ${a.email} [Console API]`
+    ? `${a.console.org || a.email} [${a.email}]`
     : `${shortName(a)}${a.plan ? ` [${a.plan}]` : ""}`;
 
 function rowDetail(a) {
