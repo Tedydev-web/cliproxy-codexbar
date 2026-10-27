@@ -174,7 +174,7 @@ struct BackupSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Dự phòng khi hết quota")
+                Text("Dự phòng")
                     .font(.footnote)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)

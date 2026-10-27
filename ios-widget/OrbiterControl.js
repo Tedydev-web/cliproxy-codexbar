@@ -330,7 +330,7 @@ async function controlPanel({ preview } = {}) {
       const sel = (b.models || []).find((m) => m.selected);
       addTextRow(
         table,
-        `${on ? "●" : "○"} Dự phòng khi hết quota [Aperture]`,
+        `${on ? "●" : "○"} Dự phòng [Aperture]`,
         `${backupStatus(b)}\n${on ? `Tự chuyển sang ${sel ? sel.label : "model dự phòng"}` : "Đang tắt"}`,
         async () => {
           await backupActions(b);
