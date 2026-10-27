@@ -129,13 +129,12 @@ class ConsoleRouteProvider:
         if new == old:
             return
         shutil.copy2(CONFIG_FILE, CONFIG_FILE + ".bak-console-route")
-        tmp = CONFIG_FILE + ".tmp"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        with open(CONFIG_FILE, "r+", encoding="utf-8") as f:
+            f.seek(0)
             f.write(new)
+            f.truncate()
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, CONFIG_FILE)
 
     def _edit(self, edits):
         with self._lock:
