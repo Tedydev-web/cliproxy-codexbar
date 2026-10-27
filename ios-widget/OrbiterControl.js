@@ -49,6 +49,33 @@ const rowTitle = (a) =>
     ? `${a.console.org || a.email} [${a.email}]`
     : `${shortName(a)}${a.plan ? ` [${a.plan}]` : ""}`;
 
+function clockAfter(rel) {
+  const parts = String(rel || "").trim().split(/\s+/);
+  let sec = 0;
+  for (const part of parts) {
+    const n = parseFloat(part);
+    if (!Number.isFinite(n)) continue;
+    if (part.endsWith("d")) sec += n * 86400;
+    else if (part.endsWith("h")) sec += n * 3600;
+    else if (part.endsWith("m")) sec += n * 60;
+    else if (part.endsWith("s")) sec += n;
+  }
+  if (sec <= 0) return "";
+  const t = new Date(Date.now() + sec * 1000);
+  const hm = `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+  const now = new Date();
+  if (t.toDateString() === now.toDateString()) return hm;
+  const tomorrow = new Date(now.getTime() + 86400000);
+  if (t.toDateString() === tomorrow.toDateString()) return `Mai ${hm}`;
+  return `${String(t.getDate()).padStart(2, "0")}/${String(t.getMonth() + 1).padStart(2, "0")} ${hm}`;
+}
+
+function quotaLine(label, used, rel) {
+  const when = rel ? `hồi ${rel}${clockAfter(rel) ? ` · ${clockAfter(rel)}` : ""}` : label === "5h" ? "chưa bắt đầu" : "chưa có mốc";
+  const flag = typeof used === "number" && used >= 100 ? " ⛔" : "";
+  return `${label} ${pct(used)}${flag} · ${when}`;
+}
+
 function rowDetail(a) {
   if (a.is_console) {
     const state = a.console.state;
@@ -57,10 +84,7 @@ function rowDetail(a) {
     if (state === "ok") return "Không xem được số dư";
     return keyStateLabel(state)[0].toUpperCase() + keyStateLabel(state).slice(1);
   }
-  if (a.is_disabled) return `Đang tắt · dùng 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}`;
-  if (a.is_available === false) return a.reset_weekly ? `Tuần hồi sau ${a.reset_weekly}` : "Tuần đã hết · chưa rõ giờ hồi";
-  if (typeof a.used_5h === "number" && a.used_5h >= 100) return a.reset_5h ? `5h hồi sau ${a.reset_5h}` : "5h đã đầy · chưa rõ giờ hồi";
-  return `Dùng 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}${a.reset_5h ? ` · 5h hồi sau ${a.reset_5h}` : ""}`;
+  return `${quotaLine("5h", a.used_5h, a.reset_5h)}\n${quotaLine("Tuần", a.used_weekly, a.reset_weekly)}`;
 }
 
 function accountLine(a, index) {
@@ -205,7 +229,7 @@ async function accountActions(a, isFirst) {
 
 function addTextRow(table, title, subtitle, onSelect) {
   const row = new UITableRow();
-  row.height = subtitle ? 60 : 44;
+  row.height = subtitle ? (String(subtitle).includes("\n") ? 78 : 60) : 44;
   row.addText(title, subtitle);
   if (onSelect) {
     row.dismissOnSelect = false;

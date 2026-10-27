@@ -174,7 +174,7 @@ struct ConsoleKeyItem: Identifiable {
 struct RouteRow: Identifiable {
     let id: String
     let subDetails: String
-    var compactDetails: String? = nil
+    var cells: [QuotaCell] = []
     let isAvailable: Bool
     var isProbeError: Bool = false
     var isDisabled: Bool = false
@@ -191,6 +191,7 @@ struct CompactAccountRowView: View {
     let index: Int
     let totalCount: Int
     let subDetails: String
+    var cells: [QuotaCell] = []
     let isAvailable: Bool
     let isCurrent: Bool
     var isProbeError: Bool = false
@@ -216,7 +217,7 @@ struct CompactAccountRowView: View {
             rowContent
                 .help(self.email)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(self.title ?? Self.shortIdentity(self.email)) \(self.badge ?? ""), \(self.statusText ?? (self.isAvailable ? "" : self.unavailableLabel)), \(self.subDetails)")
+                .accessibilityLabel("\(self.title ?? Self.shortIdentity(self.email)) \(self.badge ?? ""), \(self.statusText ?? (self.isAvailable ? "" : self.unavailableLabel)), \(self.cells.isEmpty ? self.subDetails : self.cells.map { "\($0.label) \($0.value), \($0.recovery)" }.joined(separator: "; "))")
             if let onToggleEnabled = onToggleEnabled {
                 Toggle("", isOn: Binding(get: { !self.isDisabled }, set: { _ in onToggleEnabled() }))
                     .toggleStyle(.switch)
@@ -316,11 +317,15 @@ struct CompactAccountRowView: View {
                         }
                     }
                     
-                    // Line 2: Details & Reset time (Clean, subtle secondary text)
-                    Text(self.subDetails)
-                        .font(.footnote)
-                        .foregroundStyle(self.isProbeError ? Color(nsColor: .systemOrange) : Color.secondary)
-                        .lineLimit(1)
+                    if !self.cells.isEmpty {
+                        QuotaCellsView(cells: self.cells)
+                            .padding(.top, 2)
+                    } else {
+                        Text(self.subDetails)
+                            .font(.footnote)
+                            .foregroundStyle(self.isProbeError ? Color(nsColor: .systemOrange) : Color.secondary)
+                            .lineLimit(1)
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -405,41 +410,75 @@ struct PoolAccountItem: Identifiable {
         scoped.isEmpty ? "" : " · " + scoped.map { "\($0.model): \($0.used)%" }.joined(separator: " · ")
     }
 
-    func subDetails(isUsedMode: Bool) -> String {
-        if isPaused {
-            return "Đã cách ly · \(errorHint.isEmpty ? "Cần đăng nhập lại" : errorHint)"
-        }
-        if isDisabled {
-            return isUsedMode ? "Đang tắt · Dùng 5h \(used5h)% · Tuần \(usedWeekly)%" : "Đang tắt · Còn 5h \(remaining5h)% · Tuần \(remainingWeekly)%"
-        }
-        if isProbeError {
-            return "Tạm nghẽn 429 API · Sẵn sàng"
-        }
-        if !isAvailable {
-            let est = Self.recoveryText(resetWeekly)
-            return est.isEmpty ? "Tuần đã hết · chưa rõ giờ hồi" : "Tuần \(est)"
-        }
-        if used5h >= 100 {
-            let est = Self.recoveryText(reset5h)
-            return est.isEmpty ? "5h đã đầy · chưa rõ giờ hồi" : "5h \(est)"
-        }
-        let usage = isUsedMode ? "Dùng 5h \(used5h)% · Tuần \(usedWeekly)%" : "Còn 5h \(remaining5h)% · Tuần \(remainingWeekly)%"
-        let window = reset5h.isEmpty ? "Tuần" : "5h"
-        let est = Self.recoveryText(reset5h.isEmpty ? resetWeekly : reset5h).components(separatedBy: " · ").first ?? ""
-        return est.isEmpty ? usage : "\(usage) · \(window) \(est)"
+    var statusLine: String {
+        isPaused ? "Đã cách ly · \(errorHint.isEmpty ? "Cần đăng nhập lại" : errorHint)" : ""
     }
 
-    var compactDetails: String? {
-        guard isAvailable, !isDisabled, !isPaused, !isProbeError else { return nil }
-        let window = reset5h.isEmpty ? "Tuần" : "5h"
-        let est = Self.recoveryText(reset5h.isEmpty ? resetWeekly : reset5h)
-        return est.isEmpty ? nil : "\(window) \(est)"
+    func quotaCells(isUsedMode: Bool) -> [QuotaCell] {
+        guard !isPaused else { return [] }
+        return [
+            QuotaCell.make(label: "5h", used: used5h, remaining: remaining5h, reset: reset5h, emptyReset: "Chưa bắt đầu", isUsedMode: isUsedMode),
+            QuotaCell.make(label: "Tuần", used: usedWeekly, remaining: remainingWeekly, reset: resetWeekly, emptyReset: "Chưa có mốc", isUsedMode: isUsedMode)
+        ]
+    }
+}
+
+struct QuotaCell: Identifiable {
+    let label: String
+    let value: String
+    let level: Int
+    let recovery: String
+    var id: String { label }
+
+    static func make(label: String, used: Int, remaining: Int, reset: String, emptyReset: String, isUsedMode: Bool) -> QuotaCell {
+        let est = formatResetWithEst(raw: reset).replacingOccurrences(of: "Hồi sau ", with: "Hồi ")
+        return QuotaCell(
+            label: label,
+            value: isUsedMode ? "\(used)% dùng" : "\(remaining)% còn",
+            level: used >= 100 ? 2 : (used >= 80 ? 1 : 0),
+            recovery: est.isEmpty ? emptyReset : est
+        )
+    }
+}
+
+struct QuotaCellsView: View {
+    let cells: [QuotaCell]
+
+    private func tint(_ level: Int) -> Color {
+        switch level {
+        case 2: return Color(nsColor: .systemRed)
+        case 1: return Color(nsColor: .systemOrange)
+        default: return Color.primary
+        }
     }
 
-    static func recoveryText(_ raw: String) -> String {
-        let est = formatResetWithEst(raw: raw)
-        if est.isEmpty { return "" }
-        return est.replacingOccurrences(of: "Hồi sau ", with: "hồi sau ").replacingOccurrences(of: "Hồi: ", with: "hồi sau ")
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(cells) { cell in
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(cell.label)
+                            .font(.system(size: 9.5, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(cell.value)
+                            .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(tint(cell.level))
+                    }
+                    Text(cell.recovery)
+                        .font(.system(size: 9.5).monospacedDigit())
+                        .foregroundStyle(cell.level == 2 ? tint(2).opacity(0.9) : Color.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(cell.level == 2 ? Color(nsColor: .systemRed).opacity(0.14) : Color.white.opacity(0.05))
+                )
+            }
+        }
     }
 }
 
@@ -622,7 +661,8 @@ struct ClaudeFullCardView: View {
                         email: row.id,
                         index: index,
                         totalCount: rows.count,
-                        subDetails: (self.state.activeRouteId == row.id ? row.compactDetails : nil) ?? row.subDetails,
+                        subDetails: row.subDetails,
+                        cells: row.cells,
                         isAvailable: row.isAvailable,
                         isCurrent: self.state.activeRouteId == row.id,
                         isProbeError: row.isProbeError,
@@ -1345,7 +1385,7 @@ class QuotaState: ObservableObject {
         var byId: [String: RouteRow] = [:]
         let isUsedMode = quotaDisplayMode == "used"
         for a in claudeAccounts {
-            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetails(isUsedMode: isUsedMode), compactDetails: a.compactDetails, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, unavailableLabel: a.isPaused ? "Cách ly" : "Hết hạn", statusText: (a.isAvailable && !a.isDisabled && !a.isPaused) ? "Sẵn sàng" : nil, badge: a.plan)
+            byId[a.email] = RouteRow(id: a.email, subDetails: a.statusLine, cells: a.quotaCells(isUsedMode: isUsedMode), isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, unavailableLabel: a.isPaused ? "Cách ly" : "Hết hạn", statusText: (a.isAvailable && !a.isDisabled && !a.isPaused) ? "Sẵn sàng" : nil, badge: a.plan)
         }
         for k in consoleKeys {
             byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: (k.state == "ok" && k.enabled) ? "Còn credit" : nil, title: k.displayName, badge: k.id)
