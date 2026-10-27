@@ -606,7 +606,25 @@ class ClaudePoolProvider:
         self._last_probe_time = 0
         return 200, {"ok": True, "email": email, "enabled": enabled}
 
-    def set_accounts_order(self, ordered_emails):
+    def get_priority_map(self):
+        out = {}
+        try:
+            with open(ACCOUNTS_FILE, "r", encoding="utf-8") as f:
+                accounts = json.load(f)["providers"]["claude"].get("accounts", {})
+        except (OSError, ValueError, KeyError):
+            return out
+        for em, info in accounts.items():
+            if info.get("status") == "paused":
+                continue
+            fn = info.get("tokenFile", f"claude-{em}.json")
+            try:
+                with open(os.path.join(AUTH_DIR, fn), "r", encoding="utf-8") as f:
+                    out[em] = int(json.load(f).get("priority", 0))
+            except (OSError, ValueError):
+                continue
+        return out
+
+    def set_accounts_order(self, ordered_emails, ranks=None, total=None):
         if not ordered_emails or not isinstance(ordered_emails, list):
             return False
 
@@ -632,9 +650,9 @@ class ClaudePoolProvider:
             print(f"set_accounts_order: accounts.json write failed: {e}", file=sys.stderr)
 
         # 2. Update priority via Management API
-        total = len(ordered_emails)
+        total = total or len(ordered_emails)
         for idx, em in enumerate(ordered_emails):
-            prio = max(1, total - idx + 1)
+            prio = max(1, total - (ranks.get(em, idx) if ranks else idx) + 1)
             fn = accounts_dict.get(em, {}).get("tokenFile", f"claude-{em}.json")
             try:
                 req = urllib.request.Request(

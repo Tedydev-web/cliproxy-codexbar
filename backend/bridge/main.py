@@ -26,7 +26,6 @@ def main():
     agy_prov = AntigravityProvider()
     keeper_prov = KeeperProvider()
     console_prov = ConsoleRouteProvider()
-    console_prov.start()
     gateway_prov = GatewayProvider()
     system_prov = SystemProvider()
 

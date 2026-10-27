@@ -63,6 +63,39 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             self.send_response(405)
             self.end_headers()
 
+    def routing_order(self, accounts, console_keys):
+        prio = self.claude_provider.get_priority_map()
+        items = [(prio.get(a["email"], 0), 0, a["email"]) for a in accounts if not a.get("is_paused")]
+        items += [(k["priority"], 1, k["id"]) for k in console_keys]
+        items.sort(key=lambda t: (-t[0], t[1], t[2]))
+        return [t[2] for t in items]
+
+    def pool_payload(self, accounts, gw_info):
+        keys = self.console_provider.get_keys() if self.console_provider else []
+        return {
+            "accounts": accounts,
+            "gateway": gw_info,
+            "console": {"keys": keys},
+            "order": self.routing_order(accounts, keys),
+        }
+
+    def apply_order(self, order):
+        from providers.console_route import is_console_id
+        order = [str(x) for x in order]
+        pool_ids = [x for x in order if not is_console_id(x)]
+        console_ids = [x for x in order if is_console_id(x)]
+        paused = {a["email"] for a in self.claude_provider.get_pool_status() if a.get("is_paused")}
+        effective = [x for x in order if x not in paused]
+        ranks = {x: i for i, x in enumerate(effective)}
+        total = len(effective)
+        if console_ids and self.console_provider:
+            status, result = self.console_provider.set_priorities({c: max(1, total - ranks[c] + 1) for c in console_ids})
+            if status != 200:
+                return status, result
+        if pool_ids and not self.claude_provider.set_accounts_order(pool_ids, ranks=ranks, total=total):
+            return 400, {"error": "Invalid order payload"}
+        return 200, {"ok": True, "order": order}
+
     def do_GET(self):
         if self.path == "/health":
             self.send_json(200, {"status": "healthy", "service": "cliproxy-quota-bridge"})
@@ -73,7 +106,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/v1/pool-status"):
             accounts = self.claude_provider.get_pool_status()
             gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else None
-            self.send_json(200, {"accounts": accounts, "gateway": gw_info, "console": self.console_provider.get_state() if self.console_provider else None})
+            self.send_json(200, self.pool_payload(accounts, gw_info))
         elif self.path.startswith("/v1/gateway-telemetry"):
             gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else {}
             self.send_json(200, gw_info)
@@ -114,7 +147,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             # Default fallback for CodexBar clients
             accounts = self.claude_provider.get_pool_status()
             gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else None
-            self.send_json(200, {"accounts": accounts, "gateway": gw_info, "console": self.console_provider.get_state() if self.console_provider else None})
+            self.send_json(200, self.pool_payload(accounts, gw_info))
 
     def do_POST(self):
         if not self.is_authorized():
@@ -129,33 +162,27 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             return
 
         if self.path.startswith("/v1/set-priority"):
-            target_email = req_data.get("email")
-            if not target_email:
+            target = req_data.get("email") or req_data.get("id")
+            if not target:
                 self.send_json(400, {"error": "Missing 'email' field"})
                 return
-
+            from providers.console_route import is_console_id
+            keys = self.console_provider.get_keys() if self.console_provider else []
             pool = self.claude_provider.get_pool_status()
-            emails = [a["email"] for a in pool]
-            if target_email in emails:
-                emails.remove(target_email)
-                new_order = [target_email] + emails
-                self.claude_provider.set_accounts_order(new_order)
-                self.send_json(200, {"ok": True, "target": target_email, "order": new_order})
-            else:
-                self.send_json(404, {"error": f"Account '{target_email}' not found in pool"})
+            order = self.routing_order(pool, keys)
+            if target not in order:
+                self.send_json(404, {"error": f"'{target}' not found in routing order"})
+                return
+            order.remove(target)
+            status, result = self.apply_order([target] + order)
+            self.send_json(status, result)
 
         elif self.path.startswith("/v1/set-order"):
             new_order = req_data.get("order", [])
-            if self.claude_provider.set_accounts_order(new_order):
-                self.send_json(200, {"ok": True, "order": new_order})
-            else:
+            if not isinstance(new_order, list) or not new_order:
                 self.send_json(400, {"error": "Invalid order payload"})
-
-        elif self.path.startswith("/v1/set-console-mode"):
-            if not self.console_provider:
-                self.send_json(503, {"error": "Console route provider unavailable"})
                 return
-            status, result = self.console_provider.set_mode(req_data.get("mode"))
+            status, result = self.apply_order(new_order)
             self.send_json(status, result)
 
         elif self.path.startswith("/v1/set-enabled"):
@@ -164,7 +191,11 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             if not email or not isinstance(enabled, bool):
                 self.send_json(400, {"error": "Need 'email' (string) and 'enabled' (bool)"})
                 return
-            status, result = self.claude_provider.set_account_enabled(email, enabled)
+            from providers.console_route import is_console_id
+            if is_console_id(email):
+                status, result = self.console_provider.set_enabled(email, enabled) if self.console_provider else (503, {"error": "Console route provider unavailable"})
+            else:
+                status, result = self.claude_provider.set_account_enabled(email, enabled)
             self.send_json(status, result)
 
         elif self.path.startswith("/v1/kill-port"):

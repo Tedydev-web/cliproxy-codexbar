@@ -136,78 +136,43 @@ struct MetricRow: View {
 }
 
 // MARK: - Minimal Sleek Account Row (Exact CodexBar Native Row Style)
-struct ConsoleKeyStatus: Identifiable {
-    let prefix: String
+struct ConsoleKeyItem: Identifiable {
+    let id: String
     let org: String
     let state: String
-    var id: String { prefix }
-}
+    let enabled: Bool
 
-struct ConsoleRouteRowView: View {
-    let isPrimary: Bool
-    let keyCount: Int
-    let keys: [ConsoleKeyStatus]
-    let onToggle: () -> Void
+    var isUsable: Bool { enabled && (state == "ok" || state == "rate_limited" || state == "unknown" || state == "error") }
 
-    static func color(_ state: String) -> Color {
-        switch state {
-        case "ok": return Color.green
-        case "rate_limited": return Color.yellow
-        default: return Color.red
-        }
-    }
-
-    static func label(_ state: String) -> String {
+    var stateLabel: String {
         switch state {
         case "ok": return "Còn credit"
         case "no_credit": return "Hết credit"
         case "invalid": return "Key không hợp lệ"
         case "rate_limited": return "Đang bị giới hạn"
+        case "disabled": return "Đang tắt"
+        case "unknown": return "Đang kiểm tra"
         default: return "Chưa kiểm tra được"
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-        HStack(spacing: 8) {
-            Image(systemName: "key.horizontal.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(isPrimary ? Color.orange : Color.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Console API (capi) · \(keyCount) key")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isPrimary ? Color.primary : Color.secondary)
-                Text(isPrimary ? "Đang ưu tiên capi · hết credit tự về pool" : "Dự phòng · tự dùng khi pool hết, tự về pool khi có lại")
-                    .font(.system(size: 10))
-                    .foregroundStyle(isPrimary ? Color.orange : Color.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            Button(action: onToggle) {
-                Text(isPrimary ? "Về pool" : "Dùng capi")
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        }
-        ForEach(keys) { k in
-            HStack(spacing: 6) {
-                Circle().fill(Self.color(k.state)).frame(width: 6, height: 6)
-                Text("\(k.prefix)\(k.org.isEmpty ? "" : " · \(k.org)")")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(Self.label(k.state))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Self.color(k.state))
-            }
-            .padding(.leading, 20)
-        }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isPrimary ? Color.orange.opacity(0.12) : Color.clear))
+    var detailText: String {
+        let prefix = org.isEmpty ? "Console API" : "Console API · \(org)"
+        return enabled ? "\(prefix) · \(stateLabel)" : "\(prefix) · Đang tắt"
     }
+}
+
+struct RouteRow: Identifiable {
+    let id: String
+    let subDetails: String
+    let remainingPercent: Int
+    let isAvailable: Bool
+    var isProbeError: Bool = false
+    var isDisabled: Bool = false
+    var isPaused: Bool = false
+    var isConsole: Bool = false
+    var unavailableLabel: String = "Hết hạn"
+    var statusText: String? = nil
 }
 
 struct CompactAccountRowView: View {
@@ -224,6 +189,8 @@ struct CompactAccountRowView: View {
     var onMoveDown: (() -> Void)? = nil
     let onSwitch: () -> Void
     var onToggleEnabled: (() -> Void)? = nil
+    var unavailableLabel: String = "Hết hạn"
+    var statusText: String? = nil
 
     @State private var isHovered: Bool = false
 
@@ -316,9 +283,13 @@ struct CompactAccountRowView: View {
                             }
                             .foregroundStyle(Color(nsColor: .systemOrange))
                         } else if !self.isAvailable {
-                            Text("Hết hạn")
+                            Text(self.unavailableLabel)
                                 .font(.system(size: 9.5, weight: .medium))
                                 .foregroundStyle(Color(nsColor: .systemRed))
+                        } else if let statusText = self.statusText {
+                            Text(statusText)
+                                .font(.system(size: 9.5, weight: .medium))
+                                .foregroundStyle(Color(nsColor: .systemGreen))
                         } else {
                             // CodexBar mini progress capsule
                             Capsule()
@@ -619,30 +590,24 @@ struct ClaudeFullCardView: View {
                         .foregroundStyle(.tertiary)
                 }
                 
-                ForEach(Array(self.state.claudeAccounts.enumerated()), id: \.element.id) { index, acc in
+                let rows = self.state.routeRows
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     CompactAccountRowView(
-                        email: acc.email,
+                        email: row.id,
                         index: index,
-                        totalCount: self.state.claudeAccounts.count,
-                        subDetails: acc.subDetailsText,
-                        remainingPercent: acc.isAvailable ? acc.remainingWeekly : 0,
-                        isAvailable: acc.isAvailable,
-                        isCurrent: self.state.claudeEmail == acc.email,
-                        isProbeError: acc.isProbeError,
-                        isDisabled: acc.isDisabled,
-                        onMoveUp: { self.state.moveAccount(fromIndex: index, toIndex: index - 1) },
-                        onMoveDown: { self.state.moveAccount(fromIndex: index, toIndex: index + 1) },
-                        onSwitch: { AppDelegate.shared?.confirmSwitch(to: acc.email) },
-                        onToggleEnabled: acc.isPaused ? nil : { AppDelegate.shared?.confirmToggleEnabled(email: acc.email, enable: acc.isDisabled) }
-                    )
-                }
-
-                if !self.state.consoleMode.isEmpty {
-                    ConsoleRouteRowView(
-                        isPrimary: self.state.consoleMode == "primary",
-                        keyCount: self.state.consoleKeys,
-                        keys: self.state.consoleKeyStatus,
-                        onToggle: { AppDelegate.shared?.confirmConsoleMode(primary: self.state.consoleMode != "primary") }
+                        totalCount: rows.count,
+                        subDetails: row.subDetails,
+                        remainingPercent: row.isAvailable ? row.remainingPercent : 0,
+                        isAvailable: row.isAvailable,
+                        isCurrent: self.state.activeRouteId == row.id,
+                        isProbeError: row.isProbeError,
+                        isDisabled: row.isDisabled,
+                        onMoveUp: { self.state.moveRoute(fromIndex: index, toIndex: index - 1) },
+                        onMoveDown: { self.state.moveRoute(fromIndex: index, toIndex: index + 1) },
+                        onSwitch: { AppDelegate.shared?.confirmSwitch(to: row.id) },
+                        onToggleEnabled: row.isPaused ? nil : { AppDelegate.shared?.confirmToggleEnabled(email: row.id, enable: row.isDisabled) },
+                        unavailableLabel: row.unavailableLabel,
+                        statusText: row.statusText
                     )
                 }
             }
@@ -1239,9 +1204,8 @@ class QuotaState: ObservableObject {
     @Published var agyGeminiWeeklyRemaining: Int = 66
     @Published var agyGeminiWeeklyRefresh: String = "3d 7h"
     
-    @Published var consoleMode: String = ""
-    @Published var consoleKeys: Int = 0
-    @Published var consoleKeyStatus: [ConsoleKeyStatus] = []
+    @Published var consoleKeys: [ConsoleKeyItem] = []
+    @Published var routingOrder: [String] = []
     @Published var agyClaudeGpt5hText: String = "Quota available"
     @Published var agyClaudeGpt5hRemaining: Int = 100
     @Published var agyClaudeGpt5hRefresh: String = "4h 24m"
@@ -1321,7 +1285,7 @@ class QuotaState: ObservableObject {
     }
     
     func saveOrder() {
-        let newOrder = self.claudeAccounts.map { $0.email }
+        let newOrder = self.routeRows.map { $0.id }
         self.switchingMessage = "Đang lưu thứ tự Pool..."
         
         guard let url = URL(string: "\(self.baseUrl)/v1/set-order") else { return }
@@ -1348,6 +1312,48 @@ class QuotaState: ObservableObject {
         accounts.first { !$0.isDisabled && !$0.isPaused && $0.isAvailable }
             ?? accounts.first { !$0.isDisabled && !$0.isPaused }
             ?? accounts.first
+    }
+
+    var routeRows: [RouteRow] {
+        var byId: [String: RouteRow] = [:]
+        for a in claudeAccounts {
+            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetailsText, remainingPercent: a.remainingWeekly, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused)
+        }
+        for k in consoleKeys {
+            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, remainingPercent: 100, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: k.state == "ok" ? "Còn credit" : nil)
+        }
+        var rows = routingOrder.compactMap { byId[$0] }
+        let seen = Set(rows.map { $0.id })
+        rows += claudeAccounts.filter { !seen.contains($0.email) }.compactMap { byId[$0.email] }
+        return rows
+    }
+
+    var activeRouteId: String? {
+        let rows = routeRows
+        return rows.first { !$0.isDisabled && !$0.isPaused && $0.isAvailable }?.id
+            ?? rows.first { !$0.isDisabled && !$0.isPaused }?.id
+    }
+
+    func moveRoute(fromIndex: Int, toIndex: Int) {
+        var ids = routeRows.map { $0.id }
+        guard fromIndex >= 0, fromIndex < ids.count, toIndex >= 0, toIndex < ids.count, fromIndex != toIndex else { return }
+        let moved = ids.remove(at: fromIndex)
+        ids.insert(moved, at: toIndex)
+        self.routingOrder = ids
+        let poolIds = ids.filter { id in claudeAccounts.contains { $0.email == id } }
+        self.claudeAccounts = poolIds.compactMap { id in claudeAccounts.first { $0.email == id } } + claudeAccounts.filter { !poolIds.contains($0.email) }
+        if let topAcc = Self.currentAccount(in: claudeAccounts) {
+            self.claudeEmail = topAcc.email
+            self.claudePlan = topAcc.plan
+            self.claude5h = topAcc.used5h
+            self.claude7d = topAcc.usedWeekly
+            self.claude5hReset = topAcc.reset5h.isEmpty ? "Đầy đủ" : topAcc.reset5h
+            self.claude7dReset = topAcc.resetWeekly
+            self.claudePaceReserve = topAcc.remaining5h
+            self.claudeScoped = topAcc.scoped
+            self.onUpdate?()
+        }
+        self.saveOrder()
     }
 
     func moveAccount(fromIndex: Int, toIndex: Int) {
@@ -1411,7 +1417,10 @@ class QuotaState: ObservableObject {
         URLSession.shared.dataTask(with: req) { data, _, _ in
             DispatchQueue.main.async {
                 self.switchingMessage = "Đã chuyển & kiểm tra thành công!"
-                self.claudeEmail = email
+                if self.claudeAccounts.contains(where: { $0.email == email }) {
+                    self.claudeEmail = email
+                }
+                self.routingOrder = [email] + self.routingOrder.filter { $0 != email }
                 self.fetchData()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                     self.switchingMessage = ""
@@ -1420,25 +1429,6 @@ class QuotaState: ObservableObject {
         }.resume()
     }
     
-    func setConsoleMode(_ mode: String) {
-        guard let url = URL(string: "\(self.baseUrl)/v1/set-console-mode") else { return }
-        self.switchingMessage = mode == "primary" ? "Đang chuyển sang capi..." : "Đang chuyển về pool..."
-        var req = authedRequest(url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: ["mode": mode])
-        URLSession.shared.dataTask(with: req) { _, response, _ in
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            DispatchQueue.main.async {
-                self.switchingMessage = status == 200 ? (mode == "primary" ? "Đã ưu tiên capi" : "Đã về chế độ tự động") : "Không đổi được chế độ capi (HTTP \(status))"
-                self.fetchData()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    self.switchingMessage = ""
-                }
-            }
-        }.resume()
-    }
-
     func setEnabled(email: String, enabled: Bool, onError: @escaping (String) -> Void) {
         guard let url = URL(string: "\(self.baseUrl)/v1/set-enabled") else { return }
         self.switchingMessage = enabled ? "Đang bật \(email)..." : "Đang tắt \(email)..."
@@ -1593,14 +1583,13 @@ class QuotaState: ObservableObject {
                     }
                     
                     if let cs = json["console"] as? [String: Any] {
-                        self.consoleMode = cs["mode"] as? String ?? ""
-                        self.consoleKeys = cs["keys"] as? Int ?? 0
-                        self.consoleKeyStatus = (cs["key_status"] as? [[String: Any]] ?? []).map {
-                            ConsoleKeyStatus(prefix: $0["prefix"] as? String ?? "", org: $0["org"] as? String ?? "", state: $0["state"] as? String ?? "")
+                        self.consoleKeys = (cs["keys"] as? [[String: Any]] ?? []).map {
+                            ConsoleKeyItem(id: $0["id"] as? String ?? "", org: $0["org"] as? String ?? "", state: $0["state"] as? String ?? "", enabled: $0["enabled"] as? Bool ?? true)
                         }
                     } else {
-                        self.consoleMode = ""
+                        self.consoleKeys = []
                     }
+                    self.routingOrder = json["order"] as? [String] ?? []
 
                     // Parse Gateway Telemetry
                     if let gw = json["gateway"] as? [String: Any] {
@@ -3138,24 +3127,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    func confirmConsoleMode(primary: Bool) {
-        let alert = NSAlert()
-        alert.messageText = primary ? "Chuyển sang dùng capi (Console API)?" : "Quay về pool account?"
-        alert.informativeText = primary
-            ? "Mọi request mới sẽ đi qua key Console (tính tiền theo token) trước các tài khoản pool. Nếu capi hết credit, proxy tự rơi về pool."
-            : "capi trở lại làm dự phòng: dùng pool trước, tự sang capi khi tất cả account pool hết hạn mức, và tự quay về khi có account khả dụng."
-        alert.alertStyle = primary ? .warning : .informational
-        alert.addButton(withTitle: primary ? "Dùng capi" : "Về pool")
-        alert.addButton(withTitle: "Hủy bỏ")
-        NSApp.activate(ignoringOtherApps: true)
-        if alert.runModal() == .alertFirstButtonReturn {
-            state.setConsoleMode(primary ? "primary" : "fallback")
-        }
-    }
-
     func confirmSwitch(to email: String) {
-        if state.claudeAccounts.first?.email == email { return }
-        if state.claudeAccounts.first(where: { $0.email == email })?.isDisabled == true {
+        if state.routeRows.first?.id == email { return }
+        if state.routeRows.first(where: { $0.id == email })?.isDisabled == true {
             let alert = NSAlert()
             alert.messageText = "Account đang tắt"
             alert.informativeText = "\(email)\n\nBật account trước rồi mới đặt làm #1."

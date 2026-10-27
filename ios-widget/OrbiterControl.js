@@ -16,6 +16,31 @@ async function pool() {
   return p;
 }
 
+const keyStateLabel = (state) =>
+  ({ ok: "còn credit", no_credit: "HẾT credit", invalid: "key không hợp lệ", rate_limited: "đang bị giới hạn", disabled: "đang tắt", unknown: "đang kiểm tra" })[state] || "chưa kiểm tra được";
+
+const consoleAccount = (k) => ({
+  email: k.id,
+  name: k.id,
+  is_console: true,
+  is_paused: false,
+  is_disabled: !k.enabled,
+  is_available: k.enabled && (k.state === "ok" || k.state === "rate_limited" || k.state === "unknown"),
+  console: k,
+});
+
+function routeRows(p) {
+  const pool = new Map(liveAccounts(p).map((a) => [a.email, a]));
+  const keys = new Map(((p.console && p.console.keys) || []).map((k) => [k.id, consoleAccount(k)]));
+  const rows = [];
+  for (const id of p.order || []) {
+    const row = pool.get(id) || keys.get(id);
+    if (row) rows.push(row);
+  }
+  for (const a of pool.values()) if (!rows.includes(a)) rows.push(a);
+  return rows;
+}
+
 const liveAccounts = (p) => (p.accounts || []).filter((a) => !a.is_paused);
 const activeAccount = (p) => liveAccounts(p).find((a) => !a.is_disabled) || null;
 
@@ -31,11 +56,12 @@ function accountLine(a, index) {
 function summary(p) {
   const live = liveAccounts(p);
   const paused = (p.accounts || []).filter((a) => a.is_paused);
+  const keyLines = ((p.console && p.console.keys) || []).map((k) => `${k.id}${k.org ? ` (${k.org})` : ""}: ${keyStateLabel(k.state)}`);
   const act = activeAccount(p);
   const lines = [act ? `Đang chạy: ${shortName(act)}, 5h ${pct(act.used_5h)}, tuần ${pct(act.used_weekly)}` : "Không có account nào đang bật"];
   live.forEach((a, i) => lines.push(accountLine(a, i)));
   paused.forEach((a) => lines.push(accountLine(a)));
-  if (p.console) lines.push(`capi: ${p.console.mode === "primary" ? "đang ưu tiên" : "dự phòng tự động"} (${p.console.keys} key)${(p.console.key_status || []).map((k) => `, ${k.prefix} ${keyStateLabel(k.state)}`).join("")}`);
+  keyLines.forEach((l) => lines.push(l));
   return lines.join("\n");
 }
 
@@ -118,29 +144,6 @@ async function setFirst(a) {
   return orbiter.api("/v1/set-priority", { method: "POST", body: { email: a.email } });
 }
 
-const keyStateLabel = (state) =>
-  ({ ok: "còn credit", no_credit: "HẾT credit", invalid: "key không hợp lệ", rate_limited: "đang bị giới hạn" })[state] || "chưa kiểm tra được";
-
-async function setConsoleMode(mode) {
-  return orbiter.api("/v1/set-console-mode", { method: "POST", body: { mode } });
-}
-
-async function toggleConsole(c) {
-  const primary = c.mode !== "primary";
-  const title = primary ? "Chuyển sang dùng capi?" : "Quay về pool account?";
-  const message = primary
-    ? "Mọi request mới đi qua key Console (tính tiền theo token) trước các account pool. Nếu capi hết credit, proxy tự rơi về pool."
-    : "capi trở lại làm dự phòng: dùng pool trước, tự sang capi khi tất cả account pool hết hạn mức, và tự quay về khi có account khả dụng.";
-  if (!(await confirm(title, message, primary ? "Dùng capi" : "Về pool"))) return false;
-  try {
-    await setConsoleMode(primary ? "primary" : "fallback");
-    return true;
-  } catch (e) {
-    await info("Không đổi được chế độ capi", e.message || String(e));
-    return false;
-  }
-}
-
 async function setEnabled(a, enabled) {
   return orbiter.api("/v1/set-enabled", { method: "POST", body: { email: a.email, enabled } });
 }
@@ -167,7 +170,9 @@ async function accountActions(a, isFirst) {
 
   const sheet = new Alert();
   sheet.title = shortName(a);
-  sheet.message = a.is_paused ? a.error_hint || "Đã cách ly" : `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}\n${a.reset_5h || ""}\n${a.lifecycle_label || ""}`.trim();
+  sheet.message = a.is_console
+    ? `Console API${a.console.org ? ` · ${a.console.org}` : ""}\n${keyStateLabel(a.console.state)}`
+    : a.is_paused ? a.error_hint || "Đã cách ly" : `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}\n${a.reset_5h || ""}\n${a.lifecycle_label || ""}`.trim();
   for (const [title] of actions) sheet.addAction(title);
   sheet.addCancelAction("Đóng");
   const choice = await sheet.presentSheet();
@@ -181,7 +186,7 @@ async function accountActions(a, isFirst) {
 
 function addTextRow(table, title, subtitle, onSelect) {
   const row = new UITableRow();
-  row.height = subtitle ? (String(subtitle).split("\n").length > 1 ? 92 : 60) : 44;
+  row.height = subtitle ? 60 : 44;
   row.addText(title, subtitle);
   if (onSelect) {
     row.dismissOnSelect = false;
@@ -224,12 +229,15 @@ async function controlPanel({ preview } = {}) {
     header.addText("Orbiter · Claude pool", `Cập nhật ${updatedAt.toLocaleTimeString("vi-VN")} · tự làm mới mỗi ${LIVE_REFRESH_MS / 1000}s${offline ? " · mất kết nối" : ""}${orbiter.stale ? " · đang chạy code cache" : ""}`);
     table.addRow(header);
 
-    const act = activeAccount(p);
-    const live = liveAccounts(p);
-    live.forEach((a, i) => {
+    const rows = routeRows(p);
+    const act = rows.find((a) => !a.is_disabled && a.is_available !== false) || rows.find((a) => !a.is_disabled) || null;
+    rows.forEach((a, i) => {
       const marker = a.is_disabled ? "○" : a === act ? "●" : "◦";
       const status = a.is_disabled ? "Đang tắt" : a.lifecycle_label || a.status_text || "";
-      addTextRow(table, `${marker} #${i + 1} ${shortName(a)}`, `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)} · ${status}`, async () => {
+      const detail = a.is_console
+        ? `Console API${a.console.org ? ` · ${a.console.org}` : ""} · ${keyStateLabel(a.console.state)}`
+        : `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)} · ${status}`;
+      addTextRow(table, `${marker} #${i + 1} ${shortName(a)}`, detail, async () => {
         await accountActions(a, i === 0);
         await refresh();
       });
@@ -239,19 +247,6 @@ async function controlPanel({ preview } = {}) {
         await accountActions(a, false);
       });
     });
-
-    if (p.console) {
-      const primary = p.console.mode === "primary";
-      const keyLine = (p.console.key_status || []).map((k) => `${k.prefix}${k.org ? ` ${k.org}` : ""}: ${keyStateLabel(k.state)}`).join("\n");
-      addTextRow(
-        table,
-        `${primary ? "●" : "◦"} Console API (capi) · ${p.console.keys} key`,
-        `${primary ? "Đang ưu tiên capi · bấm để về pool" : "Dự phòng, tự chuyển hai chiều · bấm để dùng capi"}${keyLine ? `\n${keyLine}` : ""}`,
-        async () => {
-          if (await toggleConsole(p.console)) await refresh();
-        }
-      );
-    }
 
     addTextRow(table, "Làm mới", null, () => refresh(false));
     if (preview) addTextRow(table, "Xem trước widget", null, async () => preview());
