@@ -298,7 +298,8 @@ function buildMediumWidget(w, data) {
 
   const barW = getWidgetContentWidth("medium", hPadding);
   const gap = 14;
-  const colW = Math.floor((barW - gap) / 2);
+  const showBoth = orbiter.mode !== "widget";
+  const colW = showBoth ? Math.floor((barW - gap) / 2) : barW;
 
   const body = w.addStack();
   body.layoutHorizontally();
@@ -336,8 +337,10 @@ function buildMediumWidget(w, data) {
   };
 
   addGroup(body, "GEMINI (Flash, Pro)", { remaining: g5Rem, refresh: agy.gemini?.five_hour_refresh }, { remaining: gWkRem, refresh: agy.gemini?.weekly_refresh });
-  body.addSpacer(gap);
-  addGroup(body, "CLAUDE & GPT (Opus, Sonnet)", { remaining: cg5Rem, refresh: agy.claude_gpt?.five_hour_refresh }, { remaining: cgWkRem, refresh: agy.claude_gpt?.weekly_refresh });
+  if (showBoth) {
+    body.addSpacer(gap);
+    addGroup(body, "CLAUDE & GPT (Opus, Sonnet)", { remaining: cg5Rem, refresh: agy.claude_gpt?.five_hour_refresh }, { remaining: cgWkRem, refresh: agy.claude_gpt?.weekly_refresh });
+  }
 }
 
 // ==========================================

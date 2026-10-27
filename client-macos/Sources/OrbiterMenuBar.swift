@@ -2807,10 +2807,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let gemWk = isUsed ? (100 - state.agyGeminiWeeklyRemaining) : state.agyGeminiWeeklyRemaining
             let cg5h = isUsed ? (100 - state.agyClaudeGpt5hRemaining) : state.agyClaudeGpt5hRemaining
             let cgWk = isUsed ? (100 - state.agyClaudeGptWeeklyRemaining) : state.agyClaudeGptWeeklyRemaining
-            let preferClaude = (100 - state.agyClaudeGpt5hRemaining > 100 - state.agyGemini5hRemaining) ||
-                               (100 - state.agyClaudeGptWeeklyRemaining > 100 - state.agyGeminiWeeklyRemaining)
-            let disp5h = preferClaude ? cg5h : gem5h
-            let dispWk = preferClaude ? cgWk : gemWk
+            let disp5h = gem5h
+            let dispWk = gemWk
             btn.title = " 5h \(disp5h)% · W \(dispWk)%"
             btn.toolTip = "Antigravity Quota (\(isUsed ? "Đã dùng" : "Còn lại")):\n• Gemini: 5h \(gem5h)% · Tuần \(gemWk)%\n• Claude/GPT: 5h \(cg5h)% · Tuần \(cgWk)%"
         }
@@ -2954,10 +2952,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let gemWk = isUsed ? (100 - self.state.agyGeminiWeeklyRemaining) : self.state.agyGeminiWeeklyRemaining
                 let cg5h = isUsed ? (100 - self.state.agyClaudeGpt5hRemaining) : self.state.agyClaudeGpt5hRemaining
                 let cgWk = isUsed ? (100 - self.state.agyClaudeGptWeeklyRemaining) : self.state.agyClaudeGptWeeklyRemaining
-                let preferClaude = (100 - self.state.agyClaudeGpt5hRemaining > 100 - self.state.agyGemini5hRemaining) ||
-                                   (100 - self.state.agyClaudeGptWeeklyRemaining > 100 - self.state.agyGeminiWeeklyRemaining)
-                let disp5h = preferClaude ? cg5h : gem5h
-                let dispWk = preferClaude ? cgWk : gemWk
+                let disp5h = gem5h
+                let dispWk = gemWk
                 agyBtn.title = " 5h \(disp5h)% · W \(dispWk)%"
                 agyBtn.toolTip = "Antigravity Quota (\(isUsed ? "Đã dùng" : "Còn lại")):\n• Gemini: 5h \(gem5h)% · Tuần \(gemWk)%\n• Claude/GPT: 5h \(cg5h)% · Tuần \(cgWk)%"
             }
