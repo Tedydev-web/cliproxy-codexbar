@@ -454,8 +454,9 @@ struct PoolAccountItem: Identifiable {
             return est.isEmpty ? "5h đã đầy · chưa rõ giờ hồi" : "5h \(est)"
         }
         let usage = isUsedMode ? "Dùng 5h \(used5h)% · Tuần \(usedWeekly)%" : "Còn 5h \(remaining5h)% · Tuần \(remainingWeekly)%"
+        let window = reset5h.isEmpty ? "Tuần" : "5h"
         let est = Self.recoveryText(reset5h.isEmpty ? resetWeekly : reset5h).components(separatedBy: " · ").first ?? ""
-        return est.isEmpty ? usage : "\(usage) · \(est)"
+        return est.isEmpty ? usage : "\(usage) · \(window) \(est)"
     }
 
     static func recoveryText(_ raw: String) -> String {

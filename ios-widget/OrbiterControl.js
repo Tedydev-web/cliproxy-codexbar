@@ -60,7 +60,7 @@ function rowDetail(a) {
   if (a.is_disabled) return `Đang tắt · dùng 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}`;
   if (a.is_available === false) return a.reset_weekly ? `Tuần hồi sau ${a.reset_weekly}` : "Tuần đã hết · chưa rõ giờ hồi";
   if (typeof a.used_5h === "number" && a.used_5h >= 100) return a.reset_5h ? `5h hồi sau ${a.reset_5h}` : "5h đã đầy · chưa rõ giờ hồi";
-  return `Dùng 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}${a.reset_5h ? ` · hồi sau ${a.reset_5h}` : ""}`;
+  return `Dùng 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}${a.reset_5h ? ` · 5h hồi sau ${a.reset_5h}` : ""}`;
 }
 
 function accountLine(a, index) {
