@@ -137,6 +137,121 @@ struct MetricRow: View {
 }
 
 // MARK: - Minimal Sleek Account Row (Exact CodexBar Native Row Style)
+struct BackupModelItem: Identifiable {
+    let key: String
+    let label: String
+    let usable: Bool
+    let selected: Bool
+    var id: String { key }
+}
+
+struct BackupInfo {
+    let online: Bool
+    let latencyMs: Int
+    let enabled: Bool
+    let models: [BackupModelItem]
+
+    var selected: BackupModelItem? { models.first { $0.selected } }
+    var anyUsable: Bool { models.contains { $0.usable } }
+
+    var statusText: String {
+        if !online { return "Ngoại tuyến" }
+        let sec = String(format: "%.1fs", Double(latencyMs) / 1000.0)
+        return anyUsable ? "Có thể dùng · \(sec)" : "Model không khả dụng"
+    }
+}
+
+struct BackupSectionView: View {
+    let info: BackupInfo
+    let onToggle: () -> Void
+    let onSelect: (String) -> Void
+    private let brand = Color(red: 218/255, green: 119/255, blue: 86/255)
+
+    private var statusColor: Color {
+        info.online && info.anyUsable ? Color(nsColor: .systemGreen) : Color(nsColor: .systemRed)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Dự phòng khi hết quota")
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                HStack(spacing: 4) {
+                    Circle().fill(statusColor).frame(width: 6, height: 6)
+                    Text(info.statusText)
+                        .font(.footnote)
+                        .foregroundStyle(statusColor)
+                }
+            }
+
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Aperture")
+                            .font(.system(size: 11.5, weight: info.enabled ? .semibold : .regular))
+                            .foregroundStyle(Color.primary)
+                        Text("Tailscale")
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .foregroundStyle(Color.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.white.opacity(0.10)))
+                            .fixedSize()
+                    }
+                    Text(info.enabled
+                        ? "Hết quota Claude và capi → tự chuyển sang \(info.selected?.label ?? "model dự phòng")"
+                        : "Đang tắt · chỉ dùng khi gọi đích danh aperture/…")
+                        .font(.footnote)
+                        .foregroundStyle(info.enabled ? brand : Color.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                Toggle("", isOn: Binding(get: { info.enabled }, set: { _ in onToggle() }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .tint(brand)
+                    .scaleEffect(0.65)
+                    .frame(width: 30, height: 18)
+                    .disabled(!info.enabled && !(info.online && info.anyUsable))
+                    .help(info.enabled ? "Đang bật · tắt để không tự chuyển" : "Bật để tự chuyển sang Aperture khi hết quota")
+            }
+
+            HStack(alignment: .top, spacing: 14) {
+                ForEach(info.models) { model in
+                    Button(action: { onSelect(model.key) }) {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: model.selected ? "largecircle.fill.circle" : "circle")
+                                .font(.system(size: 11))
+                                .foregroundStyle(model.selected ? brand : Color.secondary.opacity(0.7))
+                                .padding(.top, 1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(model.label)
+                                    .font(.footnote.weight(model.selected ? .semibold : .regular))
+                                    .foregroundStyle(model.selected ? Color.primary : Color.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                                Text(model.usable ? "Sẵn sàng" : "Không khả dụng")
+                                    .font(.caption2)
+                                    .foregroundStyle(model.usable ? Color(nsColor: .systemGreen) : Color(nsColor: .systemRed))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(model.selected ? "Model dự phòng đang chọn" : "Chọn làm model dự phòng")
+                    .accessibilityLabel("\(model.label), \(model.usable ? "sẵn sàng" : "không khả dụng"), \(model.selected ? "đang chọn" : "chưa chọn")")
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 struct ConsoleKeyItem: Identifiable {
     let id: String
     let org: String
@@ -677,6 +792,18 @@ struct ClaudeFullCardView: View {
                 }
             }
             
+            if let backup = self.state.backup {
+                Divider()
+                BackupSectionView(
+                    info: backup,
+                    onToggle: { AppDelegate.shared?.confirmBackupToggle(enable: !backup.enabled) },
+                    onSelect: { key in
+                        guard backup.selected?.key != key else { return }
+                        self.state.setBackup(enabled: nil, model: key, onError: { AppDelegate.shared?.showBackupError($0) })
+                    }
+                )
+            }
+
             Divider()
             
             // 4. Token Keeper Proactive Section (Clickable -> Opens Detail Window)
@@ -1270,6 +1397,7 @@ class QuotaState: ObservableObject {
     @Published var agyGeminiWeeklyRefresh: String = "3d 7h"
     
     @Published var consoleKeys: [ConsoleKeyItem] = []
+    @Published var backup: BackupInfo? = nil
     @Published var routingOrder: [String] = []
     @Published var agyClaudeGpt5hText: String = "Quota available"
     @Published var agyClaudeGpt5hRemaining: Int = 100
@@ -1498,6 +1626,34 @@ class QuotaState: ObservableObject {
         }.resume()
     }
     
+    func setBackup(enabled: Bool?, model: String?, onError: @escaping (String) -> Void) {
+        guard let url = URL(string: "\(self.baseUrl)/v1/set-backup") else { return }
+        var body: [String: Any] = [:]
+        if let enabled = enabled { body["enabled"] = enabled }
+        if let model = model { body["model"] = model }
+        self.switchingMessage = "Đang cập nhật dự phòng..."
+        var req = authedRequest(url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            DispatchQueue.main.async {
+                if status == 200 {
+                    self.switchingMessage = enabled == true ? "Đã bật dự phòng Aperture" : (enabled == false ? "Đã tắt dự phòng Aperture" : "Đã chọn model dự phòng")
+                } else {
+                    self.switchingMessage = ""
+                    onError(json?["error"] as? String ?? error?.localizedDescription ?? "HTTP \(status)")
+                }
+                self.fetchData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    self.switchingMessage = ""
+                }
+            }
+        }.resume()
+    }
+
     func setEnabled(email: String, enabled: Bool, onError: @escaping (String) -> Void) {
         guard let url = URL(string: "\(self.baseUrl)/v1/set-enabled") else { return }
         self.switchingMessage = enabled ? "Đang bật \(email)..." : "Đang tắt \(email)..."
@@ -1659,6 +1815,19 @@ class QuotaState: ObservableObject {
                         self.consoleKeys = []
                     }
                     self.routingOrder = json["order"] as? [String] ?? []
+                    if let bk = json["backup"] as? [String: Any] {
+                        let fb = bk["fallback"] as? [String: Any] ?? [:]
+                        self.backup = BackupInfo(
+                            online: bk["online"] as? Bool ?? false,
+                            latencyMs: bk["latency_ms"] as? Int ?? 0,
+                            enabled: fb["enabled"] as? Bool ?? false,
+                            models: (bk["models"] as? [[String: Any]] ?? []).map {
+                                BackupModelItem(key: $0["key"] as? String ?? "", label: $0["label"] as? String ?? "", usable: $0["usable"] as? Bool ?? false, selected: $0["selected"] as? Bool ?? false)
+                            }
+                        )
+                    } else {
+                        self.backup = nil
+                    }
 
                     // Parse Gateway Telemetry
                     if let gw = json["gateway"] as? [String: Any] {
@@ -3175,6 +3344,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openSettingsWindow()
     }
     
+    func showBackupError(_ message: String) {
+        let err = NSAlert()
+        err.messageText = "Không đổi được dự phòng"
+        err.informativeText = message
+        err.alertStyle = .critical
+        NSApp.activate(ignoringOtherApps: true)
+        err.runModal()
+    }
+
+    func confirmBackupToggle(enable: Bool) {
+        if !enable {
+            state.setBackup(enabled: false, model: nil, onError: showBackupError)
+            return
+        }
+        let label = state.backup?.selected?.label ?? "model dự phòng"
+        let alert = NSAlert()
+        alert.messageText = "Bật dự phòng Aperture?"
+        alert.informativeText = "Khi mọi account Claude và capi đều hết quota, request Claude sẽ tự chuyển sang \(label).\n\nLưu ý: mọi ứng dụng dùng chung proxy này (kể cả production) cũng sẽ nhận câu trả lời từ model dự phòng thay vì lỗi 429. Chất lượng có thể thấp hơn Claude."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Bật dự phòng")
+        alert.addButton(withTitle: "Hủy bỏ")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        state.setBackup(enabled: true, model: nil, onError: showBackupError)
+    }
+
     func confirmToggleEnabled(email: String, enable: Bool) {
         let alert = NSAlert()
         alert.messageText = enable ? "Bật lại account?" : "Tắt account?"

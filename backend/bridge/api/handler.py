@@ -16,6 +16,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     agy_provider = None
     keeper_provider = None
     console_provider = None
+    backup_provider = None
     gateway_provider = None
     system_provider = None
 
@@ -76,6 +77,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             "accounts": accounts,
             "gateway": gw_info,
             "console": {"keys": keys},
+            "backup": self.backup_provider.get_state() if self.backup_provider else None,
             "order": self.routing_order(accounts, keys),
         }
 
@@ -183,6 +185,17 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "Invalid order payload"})
                 return
             status, result = self.apply_order(new_order)
+            self.send_json(status, result)
+
+        elif self.path.startswith("/v1/set-backup"):
+            if not self.backup_provider:
+                self.send_json(503, {"error": "Backup provider unavailable"})
+                return
+            enabled = req_data.get("enabled")
+            if enabled is not None and not isinstance(enabled, bool):
+                self.send_json(400, {"error": "'enabled' must be boolean"})
+                return
+            status, result = self.backup_provider.set_fallback(enabled=enabled, model=req_data.get("model"))
             self.send_json(status, result)
 
         elif self.path.startswith("/v1/set-enabled"):

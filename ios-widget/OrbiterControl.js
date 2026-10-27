@@ -187,6 +187,43 @@ async function setFirst(a) {
   return orbiter.api("/v1/set-priority", { method: "POST", body: { email: a.email } });
 }
 
+async function setBackup(body) {
+  return orbiter.api("/v1/set-backup", { method: "POST", body });
+}
+
+function backupStatus(b) {
+  if (!b.online) return "Ngoại tuyến";
+  const usable = (b.models || []).some((m) => m.usable);
+  return usable ? `Có thể dùng · ${(b.latency_ms / 1000).toFixed(1)}s` : "Model không khả dụng";
+}
+
+async function backupActions(b) {
+  const enabled = Boolean(b.fallback && b.fallback.enabled);
+  const sheet = new Alert();
+  sheet.title = "Dự phòng · Aperture";
+  sheet.message = `${backupStatus(b)}\n${enabled ? "Đang tự dùng khi hết quota Claude và capi" : "Đang tắt, chỉ dùng khi gọi đích danh aperture/…"}`;
+  const actions = [];
+  actions.push([enabled ? "Tắt tự dùng khi hết quota" : "Bật tự dùng khi hết quota", async () => {
+    if (enabled || (await confirm("Bật dự phòng Aperture?", "Khi mọi account Claude và capi đều hết quota, request Claude sẽ tự chuyển sang model dự phòng. Mọi ứng dụng dùng chung proxy (kể cả production) cũng sẽ nhận câu trả lời từ model đó thay vì lỗi 429, chất lượng có thể thấp hơn Claude.", "Bật dự phòng"))) {
+      await setBackup({ enabled: !enabled });
+    }
+  }]);
+  for (const m of b.models || []) {
+    actions.push([`${m.selected ? "● " : "○ "}${m.label}${m.usable ? "" : " (không khả dụng)"}`, async () => {
+      if (!m.selected) await setBackup({ model: m.key });
+    }]);
+  }
+  for (const [title] of actions) sheet.addAction(title);
+  sheet.addCancelAction("Đóng");
+  const choice = await sheet.presentSheet();
+  if (choice < 0) return;
+  try {
+    await actions[choice][1]();
+  } catch (e) {
+    await info("Không thực hiện được", e.message || String(e));
+  }
+}
+
 async function setEnabled(a, enabled) {
   return orbiter.api("/v1/set-enabled", { method: "POST", body: { email: a.email, enabled } });
 }
@@ -286,6 +323,21 @@ async function controlPanel({ preview } = {}) {
         await accountActions(a, false);
       });
     });
+
+    if (p.backup) {
+      const b = p.backup;
+      const on = Boolean(b.fallback && b.fallback.enabled);
+      const sel = (b.models || []).find((m) => m.selected);
+      addTextRow(
+        table,
+        `${on ? "●" : "○"} Dự phòng khi hết quota [Aperture]`,
+        `${backupStatus(b)}\n${on ? `Tự chuyển sang ${sel ? sel.label : "model dự phòng"}` : "Đang tắt"}`,
+        async () => {
+          await backupActions(b);
+          await refresh();
+        }
+      );
+    }
 
     addTextRow(table, "Làm mới", null, () => refresh(false));
     if (preview) addTextRow(table, "Xem trước widget", null, async () => preview());

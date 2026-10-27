@@ -16,6 +16,7 @@ from providers.claude import ClaudePoolProvider
 from providers.antigravity import AntigravityProvider
 from providers.keeper import KeeperProvider
 from providers.console_route import ConsoleRouteProvider
+from providers.backup import BackupProvider
 from providers.gateway import GatewayProvider
 from providers.system import SystemProvider
 from api.handler import BridgeApiHandler
@@ -26,6 +27,7 @@ def main():
     agy_prov = AntigravityProvider()
     keeper_prov = KeeperProvider()
     console_prov = ConsoleRouteProvider()
+    backup_prov = BackupProvider()
     gateway_prov = GatewayProvider()
     system_prov = SystemProvider()
 
@@ -33,6 +35,7 @@ def main():
     BridgeApiHandler.agy_provider = agy_prov
     BridgeApiHandler.keeper_provider = keeper_prov
     BridgeApiHandler.console_provider = console_prov
+    BridgeApiHandler.backup_provider = backup_prov
     BridgeApiHandler.gateway_provider = gateway_prov
     BridgeApiHandler.system_provider = system_prov
 

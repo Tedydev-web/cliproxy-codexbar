@@ -2,16 +2,15 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import threading
 import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-from core.config import CLIPROXY_HOME, PROBE_CACHE_SEC
+from core import config_file
+from core.config import PROBE_CACHE_SEC
 
-CONFIG_FILE = os.path.join(CLIPROXY_HOME, "config.yaml")
 API = "https://api.anthropic.com/v1"
 PROBE_MODEL = "claude-haiku-4-5-20251001"
 ID_PATTERN = re.compile(r"^capi\d+$")
@@ -64,15 +63,13 @@ def probe_key(key, org_cache):
 
 class ConsoleRouteProvider:
     def __init__(self):
-        self._lock = threading.Lock()
         self._probe_lock = threading.Lock()
         self._status = {}
         self._org_cache = {}
         self._last_probe = 0.0
 
     def _read(self):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return f.read()
+        return config_file.read()
 
     def _entries(self, text):
         out = []
@@ -125,19 +122,8 @@ class ConsoleRouteProvider:
             })
         return keys
 
-    def _write(self, new, old):
-        if new == old:
-            return
-        shutil.copy2(CONFIG_FILE, CONFIG_FILE + ".bak-console-route")
-        with open(CONFIG_FILE, "r+", encoding="utf-8") as f:
-            f.seek(0)
-            f.write(new)
-            f.truncate()
-            f.flush()
-            os.fsync(f.fileno())
-
     def _edit(self, edits):
-        with self._lock:
+        with config_file.LOCK:
             try:
                 text = self._read()
             except OSError as e:
@@ -151,7 +137,7 @@ class ConsoleRouteProvider:
                 fn = edits.get(m.group(1))
                 return m.group(0) if not fn else fn(m.group(0))
 
-            self._write(ENTRY.sub(apply, text), text)
+            config_file.write_in_place(ENTRY.sub(apply, text), text, ".bak-console-route")
         self._last_probe = 0.0
         return 200, {"ok": True}
 
