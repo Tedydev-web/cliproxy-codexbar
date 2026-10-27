@@ -136,6 +136,39 @@ struct MetricRow: View {
 }
 
 // MARK: - Minimal Sleek Account Row (Exact CodexBar Native Row Style)
+struct ConsoleRouteRowView: View {
+    let isPrimary: Bool
+    let keyCount: Int
+    let onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "key.horizontal.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(isPrimary ? Color.orange : Color.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Console API (capi) · \(keyCount) key")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isPrimary ? Color.primary : Color.secondary)
+                Text(isPrimary ? "Đang ưu tiên capi · hết credit tự về pool" : "Dự phòng · tự dùng khi pool hết, tự về pool khi có lại")
+                    .font(.system(size: 10))
+                    .foregroundStyle(isPrimary ? Color.orange : Color.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button(action: onToggle) {
+                Text(isPrimary ? "Về pool" : "Dùng capi")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 8).fill(isPrimary ? Color.orange.opacity(0.12) : Color.clear))
+    }
+}
+
 struct CompactAccountRowView: View {
     let email: String
     let index: Int
@@ -560,6 +593,14 @@ struct ClaudeFullCardView: View {
                         onMoveDown: { self.state.moveAccount(fromIndex: index, toIndex: index + 1) },
                         onSwitch: { AppDelegate.shared?.confirmSwitch(to: acc.email) },
                         onToggleEnabled: acc.isPaused ? nil : { AppDelegate.shared?.confirmToggleEnabled(email: acc.email, enable: acc.isDisabled) }
+                    )
+                }
+
+                if !self.state.consoleMode.isEmpty {
+                    ConsoleRouteRowView(
+                        isPrimary: self.state.consoleMode == "primary",
+                        keyCount: self.state.consoleKeys,
+                        onToggle: { AppDelegate.shared?.confirmConsoleMode(primary: self.state.consoleMode != "primary") }
                     )
                 }
             }
@@ -1156,6 +1197,8 @@ class QuotaState: ObservableObject {
     @Published var agyGeminiWeeklyRemaining: Int = 66
     @Published var agyGeminiWeeklyRefresh: String = "3d 7h"
     
+    @Published var consoleMode: String = ""
+    @Published var consoleKeys: Int = 0
     @Published var agyClaudeGpt5hText: String = "Quota available"
     @Published var agyClaudeGpt5hRemaining: Int = 100
     @Published var agyClaudeGpt5hRefresh: String = "4h 24m"
@@ -1334,6 +1377,25 @@ class QuotaState: ObservableObject {
         }.resume()
     }
     
+    func setConsoleMode(_ mode: String) {
+        guard let url = URL(string: "\(self.baseUrl)/v1/set-console-mode") else { return }
+        self.switchingMessage = mode == "primary" ? "Đang chuyển sang capi..." : "Đang chuyển về pool..."
+        var req = authedRequest(url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["mode": mode])
+        URLSession.shared.dataTask(with: req) { _, response, _ in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            DispatchQueue.main.async {
+                self.switchingMessage = status == 200 ? (mode == "primary" ? "Đã ưu tiên capi" : "Đã về chế độ tự động") : "Không đổi được chế độ capi (HTTP \(status))"
+                self.fetchData()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    self.switchingMessage = ""
+                }
+            }
+        }.resume()
+    }
+
     func setEnabled(email: String, enabled: Bool, onError: @escaping (String) -> Void) {
         guard let url = URL(string: "\(self.baseUrl)/v1/set-enabled") else { return }
         self.switchingMessage = enabled ? "Đang bật \(email)..." : "Đang tắt \(email)..."
@@ -1487,6 +1549,13 @@ class QuotaState: ObservableObject {
                         self.claudeScoped = current.scoped
                     }
                     
+                    if let cs = json["console"] as? [String: Any] {
+                        self.consoleMode = cs["mode"] as? String ?? ""
+                        self.consoleKeys = cs["keys"] as? Int ?? 0
+                    } else {
+                        self.consoleMode = ""
+                    }
+
                     // Parse Gateway Telemetry
                     if let gw = json["gateway"] as? [String: Any] {
                         self.gwEnabled = gw["enabled"] as? Bool ?? true
@@ -3020,6 +3089,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             err.alertStyle = .critical
             NSApp.activate(ignoringOtherApps: true)
             err.runModal()
+        }
+    }
+
+    func confirmConsoleMode(primary: Bool) {
+        let alert = NSAlert()
+        alert.messageText = primary ? "Chuyển sang dùng capi (Console API)?" : "Quay về pool account?"
+        alert.informativeText = primary
+            ? "Mọi request mới sẽ đi qua key Console (tính tiền theo token) trước các tài khoản pool. Nếu capi hết credit, proxy tự rơi về pool."
+            : "capi trở lại làm dự phòng: dùng pool trước, tự sang capi khi tất cả account pool hết hạn mức, và tự quay về khi có account khả dụng."
+        alert.alertStyle = primary ? .warning : .informational
+        alert.addButton(withTitle: primary ? "Dùng capi" : "Về pool")
+        alert.addButton(withTitle: "Hủy bỏ")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            state.setConsoleMode(primary ? "primary" : "fallback")
         }
     }
 

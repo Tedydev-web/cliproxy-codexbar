@@ -15,6 +15,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     claude_provider = None
     agy_provider = None
     keeper_provider = None
+    console_provider = None
     gateway_provider = None
     system_provider = None
 
@@ -72,7 +73,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/v1/pool-status"):
             accounts = self.claude_provider.get_pool_status()
             gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else None
-            self.send_json(200, {"accounts": accounts, "gateway": gw_info})
+            self.send_json(200, {"accounts": accounts, "gateway": gw_info, "console": self.console_provider.get_state() if self.console_provider else None})
         elif self.path.startswith("/v1/gateway-telemetry"):
             gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else {}
             self.send_json(200, gw_info)
@@ -113,7 +114,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             # Default fallback for CodexBar clients
             accounts = self.claude_provider.get_pool_status()
             gw_info = self.gateway_provider.get_gateway_info() if self.gateway_provider else None
-            self.send_json(200, {"accounts": accounts, "gateway": gw_info})
+            self.send_json(200, {"accounts": accounts, "gateway": gw_info, "console": self.console_provider.get_state() if self.console_provider else None})
 
     def do_POST(self):
         if not self.is_authorized():
@@ -149,6 +150,13 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"ok": True, "order": new_order})
             else:
                 self.send_json(400, {"error": "Invalid order payload"})
+
+        elif self.path.startswith("/v1/set-console-mode"):
+            if not self.console_provider:
+                self.send_json(503, {"error": "Console route provider unavailable"})
+                return
+            status, result = self.console_provider.set_mode(req_data.get("mode"))
+            self.send_json(status, result)
 
         elif self.path.startswith("/v1/set-enabled"):
             email = req_data.get("email")
