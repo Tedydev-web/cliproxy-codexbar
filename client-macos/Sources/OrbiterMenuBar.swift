@@ -157,9 +157,18 @@ struct ConsoleKeyItem: Identifiable {
     }
 
     var detailText: String {
-        let prefix = org.isEmpty ? "Console API" : "Console API · \(org)"
-        return enabled ? "\(prefix) · \(stateLabel)" : "\(prefix) · Đang tắt"
+        switch state {
+        case "no_credit": return "Hết credit · cần nạp thêm"
+        case "ok": return "Credit khả dụng · không xem được số dư"
+        case "rate_limited": return "Đang bị giới hạn tốc độ"
+        case "invalid": return "Key bị từ chối (401/403)"
+        case "disabled": return "Đang tắt"
+        case "unknown": return "Đang kiểm tra..."
+        default: return "Chưa kiểm tra được"
+        }
     }
+
+    var displayName: String { org.isEmpty ? id : org }
 }
 
 struct RouteRow: Identifiable {
@@ -173,6 +182,9 @@ struct RouteRow: Identifiable {
     var isConsole: Bool = false
     var unavailableLabel: String = "Hết hạn"
     var statusText: String? = nil
+    var title: String? = nil
+    var secondaryTitle: String? = nil
+    var badge: String? = nil
 }
 
 struct CompactAccountRowView: View {
@@ -191,6 +203,9 @@ struct CompactAccountRowView: View {
     var onToggleEnabled: (() -> Void)? = nil
     var unavailableLabel: String = "Hết hạn"
     var statusText: String? = nil
+    var title: String? = nil
+    var secondaryTitle: String? = nil
+    var badge: String? = nil
 
     @State private var isHovered: Bool = false
 
@@ -260,11 +275,29 @@ struct CompactAccountRowView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // Line 1: Identity & Headroom / Status (CodexBar MenuCardCompactAccountRow layout)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(self.email)
+                        Text(self.title ?? self.email)
                             .font(.system(size: 11.5, weight: self.isCurrent ? .semibold : .regular))
                             .foregroundStyle(self.isCurrent ? Color.primary : (self.isAvailable ? Color.primary.opacity(0.88) : Color.secondary))
                             .lineLimit(1)
                             .truncationMode(.middle)
+
+                        if let secondaryTitle = self.secondaryTitle {
+                            Text(secondaryTitle)
+                                .font(.system(size: 9.5, weight: .regular, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+
+                        if let badge = self.badge, !badge.isEmpty {
+                            Text(badge)
+                                .font(.system(size: 8.5, weight: .semibold))
+                                .foregroundStyle(Color.secondary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color.white.opacity(0.10)))
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
                         
                         if self.isCurrent {
                             Image(systemName: "star.fill")
@@ -401,19 +434,28 @@ struct PoolAccountItem: Identifiable {
             return "Đã cách ly · \(errorHint.isEmpty ? "Cần đăng nhập lại" : errorHint)"
         }
         if isDisabled {
-            return "\(plan) · Đang tắt · 5h: \(used5h)% · Tuần: \(usedWeekly)%"
+            return "Đang tắt · 5h: \(used5h)% · Tuần: \(usedWeekly)%"
         }
         if isProbeError {
-            return "\(plan) · Tạm nghẽn 429 API · Sẵn sàng"
+            return "Tạm nghẽn 429 API · Sẵn sàng"
         }
         if !isAvailable {
-            let rTime = resetWeekly.isEmpty ? "18h" : resetWeekly
-            let est = formatResetWithEst(raw: rTime)
-            return "\(plan) · Hết hạn tuần\(scopedSummary) · \(est)"
+            let est = Self.recoveryText(resetWeekly)
+            return est.isEmpty ? "Tuần đã hết · chưa rõ giờ hồi" : "Tuần \(est)"
+        }
+        if used5h >= 100 {
+            let est = Self.recoveryText(reset5h)
+            return est.isEmpty ? "5h đã đầy · chưa rõ giờ hồi" : "5h \(est)"
         }
         let rTime = reset5h.isEmpty ? resetWeekly : reset5h
         let est = formatResetWithEst(raw: rTime)
-        return "\(plan) · 5h: \(used5h)% · Tuần: \(usedWeekly)%\(scopedSummary) · \(est)"
+        return "5h: \(used5h)% · Tuần: \(usedWeekly)%\(scopedSummary) · \(est)"
+    }
+
+    static func recoveryText(_ raw: String) -> String {
+        let est = formatResetWithEst(raw: raw)
+        if est.isEmpty { return "" }
+        return est.replacingOccurrences(of: "Đặt lại sau ", with: "hồi sau ").replacingOccurrences(of: "Đặt lại: ", with: "hồi sau ")
     }
 }
 
@@ -607,7 +649,10 @@ struct ClaudeFullCardView: View {
                         onSwitch: { AppDelegate.shared?.confirmSwitch(to: row.id) },
                         onToggleEnabled: row.isPaused ? nil : { AppDelegate.shared?.confirmToggleEnabled(email: row.id, enable: row.isDisabled) },
                         unavailableLabel: row.unavailableLabel,
-                        statusText: row.statusText
+                        statusText: row.statusText,
+                        title: row.title,
+                        secondaryTitle: row.secondaryTitle,
+                        badge: row.badge
                     )
                 }
             }
@@ -1317,10 +1362,10 @@ class QuotaState: ObservableObject {
     var routeRows: [RouteRow] {
         var byId: [String: RouteRow] = [:]
         for a in claudeAccounts {
-            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetailsText, remainingPercent: a.remainingWeekly, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused)
+            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetailsText, remainingPercent: a.remainingWeekly, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, badge: a.plan)
         }
         for k in consoleKeys {
-            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, remainingPercent: 100, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: k.state == "ok" ? "Còn credit" : nil)
+            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, remainingPercent: 100, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: k.state == "ok" ? "Còn credit" : nil, title: k.displayName, secondaryTitle: k.id, badge: "Console API")
         }
         var rows = routingOrder.compactMap { byId[$0] }
         let seen = Set(rows.map { $0.id })

@@ -44,6 +44,26 @@ function routeRows(p) {
 const liveAccounts = (p) => (p.accounts || []).filter((a) => !a.is_paused);
 const activeAccount = (p) => liveAccounts(p).find((a) => !a.is_disabled) || null;
 
+const rowTitle = (a) =>
+  a.is_console
+    ? `${a.console.org || a.email} · ${a.email} [Console API]`
+    : `${shortName(a)}${a.plan ? ` [${a.plan}]` : ""}`;
+
+function rowDetail(a) {
+  if (a.is_console) {
+    const state = a.console.state;
+    if (a.is_disabled) return "Đang tắt";
+    if (state === "no_credit") return "Hết credit · cần nạp thêm";
+    if (state === "ok") return "Credit khả dụng · không xem được số dư";
+    return keyStateLabel(state)[0].toUpperCase() + keyStateLabel(state).slice(1);
+  }
+  if (a.is_disabled) return `Đang tắt · 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}`;
+  if (a.is_available === false) return a.reset_weekly ? `Tuần hồi sau ${a.reset_weekly}` : "Tuần đã hết · chưa rõ giờ hồi";
+  if (typeof a.used_5h === "number" && a.used_5h >= 100) return a.reset_5h ? `5h hồi sau ${a.reset_5h}` : "5h đã đầy · chưa rõ giờ hồi";
+  const status = a.lifecycle_label || a.status_text || "";
+  return `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}${status ? ` · ${status}` : ""}`;
+}
+
 function accountLine(a, index) {
   if (a.is_paused) return `${shortName(a)}: đã cách ly (${a.error_hint || "cần đăng nhập lại"})`;
   const flags = [];
@@ -233,11 +253,7 @@ async function controlPanel({ preview } = {}) {
     const act = rows.find((a) => !a.is_disabled && a.is_available !== false) || rows.find((a) => !a.is_disabled) || null;
     rows.forEach((a, i) => {
       const marker = a.is_disabled ? "○" : a === act ? "●" : "◦";
-      const status = a.is_disabled ? "Đang tắt" : a.lifecycle_label || a.status_text || "";
-      const detail = a.is_console
-        ? `Console API${a.console.org ? ` · ${a.console.org}` : ""} · ${keyStateLabel(a.console.state)}`
-        : `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)} · ${status}`;
-      addTextRow(table, `${marker} #${i + 1} ${shortName(a)}`, detail, async () => {
+      addTextRow(table, `${marker} #${i + 1} ${rowTitle(a)}`, rowDetail(a), async () => {
         await accountActions(a, i === 0);
         await refresh();
       });
