@@ -61,6 +61,7 @@ struct UsageProgressBar: View {
     let tint: Color
     var warningMarkerPercents: [Double] = [33.33, 66.66]
     var accentPaceMarker: Double? = nil
+    var height: CGFloat = 6
     
     var body: some View {
         Canvas { context, size in
@@ -97,7 +98,7 @@ struct UsageProgressBar: View {
                 context.fill(Path(paceRect), with: .color(Color(red: 52/255, green: 199/255, blue: 89/255)))
             }
         }
-        .frame(height: 6)
+        .frame(height: self.height)
     }
 }
 
@@ -221,8 +222,10 @@ struct CompactAccountRowView: View {
             if let onToggleEnabled = onToggleEnabled {
                 Toggle("", isOn: Binding(get: { !self.isDisabled }, set: { _ in onToggleEnabled() }))
                     .toggleStyle(.switch)
-                    .controlSize(.mini)
                     .labelsHidden()
+                    .tint(Color(red: 218/255, green: 119/255, blue: 86/255))
+                    .scaleEffect(0.65)
+                    .frame(width: 30, height: 18)
                     .help(self.isDisabled ? "Đang tắt · bật để dùng lại" : "Đang bật · tắt để tạm ngưng")
                     .accessibilityLabel(self.isDisabled ? "Bật \(self.title ?? self.email)" : "Tắt \(self.title ?? self.email)")
             }
@@ -319,7 +322,7 @@ struct CompactAccountRowView: View {
                     
                     if !self.cells.isEmpty {
                         QuotaCellsView(cells: self.cells)
-                            .padding(.top, 2)
+                            .padding(.top, 3)
                     } else {
                         Text(self.subDetails)
                             .font(.footnote)
@@ -426,6 +429,7 @@ struct PoolAccountItem: Identifiable {
 struct QuotaCell: Identifiable {
     let label: String
     let value: String
+    let percent: Double
     let level: Int
     let recovery: String
     var id: String { label }
@@ -435,6 +439,7 @@ struct QuotaCell: Identifiable {
         return QuotaCell(
             label: label,
             value: isUsedMode ? "\(used)% dùng" : "\(remaining)% còn",
+            percent: Double(isUsedMode ? used : remaining),
             level: used >= 100 ? 2 : (used >= 80 ? 1 : 0),
             recovery: est.isEmpty ? emptyReset : est
         )
@@ -443,40 +448,33 @@ struct QuotaCell: Identifiable {
 
 struct QuotaCellsView: View {
     let cells: [QuotaCell]
-
-    private func tint(_ level: Int) -> Color {
-        switch level {
-        case 2: return Color(nsColor: .systemRed)
-        case 1: return Color(nsColor: .systemOrange)
-        default: return Color.primary
-        }
-    }
+    private let brand = Color(red: 218/255, green: 119/255, blue: 86/255)
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: 14) {
             ForEach(cells) { cell in
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(cell.label)
-                            .font(.system(size: 9.5, weight: .semibold))
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                         Text(cell.value)
-                            .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(tint(cell.level))
+                            .font(.footnote.weight(.medium).monospacedDigit())
+                            .foregroundStyle(cell.level == 2 ? Color(nsColor: .systemRed) : Color.primary)
                     }
+                    UsageProgressBar(
+                        percent: cell.percent,
+                        tint: cell.level == 2 ? Color(nsColor: .systemRed) : brand,
+                        warningMarkerPercents: [],
+                        height: 4
+                    )
                     Text(cell.recovery)
-                        .font(.system(size: 9.5).monospacedDigit())
-                        .foregroundStyle(cell.level == 2 ? tint(2).opacity(0.9) : Color.secondary)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.85)
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(cell.level == 2 ? Color(nsColor: .systemRed).opacity(0.14) : Color.white.opacity(0.05))
-                )
             }
         }
     }
