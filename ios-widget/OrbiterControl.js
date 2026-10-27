@@ -245,7 +245,7 @@ async function controlPanel({ preview } = {}) {
     const header = new UITableRow();
     header.isHeader = true;
     header.height = 60;
-    header.addText("Orbiter · Claude pool", `Cập nhật ${updatedAt.toLocaleTimeString("vi-VN")} · tự làm mới mỗi ${LIVE_REFRESH_MS / 1000}s${offline ? " · mất kết nối" : ""}${orbiter.stale ? " · đang chạy code cache" : ""}`);
+    header.addText("Orbiter · Thứ tự sử dụng", `Cập nhật ${updatedAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · tự làm mới mỗi ${LIVE_REFRESH_MS / 1000}s${offline ? " · mất kết nối" : ""}${orbiter.stale ? " · đang chạy code cache" : ""}`);
     table.addRow(header);
 
     const rows = routeRows(p);

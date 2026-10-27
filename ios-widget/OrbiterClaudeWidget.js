@@ -56,7 +56,7 @@ function getClaudeIcon() {
 function addSyncTimeElement(stack, timestamp, isOnline) {
   const d = new Date(timestamp || Date.now());
   const pad = (n) => String(n).padStart(2, "0");
-  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
   const syncStack = stack.addStack();
   syncStack.layoutHorizontally();
@@ -98,12 +98,12 @@ function formatResetWithEst(raw) {
     else if (s.endsWith("s")) totalSec += parseFloat(s.slice(0, -1));
   }
 
-  if (totalSec <= 0) return `Đặt lại: ${cleaned}`;
+  if (totalSec <= 0) return `Hồi: ${cleaned}`;
 
   const target = new Date(Date.now() + totalSec * 1000);
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  const timeStr = `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
+  const timeStr = `${pad(target.getHours())}:${pad(target.getMinutes())}`;
 
   const isToday = target.toDateString() === now.toDateString();
   const tomorrow = new Date(now);
@@ -111,12 +111,12 @@ function formatResetWithEst(raw) {
   const isTomorrow = target.toDateString() === tomorrow.toDateString();
 
   if (totalSec < 86400 && isToday) {
-    return `Đặt lại sau ${cleaned} · ${timeStr}`;
+    return `Hồi sau ${cleaned} · ${timeStr}`;
   } else if (isTomorrow) {
-    return `Đặt lại sau ${cleaned} · Mai ${timeStr}`;
+    return `Hồi sau ${cleaned} · Mai ${timeStr}`;
   } else {
     const dayStr = `${pad(target.getDate())}/${pad(target.getMonth() + 1)} ${pad(target.getHours())}:${pad(target.getMinutes())}`;
-    return `Đặt lại sau ${cleaned} · ${dayStr}`;
+    return `Hồi sau ${cleaned} · ${dayStr}`;
   }
 }
 
@@ -434,7 +434,7 @@ function buildLargeWidget(w, data) {
       p5Row.addSpacer();
 
       const r5Est = formatResetWithEst(acc.reset_5h);
-      const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Đặt lại: ${acc.reset_5h}` : ""));
+      const p5Reset = p5Row.addText(r5Est || (acc.reset_5h ? `Hồi: ${acc.reset_5h}` : ""));
       p5Reset.font = Font.systemFont(isFirst ? 10 : 9.5);
       p5Reset.textColor = TOKENS.textSecondary;
 
@@ -449,7 +449,7 @@ function buildLargeWidget(w, data) {
       // DÒNG NHỊP ĐỘ AN TOÀN (ĐỒNG BỘ 100% ORBITER MACOS DESKTOP: "90% dự trữ nhịp độ")
       if (isFirst && acc.remaining_5h !== undefined && acc.remaining_5h !== null) {
         accStack.addSpacer(2.5);
-        const paceSub = accStack.addText(`${acc.remaining_5h}% dự trữ nhịp độ`);
+        const paceSub = accStack.addText(`Còn ${acc.remaining_5h}% trong phiên này`);
         paceSub.font = Font.systemFont(9.5);
         paceSub.textColor = TOKENS.textMuted;
         accStack.addSpacer(5.5);
@@ -469,7 +469,7 @@ function buildLargeWidget(w, data) {
       pWkRow.addSpacer();
 
       const rWkEst = formatResetWithEst(acc.reset_weekly);
-      const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Đặt lại: ${acc.reset_weekly}` : ""));
+      const pWkReset = pWkRow.addText(rWkEst || (acc.reset_weekly ? `Hồi: ${acc.reset_weekly}` : ""));
       pWkReset.font = Font.systemFont(isFirst ? 10 : 9.5);
       pWkReset.textColor = TOKENS.textSecondary;
 

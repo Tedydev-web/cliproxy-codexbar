@@ -34,7 +34,7 @@ func formatResetWithEst(raw: String) -> String {
     }
     
     if totalSeconds <= 0 {
-        return "Đặt lại: " + cleaned
+        return "Hồi: " + cleaned
     }
     
     let target = Date().addingTimeInterval(totalSeconds)
@@ -44,13 +44,13 @@ func formatResetWithEst(raw: String) -> String {
     let timeStr = timeFormatter.string(from: target)
     
     if totalSeconds < 86400 && calendar.isDateInToday(target) {
-        return "Đặt lại sau " + cleaned + " · " + timeStr
+        return "Hồi sau " + cleaned + " · " + timeStr
     } else if calendar.isDateInTomorrow(target) {
-        return "Đặt lại sau " + cleaned + " · Mai " + timeStr
+        return "Hồi sau " + cleaned + " · Mai " + timeStr
     } else {
         let dayFormatter = DateFormatter()
         dayFormatter.dateFormat = "dd/MM HH:mm"
-        return "Đặt lại sau " + cleaned + " · " + dayFormatter.string(from: target)
+        return "Hồi sau " + cleaned + " · " + dayFormatter.string(from: target)
     }
 }
 
@@ -174,7 +174,7 @@ struct ConsoleKeyItem: Identifiable {
 struct RouteRow: Identifiable {
     let id: String
     let subDetails: String
-    let remainingPercent: Int
+    var compactDetails: String? = nil
     let isAvailable: Bool
     var isProbeError: Bool = false
     var isDisabled: Bool = false
@@ -183,7 +183,6 @@ struct RouteRow: Identifiable {
     var unavailableLabel: String = "Hết hạn"
     var statusText: String? = nil
     var title: String? = nil
-    var secondaryTitle: String? = nil
     var badge: String? = nil
 }
 
@@ -192,7 +191,6 @@ struct CompactAccountRowView: View {
     let index: Int
     let totalCount: Int
     let subDetails: String
-    let remainingPercent: Int
     let isAvailable: Bool
     let isCurrent: Bool
     var isProbeError: Bool = false
@@ -204,7 +202,6 @@ struct CompactAccountRowView: View {
     var unavailableLabel: String = "Hết hạn"
     var statusText: String? = nil
     var title: String? = nil
-    var secondaryTitle: String? = nil
     var badge: String? = nil
 
     @State private var isHovered: Bool = false
@@ -218,15 +215,15 @@ struct CompactAccountRowView: View {
         HStack(alignment: .center, spacing: 6) {
             rowContent
                 .help(self.email)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(self.title ?? Self.shortIdentity(self.email)) \(self.badge ?? ""), \(self.statusText ?? (self.isAvailable ? "" : self.unavailableLabel)), \(self.subDetails)")
             if let onToggleEnabled = onToggleEnabled {
-                Button(action: onToggleEnabled) {
-                    Image(systemName: self.isDisabled ? "play.circle" : "pause.circle")
-                        .font(.system(size: 12))
-                        .foregroundStyle(self.isDisabled ? Color(nsColor: .systemGreen) : Color.secondary)
-                        .frame(width: 16, height: 16)
-                }
-                .buttonStyle(.plain)
-                .help(self.isDisabled ? "Bật account" : "Tắt account")
+                Toggle("", isOn: Binding(get: { !self.isDisabled }, set: { _ in onToggleEnabled() }))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+                    .help(self.isDisabled ? "Đang tắt · bật để dùng lại" : "Đang bật · tắt để tạm ngưng")
+                    .accessibilityLabel(self.isDisabled ? "Bật \(self.title ?? self.email)" : "Tắt \(self.title ?? self.email)")
             }
         }
         .opacity(self.isDisabled ? 0.55 : 1)
@@ -287,13 +284,6 @@ struct CompactAccountRowView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
 
-                        if let secondaryTitle = self.secondaryTitle {
-                            Text(secondaryTitle)
-                                .font(.system(size: 9.5, weight: .regular, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-
                         if let badge = self.badge, !badge.isEmpty {
                             Text(badge)
                                 .font(.system(size: 8.5, weight: .semibold))
@@ -303,12 +293,6 @@ struct CompactAccountRowView: View {
                                 .background(Capsule().fill(Color.white.opacity(0.10)))
                                 .lineLimit(1)
                                 .fixedSize()
-                        }
-                        
-                        if self.isCurrent {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 8))
-                                .foregroundStyle(Color(nsColor: .systemYellow))
                         }
                         
                         Spacer(minLength: 8)
@@ -328,21 +312,7 @@ struct CompactAccountRowView: View {
                         } else if let statusText = self.statusText {
                             Text(statusText)
                                 .font(.system(size: 9.5, weight: .medium))
-                                .foregroundStyle(Color(nsColor: .systemGreen))
-                        } else {
-                            // CodexBar mini progress capsule
-                            Capsule()
-                                .fill(Color(white: 0.28, opacity: 0.5))
-                                .frame(width: 44, height: 4)
-                                .overlay(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color(red: 218/255, green: 119/255, blue: 86/255))
-                                        .frame(width: 44 * CGFloat(max(0, min(100, self.remainingPercent))) / 100.0)
-                                }
-                            Text("\(self.remainingPercent)%")
-                                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .frame(minWidth: 26, alignment: .trailing)
+                                .foregroundStyle(self.isCurrent ? Color.accentColor : Color(nsColor: .systemGreen))
                         }
                     }
                     
@@ -459,10 +429,17 @@ struct PoolAccountItem: Identifiable {
         return est.isEmpty ? usage : "\(usage) · \(window) \(est)"
     }
 
+    var compactDetails: String? {
+        guard isAvailable, !isDisabled, !isPaused, !isProbeError else { return nil }
+        let window = reset5h.isEmpty ? "Tuần" : "5h"
+        let est = Self.recoveryText(reset5h.isEmpty ? resetWeekly : reset5h)
+        return est.isEmpty ? nil : "\(window) \(est)"
+    }
+
     static func recoveryText(_ raw: String) -> String {
         let est = formatResetWithEst(raw: raw)
         if est.isEmpty { return "" }
-        return est.replacingOccurrences(of: "Đặt lại sau ", with: "hồi sau ").replacingOccurrences(of: "Đặt lại: ", with: "hồi sau ")
+        return est.replacingOccurrences(of: "Hồi sau ", with: "hồi sau ").replacingOccurrences(of: "Hồi: ", with: "hồi sau ")
     }
 }
 
@@ -592,7 +569,7 @@ struct ClaudeFullCardView: View {
                 let isUsedMode = self.state.quotaDisplayMode == "used"
                 let c5hVal = isUsedMode ? self.state.claude5h : max(0, 100 - self.state.claude5h)
                 let c5hTitle = isUsedMode ? "Phiên 5h: \(c5hVal)% đã dùng" : "Phiên 5h: \(c5hVal)% còn lại"
-                let c5hPace = isUsedMode ? "\(self.state.claudePaceReserve)% dự trữ nhịp độ" : "Đã dùng \(self.state.claude5h)%"
+                let c5hPace = isUsedMode ? "Còn \(self.state.claudePaceReserve)% trong phiên này" : "Đã dùng \(self.state.claude5h)%"
                 
                 MetricRow(
                     title: c5hTitle,
@@ -629,12 +606,12 @@ struct ClaudeFullCardView: View {
             // 3. Pool Account List (Minimal Card-based with Instant Reordering)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Pool Accounts")
+                    Text("Thứ tự sử dụng")
                         .font(.footnote)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("▲▼ Thứ tự ưu tiên")
+                    Text("▲▼ đổi mức ưu tiên")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -645,8 +622,7 @@ struct ClaudeFullCardView: View {
                         email: row.id,
                         index: index,
                         totalCount: rows.count,
-                        subDetails: row.subDetails,
-                        remainingPercent: row.isAvailable ? row.remainingPercent : 0,
+                        subDetails: (self.state.activeRouteId == row.id ? row.compactDetails : nil) ?? row.subDetails,
                         isAvailable: row.isAvailable,
                         isCurrent: self.state.activeRouteId == row.id,
                         isProbeError: row.isProbeError,
@@ -658,7 +634,6 @@ struct ClaudeFullCardView: View {
                         unavailableLabel: row.unavailableLabel,
                         statusText: row.statusText,
                         title: row.title,
-                        secondaryTitle: row.secondaryTitle,
                         badge: row.badge
                     )
                 }
@@ -748,7 +723,7 @@ struct AgyModelRowView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("Đặt lại: \(self.reset.isEmpty ? "Sẵn sàng" : self.reset)")
+                Text(self.reset.isEmpty ? "Hồi: Sẵn sàng" : (self.reset.hasPrefix("Hồi") ? self.reset : "Hồi: \(self.reset)"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -892,13 +867,13 @@ struct AntigravityFullCardView: View {
                     index: 0,
                     totalCount: 1,
                     subDetails: "Google CloudCode · Project: \(self.state.agyProject)",
-                    remainingPercent: self.state.agyGemini5hRemaining,
                     isAvailable: true,
                     isCurrent: true,
                     isProbeError: false,
                     onMoveUp: nil,
                     onMoveDown: nil,
-                    onSwitch: {}
+                    onSwitch: {},
+                    statusText: "Hoạt động"
                 )
             }
             
@@ -1264,8 +1239,8 @@ class QuotaState: ObservableObject {
     @Published var agyClaudeGptWeeklyRemaining: Int = 43
     @Published var agyClaudeGptWeeklyRefresh: String = "3d 19h"
     
-    @Published var lastRefresh = "12:29:28"
-    @Published var nextRefresh = "16:29:28"
+    @Published var lastRefresh = "12:29"
+    @Published var nextRefresh = "16:29"
     @Published var keeperStatus = "Hoạt động"
     @Published var keeperCyclePercent: Double = 65.0
     @Published var keeperSchedule: String = "Mỗi 4 giờ (Proactive Refresh)"
@@ -1370,14 +1345,17 @@ class QuotaState: ObservableObject {
         var byId: [String: RouteRow] = [:]
         let isUsedMode = quotaDisplayMode == "used"
         for a in claudeAccounts {
-            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetails(isUsedMode: isUsedMode), remainingPercent: isUsedMode ? a.usedWeekly : a.remainingWeekly, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, unavailableLabel: a.isPaused ? "Cách ly" : "Hết hạn", badge: a.plan)
+            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetails(isUsedMode: isUsedMode), compactDetails: a.compactDetails, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, unavailableLabel: a.isPaused ? "Cách ly" : "Hết hạn", statusText: (a.isAvailable && !a.isDisabled && !a.isPaused) ? "Sẵn sàng" : nil, badge: a.plan)
         }
         for k in consoleKeys {
-            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, remainingPercent: 100, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: k.state == "ok" ? "Còn credit" : nil, title: k.displayName, badge: k.id)
+            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: (k.state == "ok" && k.enabled) ? "Còn credit" : nil, title: k.displayName, badge: k.id)
         }
         var rows = routingOrder.compactMap { byId[$0] }
         let seen = Set(rows.map { $0.id })
         rows += claudeAccounts.filter { !seen.contains($0.email) }.compactMap { byId[$0.email] }
+        if let activeIndex = rows.firstIndex(where: { !$0.isDisabled && !$0.isPaused && $0.isAvailable }) {
+            rows[activeIndex].statusText = "Đang dùng"
+        }
         return rows
     }
 
@@ -1437,7 +1415,7 @@ class QuotaState: ObservableObject {
 
     func updateAgoText() {
         let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "HH:mm:ss"
+        timeFormatter.dateFormat = "HH:mm"
         let timeStr = timeFormatter.string(from: self.lastQuotaFetchDate)
         
         let delta = Date().timeIntervalSince(self.lastQuotaFetchDate)

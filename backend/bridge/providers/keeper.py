@@ -30,9 +30,9 @@ class KeeperProvider:
                     if m:
                         try:
                             last_dt = datetime.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
-                            timer_info["last_run"] = last_dt.strftime("%H:%M:%S")
+                            timer_info["last_run"] = last_dt.strftime("%H:%M")
                             next_dt = last_dt + datetime.timedelta(hours=4)
-                            timer_info["next_run"] = next_dt.strftime("%H:%M:%S")
+                            timer_info["next_run"] = next_dt.strftime("%H:%M")
                             break
                         except Exception:
                             pass
@@ -42,9 +42,9 @@ class KeeperProvider:
         now_dt = datetime.datetime.now()
         if not last_dt:
             last_dt = now_dt - datetime.timedelta(minutes=5)
-            timer_info["last_run"] = last_dt.strftime("%H:%M:%S")
+            timer_info["last_run"] = last_dt.strftime("%H:%M")
             next_dt = last_dt + datetime.timedelta(hours=4)
-            timer_info["next_run"] = next_dt.strftime("%H:%M:%S")
+            timer_info["next_run"] = next_dt.strftime("%H:%M")
         else:
             next_dt = last_dt + datetime.timedelta(hours=4)
 

@@ -57,7 +57,7 @@ function getAgyIcon() {
 function addSyncTimeElement(stack, timestamp, isOnline) {
   const d = new Date(timestamp || Date.now());
   const pad = (n) => String(n).padStart(2, "0");
-  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
   const syncStack = stack.addStack();
   syncStack.layoutHorizontally();
@@ -99,12 +99,12 @@ function formatResetWithEst(raw) {
     else if (s.endsWith("s")) totalSec += parseFloat(s.slice(0, -1));
   }
 
-  if (totalSec <= 0) return `Đặt lại: ${cleaned}`;
+  if (totalSec <= 0) return `Hồi: ${cleaned}`;
 
   const target = new Date(Date.now() + totalSec * 1000);
   const now = new Date();
   const pad = (n) => String(n).padStart(2, "0");
-  const timeStr = `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
+  const timeStr = `${pad(target.getHours())}:${pad(target.getMinutes())}`;
 
   const isToday = target.toDateString() === now.toDateString();
   const tomorrow = new Date(now);
@@ -112,12 +112,12 @@ function formatResetWithEst(raw) {
   const isTomorrow = target.toDateString() === tomorrow.toDateString();
 
   if (totalSec < 86400 && isToday) {
-    return `Đặt lại sau ${cleaned} · ${timeStr}`;
+    return `Hồi sau ${cleaned} · ${timeStr}`;
   } else if (isTomorrow) {
-    return `Đặt lại sau ${cleaned} · Mai ${timeStr}`;
+    return `Hồi sau ${cleaned} · Mai ${timeStr}`;
   } else {
     const dayStr = `${pad(target.getDate())}/${pad(target.getMonth() + 1)} ${pad(target.getHours())}:${pad(target.getMinutes())}`;
-    return `Đặt lại sau ${cleaned} · ${dayStr}`;
+    return `Hồi sau ${cleaned} · ${dayStr}`;
   }
 }
 
