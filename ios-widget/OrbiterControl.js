@@ -53,15 +53,14 @@ function rowDetail(a) {
   if (a.is_console) {
     const state = a.console.state;
     if (a.is_disabled) return "Đang tắt";
-    if (state === "no_credit") return "Hết credit · cần nạp thêm";
-    if (state === "ok") return "Credit khả dụng · không xem được số dư";
+    if (state === "no_credit") return "Cần nạp thêm tại Console";
+    if (state === "ok") return "Không xem được số dư";
     return keyStateLabel(state)[0].toUpperCase() + keyStateLabel(state).slice(1);
   }
-  if (a.is_disabled) return `Đang tắt · 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}`;
+  if (a.is_disabled) return `Đang tắt · dùng 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}`;
   if (a.is_available === false) return a.reset_weekly ? `Tuần hồi sau ${a.reset_weekly}` : "Tuần đã hết · chưa rõ giờ hồi";
   if (typeof a.used_5h === "number" && a.used_5h >= 100) return a.reset_5h ? `5h hồi sau ${a.reset_5h}` : "5h đã đầy · chưa rõ giờ hồi";
-  const status = a.lifecycle_label || a.status_text || "";
-  return `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}${status ? ` · ${status}` : ""}`;
+  return `Dùng 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}${a.reset_5h ? ` · hồi sau ${a.reset_5h}` : ""}`;
 }
 
 function accountLine(a, index) {

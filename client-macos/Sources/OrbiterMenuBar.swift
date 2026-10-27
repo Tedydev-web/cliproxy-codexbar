@@ -40,7 +40,7 @@ func formatResetWithEst(raw: String) -> String {
     let target = Date().addingTimeInterval(totalSeconds)
     let calendar = Calendar.current
     let timeFormatter = DateFormatter()
-    timeFormatter.dateFormat = "HH:mm:ss"
+    timeFormatter.dateFormat = "HH:mm"
     let timeStr = timeFormatter.string(from: target)
     
     if totalSeconds < 86400 && calendar.isDateInToday(target) {
@@ -158,8 +158,8 @@ struct ConsoleKeyItem: Identifiable {
 
     var detailText: String {
         switch state {
-        case "no_credit": return "Hết credit · cần nạp thêm"
-        case "ok": return "Credit khả dụng · không xem được số dư"
+        case "no_credit": return "Cần nạp thêm tại Console"
+        case "ok": return "Không xem được số dư"
         case "rate_limited": return "Đang bị giới hạn tốc độ"
         case "invalid": return "Key bị từ chối (401/403)"
         case "disabled": return "Đang tắt"
@@ -209,9 +209,15 @@ struct CompactAccountRowView: View {
 
     @State private var isHovered: Bool = false
 
+    static func shortIdentity(_ value: String) -> String {
+        guard let at = value.firstIndex(of: "@") else { return value }
+        return String(value[..<at])
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
             rowContent
+                .help(self.email)
             if let onToggleEnabled = onToggleEnabled {
                 Button(action: onToggleEnabled) {
                     Image(systemName: self.isDisabled ? "play.circle" : "pause.circle")
@@ -275,7 +281,7 @@ struct CompactAccountRowView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // Line 1: Identity & Headroom / Status (CodexBar MenuCardCompactAccountRow layout)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(self.title ?? self.email)
+                        Text(self.title ?? Self.shortIdentity(self.email))
                             .font(.system(size: 11.5, weight: self.isCurrent ? .semibold : .regular))
                             .foregroundStyle(self.isCurrent ? Color.primary : (self.isAvailable ? Color.primary.opacity(0.88) : Color.secondary))
                             .lineLimit(1)
@@ -343,7 +349,7 @@ struct CompactAccountRowView: View {
                     // Line 2: Details & Reset time (Clean, subtle secondary text)
                     Text(self.subDetails)
                         .font(.footnote)
-                        .foregroundStyle(self.isAvailable ? Color.secondary : Color(nsColor: .systemRed).opacity(0.85))
+                        .foregroundStyle(self.isProbeError ? Color(nsColor: .systemOrange) : Color.secondary)
                         .lineLimit(1)
                 }
                 .padding(.horizontal, 8)
@@ -429,12 +435,12 @@ struct PoolAccountItem: Identifiable {
         scoped.isEmpty ? "" : " · " + scoped.map { "\($0.model): \($0.used)%" }.joined(separator: " · ")
     }
 
-    var subDetailsText: String {
+    func subDetails(isUsedMode: Bool) -> String {
         if isPaused {
             return "Đã cách ly · \(errorHint.isEmpty ? "Cần đăng nhập lại" : errorHint)"
         }
         if isDisabled {
-            return "Đang tắt · 5h: \(used5h)% · Tuần: \(usedWeekly)%"
+            return isUsedMode ? "Đang tắt · Dùng 5h \(used5h)% · Tuần \(usedWeekly)%" : "Đang tắt · Còn 5h \(remaining5h)% · Tuần \(remainingWeekly)%"
         }
         if isProbeError {
             return "Tạm nghẽn 429 API · Sẵn sàng"
@@ -447,9 +453,9 @@ struct PoolAccountItem: Identifiable {
             let est = Self.recoveryText(reset5h)
             return est.isEmpty ? "5h đã đầy · chưa rõ giờ hồi" : "5h \(est)"
         }
-        let rTime = reset5h.isEmpty ? resetWeekly : reset5h
-        let est = formatResetWithEst(raw: rTime)
-        return "5h: \(used5h)% · Tuần: \(usedWeekly)%\(scopedSummary) · \(est)"
+        let usage = isUsedMode ? "Dùng 5h \(used5h)% · Tuần \(usedWeekly)%" : "Còn 5h \(remaining5h)% · Tuần \(remainingWeekly)%"
+        let est = Self.recoveryText(reset5h.isEmpty ? resetWeekly : reset5h).components(separatedBy: " · ").first ?? ""
+        return est.isEmpty ? usage : "\(usage) · \(est)"
     }
 
     static func recoveryText(_ raw: String) -> String {
@@ -609,7 +615,7 @@ struct ClaudeFullCardView: View {
                 ForEach(self.state.claudeScoped) { scoped in
                     let sVal = isUsedMode ? scoped.used : max(0, 100 - scoped.used)
                     MetricRow(
-                        title: isUsedMode ? "\(scoped.model) hàng tuần: \(sVal)% đã dùng" : "\(scoped.model) hàng tuần: \(sVal)% còn lại",
+                        title: isUsedMode ? "\(scoped.model) tuần: \(sVal)% đã dùng" : "\(scoped.model) tuần: \(sVal)% còn lại",
                         percent: Double(sVal),
                         resetText: formatResetWithEst(raw: scoped.resetText),
                         tint: Color(red: 218/255, green: 119/255, blue: 86/255)
@@ -1361,8 +1367,9 @@ class QuotaState: ObservableObject {
 
     var routeRows: [RouteRow] {
         var byId: [String: RouteRow] = [:]
+        let isUsedMode = quotaDisplayMode == "used"
         for a in claudeAccounts {
-            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetailsText, remainingPercent: a.remainingWeekly, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, badge: a.plan)
+            byId[a.email] = RouteRow(id: a.email, subDetails: a.subDetails(isUsedMode: isUsedMode), remainingPercent: isUsedMode ? a.usedWeekly : a.remainingWeekly, isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, unavailableLabel: a.isPaused ? "Cách ly" : "Hết hạn", badge: a.plan)
         }
         for k in consoleKeys {
             byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, remainingPercent: 100, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: k.state == "ok" ? "Còn credit" : nil, title: k.displayName, secondaryTitle: k.id, badge: "Console API")
