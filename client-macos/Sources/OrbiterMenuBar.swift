@@ -136,12 +136,39 @@ struct MetricRow: View {
 }
 
 // MARK: - Minimal Sleek Account Row (Exact CodexBar Native Row Style)
+struct ConsoleKeyStatus: Identifiable {
+    let prefix: String
+    let org: String
+    let state: String
+    var id: String { prefix }
+}
+
 struct ConsoleRouteRowView: View {
     let isPrimary: Bool
     let keyCount: Int
+    let keys: [ConsoleKeyStatus]
     let onToggle: () -> Void
 
+    static func color(_ state: String) -> Color {
+        switch state {
+        case "ok": return Color.green
+        case "rate_limited": return Color.yellow
+        default: return Color.red
+        }
+    }
+
+    static func label(_ state: String) -> String {
+        switch state {
+        case "ok": return "Còn credit"
+        case "no_credit": return "Hết credit"
+        case "invalid": return "Key không hợp lệ"
+        case "rate_limited": return "Đang bị giới hạn"
+        default: return "Chưa kiểm tra được"
+        }
+    }
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
         HStack(spacing: 8) {
             Image(systemName: "key.horizontal.fill")
                 .font(.system(size: 12))
@@ -162,6 +189,20 @@ struct ConsoleRouteRowView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+        }
+        ForEach(keys) { k in
+            HStack(spacing: 6) {
+                Circle().fill(Self.color(k.state)).frame(width: 6, height: 6)
+                Text("\(k.prefix)\(k.org.isEmpty ? "" : " · \(k.org)")")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(Self.label(k.state))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Self.color(k.state))
+            }
+            .padding(.leading, 20)
+        }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -600,6 +641,7 @@ struct ClaudeFullCardView: View {
                     ConsoleRouteRowView(
                         isPrimary: self.state.consoleMode == "primary",
                         keyCount: self.state.consoleKeys,
+                        keys: self.state.consoleKeyStatus,
                         onToggle: { AppDelegate.shared?.confirmConsoleMode(primary: self.state.consoleMode != "primary") }
                     )
                 }
@@ -1199,6 +1241,7 @@ class QuotaState: ObservableObject {
     
     @Published var consoleMode: String = ""
     @Published var consoleKeys: Int = 0
+    @Published var consoleKeyStatus: [ConsoleKeyStatus] = []
     @Published var agyClaudeGpt5hText: String = "Quota available"
     @Published var agyClaudeGpt5hRemaining: Int = 100
     @Published var agyClaudeGpt5hRefresh: String = "4h 24m"
@@ -1552,6 +1595,9 @@ class QuotaState: ObservableObject {
                     if let cs = json["console"] as? [String: Any] {
                         self.consoleMode = cs["mode"] as? String ?? ""
                         self.consoleKeys = cs["keys"] as? Int ?? 0
+                        self.consoleKeyStatus = (cs["key_status"] as? [[String: Any]] ?? []).map {
+                            ConsoleKeyStatus(prefix: $0["prefix"] as? String ?? "", org: $0["org"] as? String ?? "", state: $0["state"] as? String ?? "")
+                        }
                     } else {
                         self.consoleMode = ""
                     }

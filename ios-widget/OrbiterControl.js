@@ -35,7 +35,7 @@ function summary(p) {
   const lines = [act ? `Đang chạy: ${shortName(act)}, 5h ${pct(act.used_5h)}, tuần ${pct(act.used_weekly)}` : "Không có account nào đang bật"];
   live.forEach((a, i) => lines.push(accountLine(a, i)));
   paused.forEach((a) => lines.push(accountLine(a)));
-  if (p.console) lines.push(`capi: ${p.console.mode === "primary" ? "đang ưu tiên" : "dự phòng tự động"} (${p.console.keys} key)`);
+  if (p.console) lines.push(`capi: ${p.console.mode === "primary" ? "đang ưu tiên" : "dự phòng tự động"} (${p.console.keys} key)${(p.console.key_status || []).map((k) => `, ${k.prefix} ${keyStateLabel(k.state)}`).join("")}`);
   return lines.join("\n");
 }
 
@@ -118,6 +118,9 @@ async function setFirst(a) {
   return orbiter.api("/v1/set-priority", { method: "POST", body: { email: a.email } });
 }
 
+const keyStateLabel = (state) =>
+  ({ ok: "còn credit", no_credit: "HẾT credit", invalid: "key không hợp lệ", rate_limited: "đang bị giới hạn" })[state] || "chưa kiểm tra được";
+
 async function setConsoleMode(mode) {
   return orbiter.api("/v1/set-console-mode", { method: "POST", body: { mode } });
 }
@@ -178,7 +181,7 @@ async function accountActions(a, isFirst) {
 
 function addTextRow(table, title, subtitle, onSelect) {
   const row = new UITableRow();
-  row.height = subtitle ? 60 : 44;
+  row.height = subtitle ? (String(subtitle).split("\n").length > 1 ? 92 : 60) : 44;
   row.addText(title, subtitle);
   if (onSelect) {
     row.dismissOnSelect = false;
@@ -239,10 +242,11 @@ async function controlPanel({ preview } = {}) {
 
     if (p.console) {
       const primary = p.console.mode === "primary";
+      const keyLine = (p.console.key_status || []).map((k) => `${k.prefix}${k.org ? ` ${k.org}` : ""}: ${keyStateLabel(k.state)}`).join("\n");
       addTextRow(
         table,
         `${primary ? "●" : "◦"} Console API (capi) · ${p.console.keys} key`,
-        primary ? "Đang ưu tiên capi · bấm để về pool" : "Dự phòng, tự chuyển hai chiều · bấm để dùng capi",
+        `${primary ? "Đang ưu tiên capi · bấm để về pool" : "Dự phòng, tự chuyển hai chiều · bấm để dùng capi"}${keyLine ? `\n${keyLine}` : ""}`,
         async () => {
           if (await toggleConsole(p.console)) await refresh();
         }
