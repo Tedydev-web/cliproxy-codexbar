@@ -205,7 +205,7 @@ def contract_check():
         problems.append("v8 credentials endpoint is missing, the bridge runs on the legacy fallback")
     legacy = api("/v0/management/auth-files", secret=secret)[0]
     if legacy != 200:
-        problems.append(f"legacy /v0 auth-files answered HTTP {legacy}, claude-token-keeper and cswitch still use it")
+        problems.append(f"legacy /v0 auth-files answered HTTP {legacy}, claude-token-keeper still uses it")
     queue = api("/v8/management/observability/usage/queue?count=0", secret=secret)[0]
     if queue != 400:
         problems.append(f"usage queue route answered HTTP {queue}, the usage collector needs it")
