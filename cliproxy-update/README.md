@@ -9,7 +9,7 @@ Mỗi ngày kiểm tra bản phát hành mới của [CLIProxyAPI](https://githu
 3. Chọn bản cập nhật: bản **mới nhất đã phát hành ít nhất 24 giờ** (soak, tránh bản vừa ra bị lỗi). Bỏ qua nếu đang `hold` hoặc chế độ chỉ thông báo.
 4. Tải bản `linux_amd64`, **kiểm tra SHA-256** theo `checksums.txt` của chính bản phát hành.
 5. **Smoke test**: chạy binary mới trên cổng ngẫu nhiên với bản sao cấu hình thật và thư mục auth rỗng, yêu cầu nó khởi động và liệt kê được model. Lỗi thì dừng, không đụng gì.
-6. **Chỉ chạy khi rảnh**: nếu có request trong 120 giây gần nhất thì hoãn (mã thoát 75, lần hẹn sau thử lại).
+6. **Chỉ chạy khi rảnh**: nếu có request trong 300 giây gần nhất thì hoãn (mã thoát 75, lần hẹn sau thử lại).
 7. Sao lưu binary (`cli-proxy-api.bak_v<phiên bản>`, giữ 3 bản) và cấu hình (`~/.cliproxy/backups/`), thay binary nguyên tử, khởi động lại dịch vụ.
 8. **Kiểm tra sau cập nhật**: API quản lý phải trả 200 và một request suy luận thật không được lỗi 5xx. Hỏng thì **tự khôi phục** bản cũ và thông báo.
 9. **Kiểm tra hợp đồng dữ liệu của bridge** (không khôi phục, chỉ thông báo): `auth-files` còn đủ `name/type/disabled/quota` và `quota.signals` còn đủ 4 tín hiệu Anthropic mà bridge đọc.
@@ -30,7 +30,7 @@ Mỗi ngày kiểm tra bản phát hành mới của [CLIProxyAPI](https://githu
 |---|---|---|
 | `CLIPROXY_UPDATE_MODE` | `auto` | `notify` chỉ báo cáo, không tự cập nhật |
 | `CLIPROXY_UPDATE_MIN_AGE_HOURS` | `24` | Tuổi tối thiểu của bản phát hành trước khi cài |
-| `CLIPROXY_UPDATE_IDLE_SEC` | `120` | Hoãn nếu có request trong khoảng này |
+| `CLIPROXY_UPDATE_IDLE_SEC` | `300` | Hoãn nếu có request trong khoảng này |
 | `CLIPROXY_UPDATE_FLAVOR` | `default` | `no-plugin` cho bản không hỗ trợ plugin |
 
 Tạm dừng tự cập nhật: `touch ~/.cliproxy/update.hold` (vẫn nhận báo cáo). Bỏ dừng: xóa file đó.

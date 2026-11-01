@@ -16,7 +16,7 @@ CACHE = f"{SHARE}/cache"
 STATE = f"{SHARE}/state.json"
 UNIT = "cliproxy.service"
 MIN_AGE_HOURS = float(os.environ.get("CLIPROXY_UPDATE_MIN_AGE_HOURS", "24"))
-IDLE_SEC = int(os.environ.get("CLIPROXY_UPDATE_IDLE_SEC", "120"))
+IDLE_SEC = int(os.environ.get("CLIPROXY_UPDATE_IDLE_SEC", "300"))
 FLAVOR = os.environ.get("CLIPROXY_UPDATE_FLAVOR", "default")
 MODE = os.environ.get("CLIPROXY_UPDATE_MODE", "auto")
 KEEP_BACKUPS = 3
@@ -89,6 +89,26 @@ def api(path, method="GET", body=None, port=None, key=None, secret=None, timeout
         return 0, str(e).encode()
 
 
+LOG_TAIL_BYTES = 262144
+LOG_REQUEST = re.compile(r'^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\].*\| (?:POST|GET) +"/v1/(?:messages|chat/completions|responses|completions)')
+
+
+def last_log_request_age_sec(path=os.path.expanduser("~/.cliproxy/logs/main.log")):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - LOG_TAIL_BYTES))
+            lines = f.read().decode("utf-8", "ignore").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        m = LOG_REQUEST.match(line)
+        if m:
+            when = datetime.datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S")
+            return max(0.0, (datetime.datetime.now() - when).total_seconds())
+    return None
+
+
 def idle_age_sec():
     code, raw = api("/v0/management/auth-files", secret=mgmt_secret())
     if code != 200:
@@ -99,6 +119,9 @@ def idle_age_sec():
         if obs and not obs.startswith("0001"):
             age = (now - datetime.datetime.fromisoformat(obs)).total_seconds()
             newest = age if newest is None else min(newest, age)
+    logged = last_log_request_age_sec()
+    if logged is not None:
+        newest = logged if newest is None else min(newest, logged)
     return newest
 
 
