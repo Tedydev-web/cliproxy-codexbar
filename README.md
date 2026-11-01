@@ -173,9 +173,9 @@ cliproxy-codexbar/
 
 ---
 
-## 🍪 Nguồn quota qua cookie claude.ai (web-session)
+## 📊 Quota phụ (Fable, cloud credits)
 
-Bổ sung cho quota OAuth, không phụ thuộc refresh token: đọc cookie `sessionKey` từ trình duyệt trên Mac, đẩy về Ubuntu qua SSH và lấy quota 5 giờ, 7 ngày, quota theo model, cloud credits. Cài đặt, kiến trúc và hành vi: xem [`web-session/README.md`](web-session/README.md). `sync-all.sh` cài cả hai phía.
+Bridge đọc quota theo model (Fable), cloud credits và extra usage trực tiếp từ `GET /api/oauth/usage` bằng token OAuth đọc quota, cache 5 phút, giữ dữ liệu cũ khi gặp 429. Mẫu `used_dollars` của cloud credits được ghi vào `~/.cliproxy/cloud-credit-samples.jsonl` khi có thay đổi. Không dùng cookie claude.ai.
 
 ## ⬆️ Tự động cập nhật CLIProxyAPI (cliproxy-update)
 

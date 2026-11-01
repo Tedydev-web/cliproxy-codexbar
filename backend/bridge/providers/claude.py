@@ -41,11 +41,11 @@ def plan_label(tier):
     if "team" in t:
         return "Team"
     return "Max"
-from providers.claude_web import WebSessionCache, usable_as_primary, as_probe, extras as web_extras
+from providers.claude_usage_extras import UsageExtrasCache
 
 class ClaudePoolProvider:
-    def __init__(self, web_cache=None):
-        self._web = web_cache or WebSessionCache()
+    def __init__(self, extras_cache=None):
+        self._extras = extras_cache or UsageExtrasCache()
         self._cache = []
         self._last_probe_time = 0
         self._account_probe_timestamps = {}
@@ -219,25 +219,19 @@ class ClaudePoolProvider:
         return p
 
     def _setup_token_status(self, email, token_file, nickname, meta, passive):
-        web = self._web.get(email)
-        r = self._setup_token_primary(email, token_file, nickname, meta, passive, web)
-        r.update(web_extras(web))
-        if web and web.get("error"):
-            r["web_error"] = web["error"]
+        reader = self._oauth_reader_file(meta.get("email"), token_file)
+        r = self._setup_token_primary(email, token_file, nickname, reader, passive)
+        r.update(self._extras.get(reader))
         return r
 
-    def _setup_token_primary(self, email, token_file, nickname, meta, passive, web):
+    def _setup_token_primary(self, email, token_file, nickname, reader, passive):
         passive_fresh = bool(passive) and passive.get("age_sec", PASSIVE_FRESHNESS_SEC) < PASSIVE_FRESHNESS_SEC
-        web_newer = usable_as_primary(web) and not web.get("stale") and web.get("cache_age_sec", 0) < (passive or {}).get("age_sec", 0)
-        if passive_fresh and not web_newer:
+        if passive_fresh:
             return dict(self._setup_token_result(email, nickname, passive), source="passive")
-        reader = self._oauth_reader_file(meta.get("email"), token_file)
         if reader:
             r = self.probe_single_account((email, reader, nickname))
             if not r.get("is_probe_error"):
                 return dict(r, source="oauth")
-        if usable_as_primary(web):
-            return dict(self._setup_token_result(email, nickname, as_probe(web)), source="web-session", web_stale=bool(web.get("stale")))
         header = self._header_probe(token_file)
         return dict(self._setup_token_result(email, nickname, header or passive), source="header-probe" if header else "passive-stale")
 

@@ -24,7 +24,7 @@ from api.handler import BridgeApiHandler
 
 def main():
     claude_prov = ClaudePoolProvider()
-    claude_prov._web.start()
+    claude_prov._extras.start()
     agy_prov = AntigravityProvider()
     keeper_prov = KeeperProvider()
     console_prov = ConsoleRouteProvider()
