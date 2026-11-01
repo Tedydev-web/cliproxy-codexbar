@@ -535,11 +535,11 @@ struct PoolAccountItem: Identifiable {
 
     func quotaCells(isUsedMode: Bool) -> [QuotaCell] {
         guard !isPaused else { return [] }
+        let weekly = QuotaCell.make(label: "Tuần", used: usedWeekly, remaining: remainingWeekly, reset: resetWeekly, emptyReset: "Chưa có mốc", isUsedMode: isUsedMode)
+        guard has5hLimit else { return [weekly] }
         return [
-            has5hLimit
-                ? QuotaCell.make(label: "5h", used: used5h, remaining: remaining5h, reset: reset5h, emptyReset: "Chưa bắt đầu", isUsedMode: isUsedMode)
-                : QuotaCell.unlimited(label: "5h"),
-            QuotaCell.make(label: "Tuần", used: usedWeekly, remaining: remainingWeekly, reset: resetWeekly, emptyReset: "Chưa có mốc", isUsedMode: isUsedMode)
+            QuotaCell.make(label: "5h", used: used5h, remaining: remaining5h, reset: reset5h, emptyReset: "Chưa bắt đầu", isUsedMode: isUsedMode),
+            weekly
         ]
     }
 }
@@ -550,12 +550,7 @@ struct QuotaCell: Identifiable {
     let percent: Double
     let level: Int
     let recovery: String
-    var showBar: Bool = true
     var id: String { label }
-
-    static func unlimited(label: String) -> QuotaCell {
-        QuotaCell(label: label, value: "Không giới hạn", percent: 0, level: 0, recovery: "Đã gỡ giới hạn 5h", showBar: false)
-    }
 
     static func make(label: String, used: Int, remaining: Int, reset: String, emptyReset: String, isUsedMode: Bool) -> QuotaCell {
         let est = formatResetWithEst(raw: reset).replacingOccurrences(of: "Hồi sau ", with: "Hồi ")
@@ -585,16 +580,12 @@ struct QuotaCellsView: View {
                             .font(.footnote.weight(.medium).monospacedDigit())
                             .foregroundStyle(cell.level == 2 ? Color(nsColor: .systemRed) : Color.primary)
                     }
-                    if cell.showBar {
-                        UsageProgressBar(
-                            percent: cell.percent,
-                            tint: cell.level == 2 ? Color(nsColor: .systemRed) : brand,
-                            warningMarkerPercents: [],
-                            height: 4
-                        )
-                    } else {
-                        Color.clear.frame(height: 4)
-                    }
+                    UsageProgressBar(
+                        percent: cell.percent,
+                        tint: cell.level == 2 ? Color(nsColor: .systemRed) : brand,
+                        warningMarkerPercents: [],
+                        height: 4
+                    )
                     Text(cell.recovery)
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -1540,7 +1531,7 @@ class QuotaState: ObservableObject {
             byId[a.email] = RouteRow(id: a.email, subDetails: a.statusLine, cells: a.quotaCells(isUsedMode: isUsedMode), isAvailable: a.isAvailable, isProbeError: a.isProbeError, isDisabled: a.isDisabled, isPaused: a.isPaused, unavailableLabel: a.isPaused ? "Cách ly" : "Hết hạn", statusText: (a.isAvailable && !a.isDisabled && !a.isPaused) ? "Sẵn sàng" : nil, badge: a.plan)
         }
         for k in consoleKeys {
-            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: (k.state == "ok" && k.enabled) ? "Còn credit" : nil, title: k.displayName, badge: k.id)
+            byId[k.id] = RouteRow(id: k.id, subDetails: k.detailText, isAvailable: k.isUsable, isProbeError: k.state == "rate_limited", isDisabled: !k.enabled, isConsole: true, unavailableLabel: k.state == "no_credit" ? "Hết credit" : "Lỗi key", statusText: (k.state == "ok" && k.enabled) ? "Còn credit" : nil, title: k.displayName, badge: k.org.isEmpty ? nil : k.id)
         }
         var rows = routingOrder.compactMap { byId[$0] }
         let seen = Set(rows.map { $0.id })

@@ -48,7 +48,7 @@ const activeAccount = (p) => liveAccounts(p).find((a) => !a.is_disabled) || null
 
 const rowTitle = (a) =>
   a.is_console
-    ? `${a.console.org || a.email} [${a.email}]`
+    ? (a.console.org ? `${a.console.org} [${a.email}]` : a.email)
     : `${shortName(a)}${a.plan ? ` [${a.plan}]` : ""}`;
 
 function clockAfter(rel) {
@@ -86,8 +86,8 @@ function rowDetail(a) {
     if (state === "ok") return "Không xem được số dư";
     return keyStateLabel(state)[0].toUpperCase() + keyStateLabel(state).slice(1);
   }
-  const five = a.has_5h_limit === false ? "5h không giới hạn" : quotaLine("5h", a.used_5h, a.reset_5h);
-  return `${five}\n${quotaLine("Tuần", a.used_weekly, a.reset_weekly)}`;
+  const weekly = quotaLine("Tuần", a.used_weekly, a.reset_weekly);
+  return a.has_5h_limit === false ? weekly : `${quotaLine("5h", a.used_5h, a.reset_5h)}\n${weekly}`;
 }
 
 function accountLine(a, index) {
