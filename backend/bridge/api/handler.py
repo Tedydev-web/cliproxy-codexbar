@@ -4,6 +4,7 @@ RESTful HTTP API Handlers for CLIProxy CodexBar Bridge
 
 import os
 import json
+import urllib.parse
 import hmac
 import hashlib
 import subprocess
@@ -17,6 +18,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     keeper_provider = None
     console_provider = None
     backup_provider = None
+    usage_collector = None
     gateway_provider = None
     system_provider = None
 
@@ -140,6 +142,17 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/system-metrics"):
             metrics = self.system_provider.get_system_metrics() if self.system_provider else {}
             self.send_json(200, metrics)
+        elif self.path.startswith("/v1/usage-summary"):
+            if not self.usage_collector:
+                self.send_json(503, {"error": "Usage collector unavailable"})
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                days = int((query.get("days") or ["7"])[0])
+            except ValueError:
+                self.send_json(400, {"error": "'days' must be an integer"})
+                return
+            self.send_json(200, self.usage_collector.summary(days))
         elif self.path.startswith("/v1/widget/"):
             self.send_widget(self.path[len("/v1/widget/"):].split("?")[0])
         elif self.path.startswith("/v1/system-ports"):

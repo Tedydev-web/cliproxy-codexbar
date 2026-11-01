@@ -16,9 +16,6 @@ import urllib.error
 from core.config import (
     AUTH_DIR,
     ACCOUNTS_FILE,
-    MGMT_HOST,
-    MGMT_PORT,
-    MGMT_SECRET,
     PROBE_CACHE_SEC,
     EXHAUSTED_CACHE_SEC,
     PASSIVE_FRESHNESS_SEC,
@@ -27,6 +24,7 @@ from core.config import (
     PROBE_STAGGER_SEC,
     PROBE_USER_AGENT
 )
+from core import mgmt
 from core.utils import fmt_relative_reset_from_ts, fmt_relative_reset_from_iso
 
 PLAN_CACHE_SEC = 6 * 3600
@@ -101,17 +99,8 @@ class ClaudePoolProvider:
 
     def fetch_passive_quota(self):
         """Fetch RateLimit signals captured passively by CLIProxy from real inferences."""
-        url = f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Bearer {MGMT_SECRET}",
-                "Content-Type": "application/json"
-            }
-        )
         try:
-            with urllib.request.urlopen(req, timeout=2.5) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+            data = mgmt.request("credentials", timeout=2.5)
             
             res = {}
             for f in data.get("files", []):
@@ -576,12 +565,7 @@ class ClaudePoolProvider:
         return results
 
     def _auth_disabled_map(self):
-        req = urllib.request.Request(
-            f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files",
-            headers={"Authorization": f"Bearer {MGMT_SECRET}"}
-        )
-        with urllib.request.urlopen(req, timeout=2.5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        data = mgmt.request("credentials", timeout=2.5)
         return {f.get("name", ""): bool(f.get("disabled")) for f in data.get("files", [])}
 
     def _token_file_disabled(self, token_file):
@@ -613,14 +597,7 @@ class ClaudePoolProvider:
                 return 409, {"error": "Refusing to disable the last enabled account"}
 
         try:
-            req = urllib.request.Request(
-                f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/fields",
-                data=json.dumps({"name": token_file(email), "disabled": not enabled}).encode("utf-8"),
-                headers={"Authorization": f"Bearer {MGMT_SECRET}", "Content-Type": "application/json"},
-                method="PATCH"
-            )
-            with urllib.request.urlopen(req, timeout=3):
-                pass
+            mgmt.request("credentials_fields", "PATCH", {"name": token_file(email), "disabled": not enabled}, timeout=3)
         except Exception as e:
             return 502, {"error": f"CLIProxy rejected the change: {e}"}
         self._last_probe_time = 0
@@ -675,17 +652,7 @@ class ClaudePoolProvider:
             prio = max(1, total - (ranks.get(em, idx) if ranks else idx) + 1)
             fn = accounts_dict.get(em, {}).get("tokenFile", f"claude-{em}.json")
             try:
-                req = urllib.request.Request(
-                    f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/fields",
-                    data=json.dumps({"name": fn, "priority": prio}).encode("utf-8"),
-                    headers={
-                        "Authorization": f"Bearer {MGMT_SECRET}",
-                        "Content-Type": "application/json"
-                    },
-                    method="PATCH"
-                )
-                with urllib.request.urlopen(req, timeout=3):
-                    pass
+                mgmt.request("credentials_fields", "PATCH", {"name": fn, "priority": prio}, timeout=3)
             except Exception as e:
                 print(f"set_accounts_order: priority PATCH failed for {fn}: {e}", file=sys.stderr)
 

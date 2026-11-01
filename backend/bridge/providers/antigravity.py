@@ -11,6 +11,7 @@ import urllib.request
 import urllib.error
 import base64
 
+from core import mgmt
 from core.config import get_agy_auth_file, AGY_CACHE_SEC, AGY_USER_AGENT, AGY_HUB_USER_AGENT
 from core.utils import fmt_relative_reset_from_iso, fmt_local_datetime, parse_iso_datetime
 
@@ -62,7 +63,6 @@ class AntigravityProvider:
 
     def ensure_fresh_token(self, auth_file, auth_data):
         """Check if Google OAuth token is near expiration (<15m) and auto-refresh via CLIProxy."""
-        from core.config import MGMT_HOST, MGMT_PORT, MGMT_SECRET
         
         # If auth_data is directly from antigravity-oauth-token
         if "token" in auth_data:
@@ -81,18 +81,11 @@ class AntigravityProvider:
                 try:
                     fn = os.path.basename(get_agy_auth_file())
                     if fn.endswith(".json"):
-                        url = f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/refresh"
-                        req = urllib.request.Request(
-                            url,
-                            data=json.dumps({"name": fn}).encode("utf-8"),
-                            headers={"Authorization": f"Bearer {MGMT_SECRET}", "Content-Type": "application/json"}
-                        )
-                        with urllib.request.urlopen(req, timeout=5) as resp:
-                            resp_d = json.loads(resp.read().decode("utf-8"))
-                            if resp_d.get("ok"):
-                                meta = resp_d.get("auth", {}).get("metadata", {})
-                                if meta.get("access_token"):
-                                    return meta.get("access_token")
+                        resp_d = mgmt.request("credentials_refresh", "POST", {"name": fn}, timeout=5)
+                        if resp_d.get("ok"):
+                            meta = resp_d.get("auth", {}).get("metadata", {})
+                            if meta.get("access_token"):
+                                return meta.get("access_token")
                 except Exception:
                     pass
             return t.get("access_token")
@@ -113,21 +106,11 @@ class AntigravityProvider:
         if needs_refresh:
             try:
                 fn = os.path.basename(auth_file)
-                url = f"http://{MGMT_HOST}:{MGMT_PORT}/v0/management/auth-files/refresh"
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps({"name": fn}).encode("utf-8"),
-                    headers={
-                        "Authorization": f"Bearer {MGMT_SECRET}",
-                        "Content-Type": "application/json"
-                    }
-                )
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    resp_d = json.loads(resp.read().decode("utf-8"))
-                    if resp_d.get("ok"):
-                        meta = resp_d.get("auth", {}).get("metadata", {})
-                        if meta.get("access_token"):
-                            auth_data["access_token"] = meta.get("access_token")
+                resp_d = mgmt.request("credentials_refresh", "POST", {"name": fn}, timeout=5)
+                if resp_d.get("ok"):
+                    meta = resp_d.get("auth", {}).get("metadata", {})
+                    if meta.get("access_token"):
+                        auth_data["access_token"] = meta.get("access_token")
             except Exception:
                 pass
         return auth_data.get("access_token")

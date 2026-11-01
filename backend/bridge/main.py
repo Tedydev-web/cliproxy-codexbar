@@ -17,6 +17,7 @@ from providers.antigravity import AntigravityProvider
 from providers.keeper import KeeperProvider
 from providers.console_route import ConsoleRouteProvider
 from providers.backup import BackupProvider
+from providers.usage_store import UsageCollector
 from providers.gateway import GatewayProvider
 from providers.system import SystemProvider
 from api.handler import BridgeApiHandler
@@ -28,6 +29,8 @@ def main():
     keeper_prov = KeeperProvider()
     console_prov = ConsoleRouteProvider()
     backup_prov = BackupProvider()
+    usage_collector = UsageCollector()
+    usage_collector.start()
     gateway_prov = GatewayProvider()
     system_prov = SystemProvider()
 
@@ -36,6 +39,7 @@ def main():
     BridgeApiHandler.keeper_provider = keeper_prov
     BridgeApiHandler.console_provider = console_prov
     BridgeApiHandler.backup_provider = backup_prov
+    BridgeApiHandler.usage_collector = usage_collector
     BridgeApiHandler.gateway_provider = gateway_prov
     BridgeApiHandler.system_provider = system_prov
 

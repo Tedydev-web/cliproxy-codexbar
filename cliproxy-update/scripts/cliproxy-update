@@ -89,6 +89,14 @@ def api(path, method="GET", body=None, port=None, key=None, secret=None, timeout
         return 0, str(e).encode()
 
 
+def credentials_api(secret):
+    for path in ("/v8/management/credentials", "/v0/management/auth-files"):
+        code, raw = api(path, secret=secret)
+        if code == 200:
+            return code, raw, path
+    return code, raw, path
+
+
 LOG_TAIL_BYTES = 262144
 LOG_REQUEST = re.compile(r'^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\].*\| (?:POST|GET) +"/v1/(?:messages|chat/completions|responses|completions)')
 
@@ -110,7 +118,7 @@ def last_log_request_age_sec(path=os.path.expanduser("~/.cliproxy/logs/main.log"
 
 
 def idle_age_sec():
-    code, raw = api("/v0/management/auth-files", secret=mgmt_secret())
+    code, raw, _ = credentials_api(mgmt_secret())
     if code != 200:
         return None
     now, newest = datetime.datetime.now(datetime.timezone.utc), None
@@ -171,7 +179,7 @@ def restart_and_wait(timeout=45):
     secret = mgmt_secret()
     for _ in range(timeout * 2):
         time.sleep(0.5)
-        if api("/v0/management/latest-version", secret=secret, timeout=3)[0] == 200:
+        if credentials_api(secret)[0] == 200:
             return True
     return False
 
@@ -182,19 +190,32 @@ def inference_check():
     return code
 
 
-SIGNALS = ["Anthropic-Ratelimit-Unified-5h-Utilization", "Anthropic-Ratelimit-Unified-7d-Utilization", "Anthropic-Ratelimit-Unified-5h-Reset", "Anthropic-Ratelimit-Unified-7d-Reset"]
+SIGNALS = ["Anthropic-Ratelimit-Unified-7d-Utilization", "Anthropic-Ratelimit-Unified-7d-Reset"]
+SIGNALS_5H = ["Anthropic-Ratelimit-Unified-5h-Utilization", "Anthropic-Ratelimit-Unified-5h-Reset"]
 FILE_FIELDS = ["name", "type", "disabled", "quota"]
 
 
 def contract_check():
-    code, raw = api("/v0/management/auth-files", secret=mgmt_secret())
+    secret = mgmt_secret()
+    code, raw, path = credentials_api(secret)
     if code != 200:
-        return [f"auth-files endpoint answered HTTP {code}"]
+        return [f"credentials endpoint answered HTTP {code}"]
+    problems = []
+    if not path.startswith("/v8/"):
+        problems.append("v8 credentials endpoint is missing, the bridge runs on the legacy fallback")
+    legacy = api("/v0/management/auth-files", secret=secret)[0]
+    if legacy != 200:
+        problems.append(f"legacy /v0 auth-files answered HTTP {legacy}, claude-token-keeper and cswitch still use it")
+    queue = api("/v8/management/observability/usage/queue?count=0", secret=secret)[0]
+    if queue != 400:
+        problems.append(f"usage queue route answered HTTP {queue}, the usage collector needs it")
     files = [f for f in json.loads(raw).get("files", []) if f.get("type") == "claude"]
-    problems = [f"{f.get('name', '?')}: missing field {k}" for f in files for k in FILE_FIELDS if k not in f]
+    problems += [f"{f.get('name', '?')}: missing field {k}" for f in files for k in FILE_FIELDS if k not in f]
     for f in files:
         signals = (f.get("quota") or {}).get("signals") or {}
         missing = [k for k in SIGNALS if signals and k not in signals]
+        if any(k in signals for k in SIGNALS_5H):
+            missing += [k for k in SIGNALS_5H if k not in signals]
         if missing:
             problems.append(f"{f.get('name', '?')}: quota.signals lacks {', '.join(missing)}")
     return problems

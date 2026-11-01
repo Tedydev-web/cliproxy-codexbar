@@ -26,6 +26,7 @@ cat << 'EOF' > ~/.local/bin/cliproxy-quota-bridge
 exec python3 ~/.local/lib/cliproxy-bridge/main.py "$@"
 EOF
 chmod +x ~/.local/bin/cliproxy-quota-bridge
+install -m 755 "${SCRIPT_DIR}/backend/tools/cliproxy-usage" ~/.local/bin/cliproxy-usage
 systemctl --user restart cliproxy-quota-bridge
 echo "✅ Backend đã được cập nhật và khởi động lại thành công!"
 

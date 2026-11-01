@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+BRIDGE_URL = os.environ.get("CLIPROXY_BRIDGE_URL", "http://127.0.0.1:8318")
+ENV_FILE = os.path.expanduser("~/.cliproxy/bridge.env")
+
+
+def secret():
+    value = os.environ.get("CLIPROXY_MANAGEMENT_SECRET")
+    if value:
+        return value
+    try:
+        with open(ENV_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("CLIPROXY_MANAGEMENT_SECRET="):
+                    return line.split("=", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    sys.exit(f"CLIPROXY_MANAGEMENT_SECRET not found (expected in {ENV_FILE})")
+
+
+def human(n):
+    n = int(n)
+    for limit, unit in ((1_000_000_000, "G"), (1_000_000, "M"), (1_000, "K")):
+        if n >= limit:
+            return f"{n / limit:.1f}{unit}"
+    return str(n)
+
+
+def table(title, rows, label):
+    print(f"\n{title}")
+    if not rows:
+        print("  (chưa có dữ liệu)")
+        return
+    width = max(len(str(label(r))) for r in rows) + 1
+    print(f"  {'':<{width}} {'req':>6} {'lỗi':>5} {'input':>8} {'output':>8} {'cache đọc':>10} {'cache ghi':>10} {'tổng':>8}")
+    for r in rows:
+        print(f"  {str(label(r)):<{width}} {r['requests']:>6} {r['failed']:>5} {human(r['input']):>8} {human(r['output']):>8} {human(r['cache_read']):>10} {human(r['cache_create']):>10} {human(r['tokens']):>8}")
+
+
+def main():
+    try:
+        days = int(sys.argv[1]) if len(sys.argv) > 1 else 7
+    except ValueError:
+        sys.exit("usage: cliproxy-usage [days]")
+    req = urllib.request.Request(f"{BRIDGE_URL}/v1/usage-summary?days={days}", headers={"Authorization": f"Bearer {secret()}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError) as e:
+        sys.exit(f"bridge unreachable: {e}")
+    t = data["totals"]
+    print(f"{data['days']} ngày từ {data['since']}: {t['requests']} request ({t['failed']} lỗi), {human(t['tokens'])} token (input {human(t['input'])}, output {human(t['output'])}, cache đọc {human(t['cache_read'])})")
+    table("Theo tài khoản / nguồn", data["by_source"], lambda r: r["source"])
+    table("Theo client (nơi gọi : khóa)", data["by_client"], lambda r: f"{r['client']} [{r['key']}]")
+    table("Theo model", data["by_model"], lambda r: f"{r['provider']}/{r['model']}")
+    table("Theo ngày", data["by_day"], lambda r: r["day"])
+
+
+if __name__ == "__main__":
+    main()

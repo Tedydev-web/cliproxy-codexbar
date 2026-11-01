@@ -14,11 +14,11 @@ from core.config import PROBE_CACHE_SEC
 API = "https://api.anthropic.com/v1"
 PROBE_MODEL = "claude-haiku-4-5-20251001"
 ID_PATTERN = re.compile(r"^capi\d+$")
-ENTRY = re.compile(r"^        - name: console-(capi\d+)\n(.*?)(?=^        - name: |^\S)", re.M | re.S)
-PRIORITY = re.compile(r"^(\s+priority: )(-?\d+)$", re.M)
-KEY = re.compile(r"^\s+- api-key: (\S+)\s*$", re.M)
-EXCLUDE_ALL = '          excluded-models:\n            - "*"\n'
-EXCLUDE_BLOCK = re.compile(r"          excluded-models:\n(?:            - [^\n]*\n)+")
+ENTRY = re.compile(r"^([ \t]*)-[ \t]+name: console-(capi\d+)\n((?:(?:\1[ \t]+[^\n]*)?\n)*)", re.M)
+PRIORITY = re.compile(r"^([ \t]+priority: )(-?\d+)$", re.M)
+KEY = re.compile(r"^[ \t]+-[ \t]+api-key: (\S+)\s*$", re.M)
+EXCLUDE_BLOCK = re.compile(r"^[ \t]+excluded-models:\n(?:[ \t]*-[ \t]+[^\n]*\n)+", re.M)
+BASE_URL_LINE = re.compile(r"^([ \t]+)base-url: [^\n]*\n", re.M)
 
 
 def is_console_id(value):
@@ -74,11 +74,11 @@ class ConsoleRouteProvider:
     def _entries(self, text):
         out = []
         for m in ENTRY.finditer(text):
-            body = m.group(2)
+            body = m.group(3)
             pm = PRIORITY.search(body)
             km = KEY.search(body)
             out.append({
-                "id": m.group(1),
+                "id": m.group(2),
                 "priority": int(pm.group(2)) if pm else 0,
                 "enabled": not EXCLUDE_BLOCK.search(body),
                 "key": km.group(1) if km else "",
@@ -134,7 +134,7 @@ class ConsoleRouteProvider:
                 return 404, {"error": f"unknown console key: {missing[0]}"}
 
             def apply(m):
-                fn = edits.get(m.group(1))
+                fn = edits.get(m.group(2))
                 return m.group(0) if not fn else fn(m.group(0))
 
             config_file.write_in_place(ENTRY.sub(apply, text), text, ".bak-console-route")
@@ -152,6 +152,8 @@ class ConsoleRouteProvider:
             stripped = EXCLUDE_BLOCK.sub("", block)
             if enabled:
                 return stripped
-            return re.sub(r"(          base-url: [^\n]*\n)", lambda m: m.group(1) + EXCLUDE_ALL, stripped, count=1)
+            return BASE_URL_LINE.sub(
+                lambda m: m.group(0) + f'{m.group(1)}excluded-models:\n{m.group(1)}  - "*"\n', stripped, count=1
+            )
 
         return self._edit({console_id: fn})

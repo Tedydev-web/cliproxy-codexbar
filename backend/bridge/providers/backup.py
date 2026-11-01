@@ -9,9 +9,9 @@ from core import config_file
 from core.config import CLIPROXY_HOME, PROBE_CACHE_SEC
 
 STATE_FILE = os.path.join(CLIPROXY_HOME, "backup-state.json")
-ENTRY = re.compile(r"^        - name: (aperture(?:-backup-[a-z]+)?)\n(.*?)(?=^        - name: |^    \S|^\S)", re.M | re.S)
-BASE_URL = re.compile(r"^\s+base-url: (\S+)\s*$", re.M)
-DISABLED = re.compile(r"^(\s+disabled: )(true|false)$", re.M)
+ENTRY = re.compile(r"^([ \t]*)-[ \t]+name: (aperture(?:-backup-[a-z]+)?)\n((?:(?:\1[ \t]+[^\n]*)?\n)*)", re.M)
+BASE_URL = re.compile(r"^[ \t]+base-url: (\S+)\s*$", re.M)
+DISABLED = re.compile(r"^([ \t]+disabled: )(true|false)$", re.M)
 MODELS = {
     "deepseek": {"id": "deepseek-v4.1-flash", "upstream": "deepseek/deepseek-v4.1-flash", "label": "DeepSeek v4.1 Flash"},
     "luna": {"id": "gpt-5.6-luna", "upstream": "openai/gpt-5.6-luna", "label": "GPT-5.6 Luna"},
@@ -28,10 +28,10 @@ class BackupProvider:
     def _entries(self, text):
         out = {}
         for m in ENTRY.finditer(text):
-            body = m.group(2)
+            body = m.group(3)
             bm = BASE_URL.search(body)
             dm = DISABLED.search(body)
-            out[m.group(1)] = {"base_url": bm.group(1) if bm else "", "disabled": (dm.group(2) == "true") if dm else False}
+            out[m.group(2)] = {"base_url": bm.group(1) if bm else "", "disabled": (dm.group(2) == "true") if dm else False}
         return out
 
     def _selected(self):
@@ -109,7 +109,7 @@ class BackupProvider:
             new = text
 
             def apply(m):
-                name = m.group(1)
+                name = m.group(2)
                 if not name.startswith("aperture-backup-"):
                     return m.group(0)
                 key = name.replace("aperture-backup-", "")

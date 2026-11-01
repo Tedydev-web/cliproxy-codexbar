@@ -190,3 +190,13 @@ Thư mục này là **nguồn chân lý duy nhất (Single Source of Truth)**. M
 ```
 
 Hệ thống sẽ tự động cập nhật backend trên Ubuntu và deploy bản build mới nhất tới các máy Mac online trong mạng Tailscale.
+
+
+## Thống kê usage
+
+Bridge tự đọc hàng đợi usage của CLIProxy (API quản lý v8, tự lùi về v0 nếu thiếu) mỗi 15 giây và lưu số liệu **tổng hợp theo ngày** vào `~/.cliproxy/usage.db` (quyền 600, giữ 400 ngày): theo tài khoản, model, nơi gọi và khóa client. Khóa client chỉ được lưu dưới dạng mã băm 8 ký tự, không bao giờ lưu khóa gốc hay nội dung request. Nhãn đọc dễ hiểu đặt trong `~/.cliproxy/key-labels.json` (`{"<mã băm>": "dev"}`).
+
+- Xem nhanh: `cliproxy-usage [số ngày]`
+- API: `GET /v1/usage-summary?days=7` (cần khóa bridge)
+
+Lưu ý bảo mật: hàng đợi usage của CLIProxy chứa khóa client **ở dạng văn bản thô**, nên đừng giao hàng đợi này cho công cụ bên thứ ba.
