@@ -28,6 +28,21 @@ from core.config import (
     PROBE_USER_AGENT
 )
 from core.utils import fmt_relative_reset_from_ts, fmt_relative_reset_from_iso
+
+PLAN_CACHE_SEC = 6 * 3600
+
+
+def plan_label(tier):
+    t = (tier or "").lower()
+    if "ultra" in t or "20x" in t:
+        return "Ultra"
+    if "5x" in t:
+        return "Max"
+    if "pro" in t:
+        return "Pro"
+    if "team" in t:
+        return "Team"
+    return "Max"
 from providers.claude_web import WebSessionCache, usable_as_primary, as_probe, extras as web_extras
 
 class ClaudePoolProvider:
@@ -40,8 +55,9 @@ class ClaudePoolProvider:
         self._header_probe_cache = {}
 
     def get_plan_tier(self, email):
-        if email in self._plan_cache:
-            return self._plan_cache[email]
+        cached = self._plan_cache.get(email)
+        if cached and time.time() - cached[0] < PLAN_CACHE_SEC:
+            return cached[1]
 
         token_file = f"claude-{email}.json"
         if os.path.exists(ACCOUNTS_FILE):
@@ -56,7 +72,7 @@ class ClaudePoolProvider:
         if not os.path.exists(auth_file):
             return "Max"
         if self._token_file_disabled(token_file):
-            return "Max 20x" if "project" in email else "Max"
+            return "Ultra" if "project" in email else "Max"
 
         try:
             with open(auth_file, "r", encoding="utf-8") as f:
@@ -75,24 +91,12 @@ class ClaudePoolProvider:
             )
             with urllib.request.urlopen(req, timeout=4) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-                tier = data.get("organization", {}).get("rate_limit_tier", "")
-                if "20x" in tier:
-                    plan = "Max 20x"
-                elif "5x" in tier:
-                    plan = "Max 5x"
-                elif "pro" in tier:
-                    plan = "Pro"
-                elif "team" in tier:
-                    plan = "Team"
-                else:
-                    plan = "Max"
-                self._plan_cache[email] = plan
+                plan = plan_label(data.get("organization", {}).get("rate_limit_tier", ""))
+                self._plan_cache[email] = (time.time(), plan)
                 return plan
         except Exception:
-            if "trthuhuyen" in email:
-                return "Max 5x"
-            elif "project" in email:
-                return "Max 20x"
+            if "project" in email:
+                return "Ultra"
             return "Max"
 
     def fetch_passive_quota(self):
@@ -132,6 +136,7 @@ class ClaudePoolProvider:
                                 pass
 
                         res[fname] = {
+                            "no5h": "Anthropic-Ratelimit-Unified-5h-Utilization" not in signals,
                             "remaining_5h": max(0, 100 - u_5h),
                             "used_5h": u_5h,
                             "reset_5h": fmt_relative_reset_from_ts(ts_5h),
@@ -206,12 +211,13 @@ class ClaudePoolProvider:
                 h = e.headers
             u_5h = h.get("anthropic-ratelimit-unified-5h-utilization")
             u_wk = h.get("anthropic-ratelimit-unified-7d-utilization")
-            if u_5h is None or u_wk is None:
-                raise ValueError("response has no unified rate-limit headers")
+            if u_wk is None:
+                raise ValueError("response has no unified weekly rate-limit header")
             ts_5h = h.get("anthropic-ratelimit-unified-5h-reset")
             ts_wk = h.get("anthropic-ratelimit-unified-7d-reset")
             p = {
-                "used_5h": int(round(float(u_5h) * 100)),
+                "no5h": u_5h is None,
+                "used_5h": int(round(float(u_5h) * 100)) if u_5h is not None else 0,
                 "reset_5h": fmt_relative_reset_from_ts(ts_5h),
                 "reset_5h_ts": int(float(ts_5h)) if ts_5h else 0,
                 "used_weekly": int(round(float(u_wk) * 100)),
@@ -254,6 +260,7 @@ class ClaudePoolProvider:
         u_wk = p["used_weekly"] if live_wk else 0
         is_avail = u_5h < 100 and u_wk < 100
         return {
+            "_no5h": bool(p) and bool(p.get("no5h")),
             "email": email,
             "name": nickname or email,
             "is_available": is_avail,
@@ -332,6 +339,7 @@ class ClaudePoolProvider:
             self._account_probe_timestamps[email] = now
 
             return {
+                "_no5h": data.get("five_hour") is None,
                 "email": email,
                 "name": nickname or email,
                 "is_available": is_avail,
@@ -351,6 +359,7 @@ class ClaudePoolProvider:
         except Exception as e:
             is_429 = "429" in str(e)
             return {
+                "has_5h_limit": prev.get("has_5h_limit", True) if prev else True,
                 "email": email,
                 "name": nickname or email,
                 "is_available": prev["is_available"] if prev else False,
@@ -367,6 +376,15 @@ class ClaudePoolProvider:
                 "reset_weekly_ts": prev.get("reset_weekly_ts", 0) if prev else 0,
                 "plan": self.get_plan_tier(email)
             }
+
+    @staticmethod
+    def finalize_5h_flags(results):
+        for r in results:
+            if "_no5h" in r:
+                no5h = r.pop("_no5h")
+                r["has_5h_limit"] = not (r.get("plan") == "Ultra" and no5h)
+            else:
+                r.setdefault("has_5h_limit", True)
 
     def get_pool_status(self):
         now = time.time()
@@ -416,6 +434,7 @@ class ClaudePoolProvider:
                 if p["age_sec"] < PASSIVE_FRESHNESS_SEC or p["remaining_weekly"] == 0:
                     is_avail = (p["remaining_5h"] > 0 and p["remaining_weekly"] > 0)
                     results.append({
+                        "_no5h": bool(p.get("no5h")),
                         "email": em,
                         "name": nick or em,
                         "is_available": is_avail,
@@ -551,6 +570,7 @@ class ClaudePoolProvider:
                 r["lifecycle_status"] = "unknown"
                 r["lifecycle_label"] = ""
 
+        self.finalize_5h_flags(results)
         self._cache = results
         self._last_probe_time = now
         return results

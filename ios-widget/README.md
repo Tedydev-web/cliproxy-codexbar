@@ -24,8 +24,8 @@ Hệ thống được rút gọn và tối ưu hóa chuyên biệt thành **đú
   - Tái tạo 1:1 theo card Claude của Orbiter Desktop macOS (chế độ **Quota Used**).
   - **Header**: Icon Claude Sparkle (`#F97316`), tài khoản chính đang ưu tiên, thời gian cập nhật.
   - **Hiển thị đầy đủ cả 3 tài khoản trong Pool**:
-    1. `#1 trthuhuyen2712@gmail.com` (Đang dùng, Gói Max 5x) — Full bar 5h & tuần hiển thị **% đã dùng**, vạch nhịp độ an toàn (`greenPace`), dự trữ nhịp độ.
-    2. `#2 projecttoncorporation@gmail.com` (Sẵn sàng, Gói Max 20x) — Full bar 5h & tuần hiển thị **% đã dùng**.
+    1. `#1 trthuhuyen2712@gmail.com` (Đang dùng, Gói Max) — Full bar 5h & tuần hiển thị **% đã dùng**, vạch nhịp độ an toàn (`greenPace`), dự trữ nhịp độ.
+    2. `#2 projecttoncorporation@gmail.com` (Sẵn sàng, Gói Ultra) — Full bar 5h & tuần hiển thị **% đã dùng**.
     3. `#3 projectplayground2025@gmail.com` (Tạm dừng - Quá hạn 30 ngày) — Thẻ thông báo cách ly.
   - **Theo dõi vòng đời OAuth 30 ngày**: Tự động hiển thị huy hiệu cảnh báo nguy cơ (ví dụ: `⚠️ Hết hạn sau 2d 7h` hoặc `ℹ️ Hết hạn sau 5d`) trực tiếp trên widget!
   - **Chốt chặn dự phòng Console API (capi)**: Hiển thị trạng thái kết nối trực tuyến của Anthropic Console API Key ở chân widget.

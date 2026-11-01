@@ -41,6 +41,8 @@ function routeRows(p) {
   return rows;
 }
 
+const fiveHourText = (a) => (a.has_5h_limit === false ? "5h không giới hạn" : `5h ${pct(a.used_5h)}`);
+
 const liveAccounts = (p) => (p.accounts || []).filter((a) => !a.is_paused);
 const activeAccount = (p) => liveAccounts(p).find((a) => !a.is_disabled) || null;
 
@@ -84,7 +86,8 @@ function rowDetail(a) {
     if (state === "ok") return "Không xem được số dư";
     return keyStateLabel(state)[0].toUpperCase() + keyStateLabel(state).slice(1);
   }
-  return `${quotaLine("5h", a.used_5h, a.reset_5h)}\n${quotaLine("Tuần", a.used_weekly, a.reset_weekly)}`;
+  const five = a.has_5h_limit === false ? "5h không giới hạn" : quotaLine("5h", a.used_5h, a.reset_5h);
+  return `${five}\n${quotaLine("Tuần", a.used_weekly, a.reset_weekly)}`;
 }
 
 function accountLine(a, index) {
@@ -93,7 +96,7 @@ function accountLine(a, index) {
   if (a.is_disabled) flags.push("đang tắt");
   if (a.is_available === false) flags.push("hết quota");
   if (a.lifecycle_status === "critical" || a.lifecycle_status === "expired") flags.push(a.lifecycle_label);
-  return `#${index + 1} ${shortName(a)}: 5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}${flags.length ? ` (${flags.join(", ")})` : ""}`;
+  return `#${index + 1} ${shortName(a)}: ${fiveHourText(a)} · tuần ${pct(a.used_weekly)}${flags.length ? ` (${flags.join(", ")})` : ""}`;
 }
 
 function summary(p) {
@@ -101,7 +104,7 @@ function summary(p) {
   const paused = (p.accounts || []).filter((a) => a.is_paused);
   const keyLines = ((p.console && p.console.keys) || []).map((k) => `${k.id}${k.org ? ` (${k.org})` : ""}: ${keyStateLabel(k.state)}`);
   const act = activeAccount(p);
-  const lines = [act ? `Đang chạy: ${shortName(act)}, 5h ${pct(act.used_5h)}, tuần ${pct(act.used_weekly)}` : "Không có account nào đang bật"];
+  const lines = [act ? `Đang chạy: ${shortName(act)}, ${fiveHourText(act)}, tuần ${pct(act.used_weekly)}` : "Không có account nào đang bật"];
   live.forEach((a, i) => lines.push(accountLine(a, i)));
   paused.forEach((a) => lines.push(accountLine(a)));
   keyLines.forEach((l) => lines.push(l));
@@ -119,7 +122,7 @@ function loadState() {
 function notificationRules(p) {
   const rules = [];
   const act = activeAccount(p);
-  if (act && act.used_5h >= WARN_PCT) {
+  if (act && act.has_5h_limit !== false && act.used_5h >= WARN_PCT) {
     rules.push([`${act.email}|5h|${act.reset_5h_ts || fiveHourBucket()}`, `Quota 5h của ${shortName(act)} đã ${act.used_5h}%`, act.reset_5h || "Sắp chạm giới hạn 5 giờ"]);
   }
   if (act && act.used_weekly >= WARN_PCT) {
@@ -252,7 +255,7 @@ async function accountActions(a, isFirst) {
   sheet.title = shortName(a);
   sheet.message = a.is_console
     ? `Console API${a.console.org ? ` · ${a.console.org}` : ""}\n${keyStateLabel(a.console.state)}`
-    : a.is_paused ? a.error_hint || "Đã cách ly" : `5h ${pct(a.used_5h)} · tuần ${pct(a.used_weekly)}\n${a.reset_5h || ""}\n${a.lifecycle_label || ""}`.trim();
+    : a.is_paused ? a.error_hint || "Đã cách ly" : `${fiveHourText(a)} · tuần ${pct(a.used_weekly)}\n${a.has_5h_limit === false ? a.reset_weekly || "" : a.reset_5h || ""}\n${a.lifecycle_label || ""}`.trim();
   for (const [title] of actions) sheet.addAction(title);
   sheet.addCancelAction("Đóng");
   const choice = await sheet.presentSheet();

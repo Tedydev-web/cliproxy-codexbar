@@ -523,6 +523,7 @@ struct PoolAccountItem: Identifiable {
     var isDisabled: Bool = false
     var isPaused: Bool = false
     var scoped: [ScopedQuota] = []
+    var has5hLimit: Bool = true
 
     var scopedSummary: String {
         scoped.isEmpty ? "" : " · " + scoped.map { "\($0.model): \($0.used)%" }.joined(separator: " · ")
@@ -535,7 +536,9 @@ struct PoolAccountItem: Identifiable {
     func quotaCells(isUsedMode: Bool) -> [QuotaCell] {
         guard !isPaused else { return [] }
         return [
-            QuotaCell.make(label: "5h", used: used5h, remaining: remaining5h, reset: reset5h, emptyReset: "Chưa bắt đầu", isUsedMode: isUsedMode),
+            has5hLimit
+                ? QuotaCell.make(label: "5h", used: used5h, remaining: remaining5h, reset: reset5h, emptyReset: "Chưa bắt đầu", isUsedMode: isUsedMode)
+                : QuotaCell.unlimited(label: "5h"),
             QuotaCell.make(label: "Tuần", used: usedWeekly, remaining: remainingWeekly, reset: resetWeekly, emptyReset: "Chưa có mốc", isUsedMode: isUsedMode)
         ]
     }
@@ -547,7 +550,12 @@ struct QuotaCell: Identifiable {
     let percent: Double
     let level: Int
     let recovery: String
+    var showBar: Bool = true
     var id: String { label }
+
+    static func unlimited(label: String) -> QuotaCell {
+        QuotaCell(label: label, value: "Không giới hạn", percent: 0, level: 0, recovery: "Đã gỡ giới hạn 5h", showBar: false)
+    }
 
     static func make(label: String, used: Int, remaining: Int, reset: String, emptyReset: String, isUsedMode: Bool) -> QuotaCell {
         let est = formatResetWithEst(raw: reset).replacingOccurrences(of: "Hồi sau ", with: "Hồi ")
@@ -577,12 +585,16 @@ struct QuotaCellsView: View {
                             .font(.footnote.weight(.medium).monospacedDigit())
                             .foregroundStyle(cell.level == 2 ? Color(nsColor: .systemRed) : Color.primary)
                     }
-                    UsageProgressBar(
-                        percent: cell.percent,
-                        tint: cell.level == 2 ? Color(nsColor: .systemRed) : brand,
-                        warningMarkerPercents: [],
-                        height: 4
-                    )
+                    if cell.showBar {
+                        UsageProgressBar(
+                            percent: cell.percent,
+                            tint: cell.level == 2 ? Color(nsColor: .systemRed) : brand,
+                            warningMarkerPercents: [],
+                            height: 4
+                        )
+                    } else {
+                        Color.clear.frame(height: 4)
+                    }
                     Text(cell.recovery)
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -719,18 +731,31 @@ struct ClaudeFullCardView: View {
             // 2. Active Account Quota Metrics
             VStack(alignment: .leading, spacing: 11) {
                 let isUsedMode = self.state.quotaDisplayMode == "used"
-                let c5hVal = isUsedMode ? self.state.claude5h : max(0, 100 - self.state.claude5h)
-                let c5hTitle = isUsedMode ? "Phiên 5h: \(c5hVal)% đã dùng" : "Phiên 5h: \(c5hVal)% còn lại"
-                let c5hPace = isUsedMode ? "Còn \(self.state.claudePaceReserve)% trong phiên này" : "Đã dùng \(self.state.claude5h)%"
-                
-                MetricRow(
-                    title: c5hTitle,
-                    percent: Double(c5hVal),
-                    resetText: formatResetWithEst(raw: self.state.claude5hReset),
-                    tint: Color(red: 218/255, green: 119/255, blue: 86/255),
-                    paceText: c5hPace,
-                    paceMarker: isUsedMode ? Double(self.state.claudePaceReserve) : nil
-                )
+                if self.state.claudeHas5h {
+                    let c5hVal = isUsedMode ? self.state.claude5h : max(0, 100 - self.state.claude5h)
+                    let c5hTitle = isUsedMode ? "Phiên 5h: \(c5hVal)% đã dùng" : "Phiên 5h: \(c5hVal)% còn lại"
+                    let c5hPace = isUsedMode ? "Còn \(self.state.claudePaceReserve)% trong phiên này" : "Đã dùng \(self.state.claude5h)%"
+
+                    MetricRow(
+                        title: c5hTitle,
+                        percent: Double(c5hVal),
+                        resetText: formatResetWithEst(raw: self.state.claude5hReset),
+                        tint: Color(red: 218/255, green: 119/255, blue: 86/255),
+                        paceText: c5hPace,
+                        paceMarker: isUsedMode ? Double(self.state.claudePaceReserve) : nil
+                    )
+                } else {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Phiên 5h")
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text("Không giới hạn")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 
                 let c7dVal = isUsedMode ? self.state.claude7d : max(0, 100 - self.state.claude7d)
                 let c7dTitle = isUsedMode ? "Hàng tuần: \(c7dVal)% đã dùng" : "Hàng tuần: \(c7dVal)% còn lại"
@@ -1371,8 +1396,9 @@ struct SettingsView: View {
 // MARK: - State Management with Remote Priority Switching
 class QuotaState: ObservableObject {
     @Published var claudeEmail = ""
-    @Published var claudePlan = "Max 5x"
+    @Published var claudePlan = "Max"
     @Published var claude5h = 11
+    @Published var claudeHas5h = true
     @Published var claude7d = 26
     @Published var claude5hReset = "3h"
     @Published var claude7dReset = "6d 13h"
@@ -1543,6 +1569,7 @@ class QuotaState: ObservableObject {
             self.claudeEmail = topAcc.email
             self.claudePlan = topAcc.plan
             self.claude5h = topAcc.used5h
+            self.claudeHas5h = topAcc.has5hLimit
             self.claude7d = topAcc.usedWeekly
             self.claude5hReset = topAcc.reset5h.isEmpty ? "Đầy đủ" : topAcc.reset5h
             self.claude7dReset = topAcc.resetWeekly
@@ -1568,6 +1595,7 @@ class QuotaState: ObservableObject {
             self.claudeEmail = topAcc.email
             self.claudePlan = topAcc.plan
             self.claude5h = topAcc.used5h
+            self.claudeHas5h = topAcc.has5hLimit
             self.claude7d = topAcc.usedWeekly
             self.claude5hReset = topAcc.reset5h.isEmpty ? "Đầy đủ" : topAcc.reset5h
             self.claude7dReset = topAcc.resetWeekly
@@ -1784,7 +1812,8 @@ class QuotaState: ObservableObject {
                             resetWeekly: rWk,
                             isDisabled: disabled,
                             isPaused: paused,
-                            scoped: scopedList
+                            scoped: scopedList,
+                            has5hLimit: a["has_5h_limit"] as? Bool ?? true
                         ))
                     }
                     self.claudeAccounts = parsedList
@@ -1795,6 +1824,7 @@ class QuotaState: ObservableObject {
                         self.claudeEmail = current.email
                         self.claudePlan = current.plan
                         self.claude5h = current.used5h
+                        self.claudeHas5h = current.has5hLimit
                         self.claude7d = current.usedWeekly
                         if current.isProbeError {
                             self.claude5hReset = "Tạm nghẽn 429"
@@ -3195,8 +3225,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let isUsed = state.quotaDisplayMode == "used"
             let c5h = isUsed ? state.claude5h : max(0, 100 - state.claude5h)
             let c7d = isUsed ? state.claude7d : max(0, 100 - state.claude7d)
-            btn.title = " 5h \(c5h)% · W \(c7d)%"
-            btn.toolTip = "Claude Quota (5h: \(c5h)% · W: \(c7d)%)"
+            btn.title = state.claudeHas5h ? " 5h \(c5h)% · W \(c7d)%" : " W \(c7d)%"
+            btn.toolTip = state.claudeHas5h ? "Claude Quota (5h: \(c5h)% · W: \(c7d)%)" : "Claude Quota (không giới hạn 5h · W: \(c7d)%)"
         }
         let claudeMenu = NSMenu()
         let claudeMenuItem = NSMenuItem()
@@ -3281,8 +3311,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let isUsed = self.state.quotaDisplayMode == "used"
                 let c5h = isUsed ? self.state.claude5h : max(0, 100 - self.state.claude5h)
                 let c7d = isUsed ? self.state.claude7d : max(0, 100 - self.state.claude7d)
-                btn.title = " 5h \(c5h)% · W \(c7d)%"
-                btn.toolTip = "Claude Quota (5h: \(c5h)% · W: \(c7d)%)"
+                btn.title = self.state.claudeHas5h ? " 5h \(c5h)% · W \(c7d)%" : " W \(c7d)%"
+                btn.toolTip = self.state.claudeHas5h ? "Claude Quota (5h: \(c5h)% · W: \(c7d)%)" : "Claude Quota (không giới hạn 5h · W: \(c7d)%)"
             }
             if let agyBtn = self.agyItem.button {
                 if agyBtn.image == nil {

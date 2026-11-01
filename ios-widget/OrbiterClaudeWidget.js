@@ -233,8 +233,8 @@ function buildLargeWidget(w, data) {
   const isOnline = data.online !== false;
   const rawAccounts = data.pool?.accounts || [];
   const accounts = rawAccounts.length > 0 ? rawAccounts : [
-    { name: "trthuhuyen2712@gmail.com", email: "trthuhuyen2712@gmail.com", plan: "Max 5x", used_5h: 8, remaining_5h: 92, reset_5h: "4h 54m", used_weekly: 82, remaining_weekly: 18, reset_weekly: "1d 8h", is_available: true, lifecycle_status: "critical", lifecycle_label: "Hết hạn sau 2d 7h" },
-    { name: "projecttoncorporation@gmail.com", email: "projecttoncorporation@gmail.com", plan: "Max 20x", used_5h: 0, remaining_5h: 100, reset_5h: "3h 4m", used_weekly: 67, remaining_weekly: 33, reset_weekly: "2d 11h", is_available: true, lifecycle_status: "warning", lifecycle_label: "Hết hạn sau 5d" },
+    { name: "trthuhuyen2712@gmail.com", email: "trthuhuyen2712@gmail.com", plan: "Max", used_5h: 8, remaining_5h: 92, reset_5h: "4h 54m", used_weekly: 82, remaining_weekly: 18, reset_weekly: "1d 8h", is_available: true, lifecycle_status: "critical", lifecycle_label: "Hết hạn sau 2d 7h" },
+    { name: "projecttoncorporation@gmail.com", email: "projecttoncorporation@gmail.com", plan: "Ultra", used_5h: 0, remaining_5h: 100, reset_5h: "3h 4m", used_weekly: 67, remaining_weekly: 33, reset_weekly: "2d 11h", is_available: true, lifecycle_status: "warning", lifecycle_label: "Hết hạn sau 5d" },
     { name: "projectplayground2025@gmail.com", email: "projectplayground2025@gmail.com", plan: "Paused", used_5h: 100, remaining_5h: 0, reset_5h: "", used_weekly: 100, remaining_weekly: 0, reset_weekly: "Cần login lại", is_available: false, lifecycle_status: "expired", lifecycle_label: "Đã quá hạn 30 ngày" }
   ];
   const contentW = getWidgetContentWidth("large", hPadding);
@@ -279,7 +279,7 @@ function buildLargeWidget(w, data) {
 
   hRow2.addSpacer();
 
-  const hPlan = hRow2.addText(`Gói ${firstAcc.plan || "Max 5x"}`);
+  const hPlan = hRow2.addText(`Gói ${firstAcc.plan || "Max"}`);
   hPlan.font = Font.systemFont(11);
   hPlan.textColor = TOKENS.textSecondary;
 
@@ -423,6 +423,15 @@ function buildLargeWidget(w, data) {
       accStack.addSpacer(2);
     } else {
       // --- B. METRIC 1: PHIÊN 5H ---
+      if (acc.has_5h_limit === false) {
+        const noLimitRow = accStack.addStack();
+        noLimitRow.layoutHorizontally();
+        noLimitRow.centerAlignContent();
+        const noLimitLabel = noLimitRow.addText("Phiên 5h: không giới hạn");
+        noLimitLabel.font = Font.boldSystemFont(isFirst ? 12 : 11);
+        noLimitLabel.textColor = TOKENS.textPrimary;
+        accStack.addSpacer(5);
+      } else {
       const p5Row = accStack.addStack();
       p5Row.layoutHorizontally();
       p5Row.centerAlignContent();
@@ -455,6 +464,7 @@ function buildLargeWidget(w, data) {
         accStack.addSpacer(5.5);
       } else {
         accStack.addSpacer(5);
+      }
       }
 
       // --- C. METRIC 2: HÀNG TUẦN ---
@@ -586,7 +596,7 @@ function buildAccessoryWidget(w, data, Control) {
   const act = data.pool ? Control.activeAccount(data.pool) : null;
   const online = data.online !== false;
   if (orbiter.family === "accessoryInline") {
-    w.addText(act ? `Claude 5h ${Control.pct(act.used_5h)} · tuần ${Control.pct(act.used_weekly)}` : "Claude: không có dữ liệu");
+    w.addText(act ? (act.has_5h_limit === false ? `Claude tuần ${Control.pct(act.used_weekly)}` : `Claude 5h ${Control.pct(act.used_5h)} · tuần ${Control.pct(act.used_weekly)}`) : "Claude: không có dữ liệu");
     return;
   }
   w.addAccessoryWidgetBackground = true;
@@ -594,9 +604,10 @@ function buildAccessoryWidget(w, data, Control) {
     const stack = w.addStack();
     stack.layoutVertically();
     stack.centerAlignContent();
-    const img = stack.addImage(drawRing(act ? act.used_5h : 0));
+    const ringValue = act ? (act.has_5h_limit === false ? act.used_weekly : act.used_5h) : 0;
+    const img = stack.addImage(drawRing(ringValue));
     img.imageSize = new Size(44, 44);
-    const t = w.addText(act ? `${act.used_5h}%` : "-");
+    const t = w.addText(act ? `${ringValue}%` : "-");
     t.font = Font.boldSystemFont(11);
     t.centerAlignText();
     return;
@@ -604,9 +615,9 @@ function buildAccessoryWidget(w, data, Control) {
   const title = w.addText(act ? `${Control.shortName(act)}${online ? "" : " · offline"}` : "Claude pool");
   title.font = Font.boldSystemFont(13);
   title.lineLimit = 1;
-  const quota = w.addText(act ? `5h ${Control.pct(act.used_5h)} · tuần ${Control.pct(act.used_weekly)}` : "Không có account đang bật");
+  const quota = w.addText(act ? (act.has_5h_limit === false ? `Tuần ${Control.pct(act.used_weekly)} · 5h không giới hạn` : `5h ${Control.pct(act.used_5h)} · tuần ${Control.pct(act.used_weekly)}`) : "Không có account đang bật");
   quota.font = Font.systemFont(13);
-  const detail = w.addText(act ? formatResetWithEst(act.reset_5h) || act.lifecycle_label || "" : "");
+  const detail = w.addText(act ? formatResetWithEst(act.has_5h_limit === false ? act.reset_weekly : act.reset_5h) || act.lifecycle_label || "" : "");
   detail.font = Font.systemFont(11);
   detail.lineLimit = 1;
 }
