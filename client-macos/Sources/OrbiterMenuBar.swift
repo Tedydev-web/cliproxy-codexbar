@@ -1348,7 +1348,7 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("http://100.127.1.234:8318")
+                    Text("http://100.77.99.14:8318")
                         .font(.subheadline.monospaced())
                 }
                 HStack {
@@ -1455,7 +1455,7 @@ class QuotaState: ObservableObject {
     // Default refresh: 60s (1 phút)
     @Published var lastQuotaFetchDate: Date = Date()
     @Published var lastQuotaFetchAgoText: String = "Vừa xong"
-    @Published var bridgeHost: String = UserDefaults.standard.string(forKey: "quota_bridge_host") ?? "http://100.127.1.234:8318"
+    @Published var bridgeHost: String = UserDefaults.standard.string(forKey: "quota_bridge_host") ?? "http://100.77.99.14:8318"
     @Published var refreshOnOpen: Bool = UserDefaults.standard.bool(forKey: "quota_refresh_on_open")
     @Published var refreshInterval: Int = UserDefaults.standard.integer(forKey: "quota_refresh_interval") == 0 ? 60 : UserDefaults.standard.integer(forKey: "quota_refresh_interval")
     @Published var telemetryIntervalMs: Double = {
@@ -1474,7 +1474,14 @@ class QuotaState: ObservableObject {
         return host.hasSuffix("/") ? String(host.dropLast()) : host
     }
 
-    static let bridgeSecret = "__CLIPROXY_BRIDGE_SECRET__"
+    static let bridgeSecret: String = {
+        let path = NSHomeDirectory() + "/.config/ai-brain/bridge-secret"
+        if let raw = try? String(contentsOfFile: path, encoding: .utf8) {
+            let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !v.isEmpty { return v }
+        }
+        return "__CLIPROXY_BRIDGE_SECRET__"
+    }()
 
     func authedRequest(_ url: URL) -> URLRequest {
         var req = URLRequest(url: url)
@@ -2710,7 +2717,7 @@ struct SystemManagerView: View {
                             }
                             GridRow {
                                 Text("Địa chỉ IP máy chủ:").foregroundStyle(.secondary)
-                                Text("100.127.1.234 (Tailscale)").font(.system(.body, design: .monospaced))
+                                Text("100.77.99.14 (Tailscale)").font(.system(.body, design: .monospaced))
                             }
                             GridRow {
                                 Text("Tổng số cổng TCP đang mở:").foregroundStyle(.secondary)

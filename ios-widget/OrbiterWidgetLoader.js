@@ -1,6 +1,6 @@
 const KC_SECRET = "orbiter.bridge.secret";
 const KC_HOST = "orbiter.bridge.host";
-const DEFAULT_HOST = "http://100.127.1.234:8318";
+const DEFAULT_HOST = "http://100.77.99.14:8318";
 const LOADER_VERSION = 2;
 
 const fm = FileManager.local();
