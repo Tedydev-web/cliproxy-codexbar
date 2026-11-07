@@ -60,5 +60,9 @@ def request(kind, method="GET", body=None, timeout=3, query=""):
     return _call(v0 + suffix, method, body, timeout)
 
 
+def call_v0(path, method="GET", body=None, timeout=10):
+    return _call("/v0/management" + path, method, body, timeout)
+
+
 def reset_state():
     _legacy_until.clear()

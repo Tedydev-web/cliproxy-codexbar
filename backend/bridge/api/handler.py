@@ -10,6 +10,7 @@ import hashlib
 import subprocess
 from http.server import BaseHTTPRequestHandler
 from core.config import MGMT_SECRET, WIDGET_DIR, WIDGET_FILES
+from providers import reauth
 
 class BridgeApiHandler(BaseHTTPRequestHandler):
     timeout = 15
@@ -100,6 +101,12 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             return 400, {"error": "Invalid order payload"}
         return 200, {"ok": True, "order": order}
 
+    def reauth_respond(self, action, *args):
+        try:
+            self.send_json(200, action(*args))
+        except reauth.ReauthError as e:
+            self.send_json(e.status, {"ok": False, "error": e.message})
+
     def do_GET(self):
         if self.path == "/health":
             self.send_json(200, {"status": "healthy", "service": "cliproxy-quota-bridge"})
@@ -158,6 +165,9 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/system-ports"):
             ports = self.system_provider.get_listening_ports() if self.system_provider else []
             self.send_json(200, {"ports": ports})
+        elif self.path.startswith("/v1/reauth-status"):
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            self.reauth_respond(reauth.status, (query.get("state") or [""])[0])
         else:
             # Default fallback for CodexBar clients
             accounts = self.claude_provider.get_pool_status()
@@ -274,21 +284,10 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             self.send_json(200, res)
 
         elif self.path.startswith("/v1/reauth-account"):
-            email = req_data.get("email")
-            if not email:
-                self.send_json(400, {"error": "Missing 'email' field"})
-                return
-            import subprocess
-            reauth_bin = os.path.expanduser("~/.local/bin/claude-reauth")
-            subprocess.Popen(
-                [reauth_bin, email],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            self.send_json(200, {
-                "ok": True,
-                "message": f"Đã khởi động quy trình xác thực lại cho {email}. Trình duyệt trên Mac sẽ tự động mở."
-            })
+            self.reauth_respond(reauth.start, req_data.get("email"))
+
+        elif self.path.startswith("/v1/reauth-complete"):
+            self.reauth_respond(reauth.complete, req_data.get("state"), req_data.get("redirect_url"))
 
         else:
             self.send_json(404, {"error": "Endpoint not found"})

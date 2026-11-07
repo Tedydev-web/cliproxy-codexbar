@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+ENV_FILE = os.path.expanduser("~/.config/ai-brain/bridge.env")
+BRIDGE = os.environ.get("CLIPROXY_BRIDGE_URL", "http://100.77.99.14:8318")
+MACOS_HOST = os.environ.get("CODEXBAR_MACOS_HOST", "tedydev@100.127.1.236")
+POLL_SEC = 60
+
+
+def secret():
+    value = os.environ.get("CLIPROXY_MANAGEMENT_SECRET")
+    if value:
+        return value
+    try:
+        with open(ENV_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("CLIPROXY_MANAGEMENT_SECRET="):
+                    return line.split("=", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    sys.exit(f"CLIPROXY_MANAGEMENT_SECRET not found (expected in {ENV_FILE})")
+
+
+def call(method, path, body=None, timeout=40):
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(
+        BRIDGE + path,
+        data=data,
+        method=method,
+        headers={"Authorization": "Bearer " + secret(), "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read().decode("utf-8"))
+        except ValueError:
+            return e.code, {"ok": False, "error": f"HTTP {e.code}"}
+    except (urllib.error.URLError, OSError) as e:
+        sys.exit(f"Không gọi được bridge {BRIDGE}: {e}")
+
+
+def open_on_mac(url):
+    try:
+        res = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes", MACOS_HOST, "open " + shlex.quote(url)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8,
+        )
+        return res.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def wait_for_result(state):
+    deadline = time.time() + POLL_SEC
+    while time.time() < deadline:
+        status, res = call("GET", "/v1/reauth-status?state=" + urllib.parse.quote(state))
+        if status != 200 or not res.get("pending"):
+            return status, res
+        time.sleep(2)
+    return 200, {"ok": False, "error": "Hết thời gian chờ CLIProxy xác nhận"}
+
+
+def notify(email):
+    try:
+        subprocess.run(
+            [os.path.expanduser("~/.local/bin/herdr"), "notification", "show", "Đăng nhập thành công",
+             "--body", f"Tài khoản {email} đã được tái kích hoạt trên node.", "--sound", "done"],
+            timeout=4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def main():
+    email = sys.argv[1].strip() if len(sys.argv) > 1 else None
+    status, res = call("POST", "/v1/reauth-account", {"email": email})
+    if status != 200 or not res.get("ok"):
+        sys.exit(f"Không tạo được phiên đăng nhập: {res.get('error')}")
+    state, url = res["state"], res["url"]
+    opened = open_on_mac(url)
+    print("Đã mở trang cấp quyền trên máy Mac." if opened else "Máy Mac không online, mở link sau trên trình duyệt bất kỳ:")
+    print(url)
+    print("Sau khi bấm Authorize, trình duyệt báo lỗi localhost:54545. Copy URL trên thanh địa chỉ rồi dán vào đây.")
+    while True:
+        try:
+            line = input("callback> ").strip()
+        except EOFError:
+            sys.exit("Đã hủy.")
+        if not line:
+            continue
+        status, res = call("POST", "/v1/reauth-complete", {"state": state, "redirect_url": line})
+        if status == 200 and res.get("pending"):
+            status, res = wait_for_result(state)
+        if status == 200 and res.get("ok"):
+            print(f"Đã xác thực {res['email']} (file {res['tokenFile']}, trạng thái {res['status']}).")
+            if res.get("emailMismatch"):
+                print(f"Cảnh báo: đã đăng nhập {res['email']}, khác tài khoản yêu cầu {email}.")
+            notify(res["email"])
+            return
+        print("Lỗi:", res.get("error"))
+        if status == 404:
+            sys.exit("Phiên đã hết hạn, chạy lại claude-reauth.")
+
+
+if __name__ == "__main__":
+    main()
