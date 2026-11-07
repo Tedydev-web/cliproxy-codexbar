@@ -43,6 +43,9 @@ def plan_label(tier):
     return "Max"
 from providers.claude_usage_extras import UsageExtrasCache
 
+_PROBE_BACKOFF = {}
+PROBE_BACKOFF_SEC = 300
+
 class ClaudePoolProvider:
     def __init__(self, extras_cache=None):
         self._extras = extras_cache or UsageExtrasCache()
@@ -272,6 +275,9 @@ class ClaudePoolProvider:
             if now - last_t < EXHAUSTED_CACHE_SEC:
                 return prev
 
+        if prev and now < _PROBE_BACKOFF.get(email, 0):
+            return prev
+
         auth_path = os.path.join(AUTH_DIR, token_file)
         if not os.path.exists(auth_path):
             return {
@@ -341,6 +347,8 @@ class ClaudePoolProvider:
             }
         except Exception as e:
             is_429 = "429" in str(e)
+            if is_429:
+                _PROBE_BACKOFF[email] = now + PROBE_BACKOFF_SEC
             return {
                 "has_5h_limit": prev.get("has_5h_limit", True) if prev else True,
                 "email": email,

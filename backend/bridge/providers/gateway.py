@@ -160,7 +160,7 @@ class GatewayProvider:
             {
                 "title": "Kiểm tra Console API qua curl",
                 "description": "Gửi request kiểm tra nhanh tới api.anthropic.com",
-                "command": f'curl -s -X POST https://api.anthropic.com/v1/messages -H "x-api-key: {self.console_api_key}" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" -d \'{{"model":"claude-haiku-4-5-20251001","max_tokens":10,"messages":[{{"role":"user","content":"ping"}}]}}\' | jq .'
+                "command": f'curl -s -X POST https://api.anthropic.com/v1/messages -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" -H "content-type: application/json" -d \'{{"model":"claude-haiku-4-5-20251001","max_tokens":10,"messages":[{{"role":"user","content":"ping"}}]}}\' | jq .'
             }
         ]
 

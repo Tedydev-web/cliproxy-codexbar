@@ -13,6 +13,14 @@ import psutil
 import subprocess
 import threading
 
+
+def _cliproxy_version():
+    try:
+        out = subprocess.run(["/opt/cliproxy/cli-proxy-api", "--help"], capture_output=True, text=True, timeout=5).stdout
+        return out.split("Version:")[1].split(",")[0].strip()
+    except Exception:
+        return "unknown"
+
 class SystemProvider:
     def __init__(self):
         # Store dynamically launched quick tunnels: {tunnel_id: {"port": int, "url": str, "pid": int, "started_at": str}}
@@ -333,9 +341,9 @@ class SystemProvider:
 
         # 1. CLIProxy
         cliproxy_active = False
-        cliproxy_version = "8.0.27"
+        cliproxy_version = _cliproxy_version()
         try:
-            res = subprocess.run(["systemctl", "--user", "is-active", "cliproxy.service"], capture_output=True, text=True)
+            res = subprocess.run(["systemctl", "is-active", "cliproxy.service"], capture_output=True, text=True)
             cliproxy_active = (res.stdout.strip() == "active")
         except Exception:
             pass
