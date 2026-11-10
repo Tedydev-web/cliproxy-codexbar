@@ -820,56 +820,6 @@ struct ClaudeFullCardView: View {
                 )
             }
 
-            Divider()
-            
-            // 4. Token Keeper Proactive Section (Clickable -> Opens Detail Window)
-            Button(action: {
-                AppDelegate.shared?.openKeeperWindow()
-            }) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(alignment: .firstTextBaseline) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "shield.lefthalf.filled")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                            Text("Token Keeper Proactive")
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                        }
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Text(self.state.keeperStatus)
-                                .font(.footnote)
-                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    
-                    // Progress Bar cho chu kỳ Keeper 4h
-                    UsageProgressBar(
-                        percent: self.state.keeperCyclePercent,
-                        tint: Color(red: 52/255, green: 199/255, blue: 89/255),
-                        warningMarkerPercents: [50.0],
-                        accentPaceMarker: nil
-                    )
-                    
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Lần làm mới trước: \(self.state.lastRefresh)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("Kế tiếp: \(self.state.nextRefresh) · \(Int(self.state.keeperCyclePercent))% chu kỳ")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)
@@ -1058,55 +1008,6 @@ struct AntigravityFullCardView: View {
                 )
             }
             
-            Divider()
-            
-            // 4. Token Keeper Proactive Section
-            Button(action: {
-                AppDelegate.shared?.openKeeperWindow()
-            }) {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(alignment: .firstTextBaseline) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "shield.lefthalf.filled")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                            Text("Token Keeper Proactive")
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.primary)
-                        }
-                        Spacer()
-                        HStack(spacing: 4) {
-                            Text(self.state.keeperStatus)
-                                .font(.footnote)
-                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    
-                    UsageProgressBar(
-                        percent: self.state.keeperCyclePercent,
-                        tint: Color(red: 52/255, green: 199/255, blue: 89/255),
-                        warningMarkerPercents: [50.0],
-                        accentPaceMarker: nil
-                    )
-                    
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Lần làm mới trước: \(self.state.lastRefresh)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("Kế tiếp: \(self.state.nextRefresh) · \(Int(self.state.keeperCyclePercent))% chu kỳ")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)
@@ -1351,15 +1252,6 @@ struct SettingsView: View {
                     Text("http://100.77.99.14:8318")
                         .font(.subheadline.monospaced())
                 }
-                HStack {
-                    Text("Token Keeper Proactive:")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("Đang chạy (Chu kỳ 4h)")
-                        .font(.subheadline)
-                        .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                }
             }
             
             Spacer()
@@ -1422,13 +1314,6 @@ class QuotaState: ObservableObject {
     @Published var agyClaudeGptWeeklyRemaining: Int = 43
     @Published var agyClaudeGptWeeklyRefresh: String = "3d 19h"
     
-    @Published var lastRefresh = "12:29"
-    @Published var nextRefresh = "16:29"
-    @Published var keeperStatus = "Hoạt động"
-    @Published var keeperCyclePercent: Double = 65.0
-    @Published var keeperSchedule: String = "Mỗi 4 giờ (Proactive Refresh)"
-    @Published var keeperBackupCount: Int = 34
-    @Published var keeperLogs: [String] = []
     
     // Gateway / DeepSeek Usage Telemetry
     @Published var gwEnabled: Bool = true
@@ -1475,7 +1360,7 @@ class QuotaState: ObservableObject {
     }
 
     static let bridgeSecret: String = {
-        let path = NSHomeDirectory() + "/.config/ai-brain/bridge-secret"
+        let path = NSHomeDirectory() + "/.config/orbiter/bridge-secret"
         if let raw = try? String(contentsOfFile: path, encoding: .utf8) {
             let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             if !v.isEmpty { return v }
@@ -1706,34 +1591,6 @@ class QuotaState: ObservableObject {
     }
 
     func fetchData() {
-        if let url = URL(string: "\(self.baseUrl)/v1/keeper-telemetry") {
-            URLSession.shared.dataTask(with: authedRequest(url)) { data, _, _ in
-                guard let data = data,
-                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-                DispatchQueue.main.async {
-                    if let timer = json["timer"] as? [String: Any] {
-                        self.lastRefresh = timer["last_run"] as? String ?? self.lastRefresh
-                        self.nextRefresh = timer["next_run"] as? String ?? self.nextRefresh
-                        let status = timer["status"] as? String ?? "active"
-                        self.keeperStatus = status == "active" ? "Hoạt động" : status
-                        self.keeperSchedule = timer["schedule"] as? String ?? self.keeperSchedule
-                        if let cp = timer["cycle_percent"] as? Double {
-                            self.keeperCyclePercent = cp
-                        } else if let cp = timer["cycle_percent"] as? Int {
-                            self.keeperCyclePercent = Double(cp)
-                        }
-                    }
-                    if let bCount = json["backup_count"] as? Int {
-                        self.keeperBackupCount = bCount
-                    }
-                    if let logsList = json["logs"] as? [String] {
-                        self.keeperLogs = logsList
-                    }
-                    self.onUpdate?()
-                }
-            }.resume()
-        }
-        
         if let agyUrl = URL(string: "\(self.baseUrl)/v1/antigravity-quota") {
             URLSession.shared.dataTask(with: authedRequest(agyUrl)) { data, _, _ in
                 guard let data = data,
@@ -2119,141 +1976,6 @@ func loadTemplateIcon(name: String) -> NSImage? {
         return img
     }
     return nil
-}
-
-// MARK: - Token Keeper Detail Window View
-struct TokenKeeperDetailView: View {
-    @ObservedObject var state: QuotaState
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Header
-            HStack(spacing: 12) {
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 32))
-                    .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Token Keeper Proactive")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    Text("Hệ thống bảo vệ phiên & tự động refresh token ngầm")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                
-                Button(action: {
-                    self.state.fetchData()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.clockwise")
-                        Text("Làm mới")
-                    }
-                    .font(.caption)
-                }
-            }
-            
-            Divider()
-            
-            // Status Grid
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Trạng thái vận hành")
-                    .font(.headline)
-                
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
-                    GridRow {
-                        Text("Dịch vụ:")
-                            .foregroundStyle(.secondary)
-                        Text("claude-token-keeper.service")
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    GridRow {
-                        Text("Trạng thái Timer:")
-                            .foregroundStyle(.secondary)
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
-                                .frame(width: 8, height: 8)
-                            Text(self.state.keeperStatus)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                        }
-                    }
-                    GridRow {
-                        Text("Chu kỳ làm mới:")
-                            .foregroundStyle(.secondary)
-                        Text(self.state.keeperSchedule)
-                    }
-                    GridRow {
-                        Text("Lần chạy gần nhất:")
-                            .foregroundStyle(.secondary)
-                        Text(self.state.lastRefresh)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    GridRow {
-                        Text("Lần chạy tiếp theo:")
-                            .foregroundStyle(.secondary)
-                        Text(self.state.nextRefresh)
-                            .font(.system(.body, design: .monospaced))
-                            .fontWeight(.semibold)
-                    }
-                    GridRow {
-                        Text("Vault Sao lưu:")
-                            .foregroundStyle(.secondary)
-                        Text("\(self.state.keeperBackupCount) bản sao lưu an toàn (~/.cliproxy/backups/auth-vault)")
-                    }
-                }
-            }
-            
-            Divider()
-            
-            // Logs Section
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("Nhật ký hoạt động gần đây (Logs):")
-                        .font(.headline)
-                    Spacer()
-                    Text("Tự động cuộn")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if self.state.keeperLogs.isEmpty {
-                            Text("Đang tải nhật ký...")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(self.state.keeperLogs, id: \.self) { logLine in
-                                Text(logLine)
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(logLine.contains("successfully") ? Color(red: 52/255, green: 199/255, blue: 89/255) : Color.primary)
-                                    .textSelection(.enabled)
-                            }
-                        }
-                    }
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .background(Color(white: 0.12))
-                .cornerRadius(6)
-                .frame(height: 160)
-            }
-            
-            Spacer()
-            
-            HStack {
-                Spacer()
-                Button("Đóng") {
-                    AppDelegate.shared?.keeperWindow?.close()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(18)
-        .frame(width: 520, height: 490)
-    }
 }
 
 // MARK: - External Gateway & DeepSeek Detail Window View
@@ -3123,7 +2845,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var timer: Timer?
     var telemetryTimer: Timer?
     var settingsWindow: NSWindow?
-    var keeperWindow: NSWindow?
     var gatewayWindow: NSWindow?
     var systemManagerWindow: NSWindow?
     
@@ -3442,30 +3163,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if response == .alertFirstButtonReturn {
             state.switchPriority(to: email)
         }
-    }
-
-    func openKeeperWindow() {
-        if let win = keeperWindow {
-            win.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        
-        let hosting = NSHostingView(rootView: TokenKeeperDetailView(state: state))
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 490),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.center()
-        window.title = "Token Keeper Proactive - Chi tiết & Nhật ký"
-        window.contentView = hosting
-        window.isReleasedWhenClosed = false
-        window.level = .floating
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        self.keeperWindow = window
     }
 
     func openGatewayWindow() {

@@ -26,8 +26,6 @@ def get_agy_auth_file():
     return os.path.join(AUTH_DIR, "antigravity-hieudat2310.bh@gmail.com.json")
 
 AGY_AUTH_FILE = get_agy_auth_file()
-LOG_FILE = os.path.join(CLIPROXY_HOME, "logs", "token-keeper.log")
-VAULT_DIR = os.path.join(CLIPROXY_HOME, "backups", "auth-vault")
 
 # Network & Ports
 MGMT_HOST = os.environ.get("CLIPROXY_HOST", "127.0.0.1")
