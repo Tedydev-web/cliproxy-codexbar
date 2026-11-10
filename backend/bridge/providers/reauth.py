@@ -9,6 +9,7 @@ from core import mgmt
 from core.config import ACCOUNTS_FILE, AUTH_DIR, CLIPROXY_HOME
 
 AUTH_PAUSED_DIR = os.path.join(CLIPROXY_HOME, "auth-paused")
+OAUTH_PROXY_URL = os.environ.get("CLIPROXY_OAUTH_PROXY_URL", "").strip()
 STATE_TTL_SEC = 600
 COMPLETE_WAIT_SEC = 12
 
@@ -47,9 +48,9 @@ def _read_json(path):
         return {}
 
 
-def _mgmt_call(path, method="GET", body=None, timeout=15):
+def _mgmt_call(path, method="GET", body=None, timeout=15, v8=False):
     try:
-        return mgmt.call_v0(path, method, body, timeout)
+        return (mgmt.call_v8 if v8 else mgmt.call_v0)(path, method, body, timeout)
     except mgmt.MgmtError as e:
         status = e.status if 400 <= e.status < 500 else 502
         raise ReauthError(status, f"CLIProxy từ chối yêu cầu ({e.status}): {e.body[:160]}")
@@ -63,7 +64,10 @@ def _prune(now):
 
 
 def start(email=None):
-    res = _mgmt_call("/anthropic-auth-url")
+    if OAUTH_PROXY_URL:
+        res = _mgmt_call("/oauth/auth-url", "POST", {"provider": "claude", "proxy_url": OAUTH_PROXY_URL}, v8=True)
+    else:
+        res = _mgmt_call("/anthropic-auth-url")
     state, url = res.get("state"), res.get("url")
     if not state or not url:
         raise ReauthError(502, "CLIProxy không trả về phiên OAuth")
