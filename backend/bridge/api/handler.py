@@ -16,7 +16,6 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     timeout = 15
     claude_provider = None
     agy_provider = None
-    keeper_provider = None
     console_provider = None
     backup_provider = None
     usage_collector = None
@@ -127,9 +126,6 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
                 self.send_json(200, data)
             else:
                 self.send_json(404, {"error": "Antigravity credentials not found or offline"})
-        elif self.path.startswith("/v1/keeper-telemetry"):
-            data = self.keeper_provider.get_telemetry()
-            self.send_json(200, data)
         elif self.path.startswith("/v1/system-telemetry"):
             if not self.system_provider:
                 self.send_json(503, {"error": "System provider not initialized"})

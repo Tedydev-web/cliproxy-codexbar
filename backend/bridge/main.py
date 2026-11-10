@@ -14,7 +14,6 @@ from http.server import ThreadingHTTPServer
 from core.config import BRIDGE_PORT
 from providers.claude import ClaudePoolProvider
 from providers.antigravity import AntigravityProvider
-from providers.keeper import KeeperProvider
 from providers.console_route import ConsoleRouteProvider
 from providers.backup import BackupProvider
 from providers.usage_store import UsageCollector
@@ -26,7 +25,6 @@ def main():
     claude_prov = ClaudePoolProvider()
     claude_prov._extras.start()
     agy_prov = AntigravityProvider()
-    keeper_prov = KeeperProvider()
     console_prov = ConsoleRouteProvider()
     backup_prov = BackupProvider()
     usage_collector = UsageCollector()
@@ -36,7 +34,6 @@ def main():
 
     BridgeApiHandler.claude_provider = claude_prov
     BridgeApiHandler.agy_provider = agy_prov
-    BridgeApiHandler.keeper_provider = keeper_prov
     BridgeApiHandler.console_provider = console_prov
     BridgeApiHandler.backup_provider = backup_prov
     BridgeApiHandler.usage_collector = usage_collector
