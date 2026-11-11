@@ -41,7 +41,8 @@ for host in "${MACOS_HOSTS[@]}"; do
     if ssh -o ConnectTimeout=4 -o BatchMode=yes "${host}" "echo 2>&1" >/dev/null 2>&1; then
         echo "   [+] Kết nối thành công! Đang truyền file và cập nhật..."
         rsync -az --delete "${CLIENT_DIR}/" "${host}:/tmp/client-macos/"
-        ssh "${host}" "cd /tmp/client-macos && CLIPROXY_BRIDGE_SECRET='${BRIDGE_SECRET}' ./install-client.sh"
+        ssh "${host}" 'umask 077; mkdir -p ~/.config/orbiter && cat > ~/.config/orbiter/bridge-secret' <<< "${BRIDGE_SECRET}"
+        ssh "${host}" "cd /tmp/client-macos && ./install-client.sh"
         echo "   ✅ Đã đồng bộ và khởi chạy phiên bản mới nhất trên ${host}!"
     else
         echo "   ⚠️ ${host} hiện đang OFFLINE hoặc ngủ (sleep) - Đã bỏ qua."
