@@ -1,0 +1,19 @@
+[Unit]
+Description=Orbiter host telemetry bridge (homelab)
+After=network-online.target tailscaled.service
+
+[Service]
+Environment=BRIDGE_BIND=100.127.1.234
+Environment=BRIDGE_PORT=8318
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=ORBITER_OPS_HOST_LABEL=Homelab
+Environment=ORBITER_OPS_SUDO=1
+Environment=ORBITER_OPS_SYNCTHING_CONFIG=%h/.local/state/syncthing/config.xml
+Environment=ORBITER_OPS_UNITS=user:claude-egress-tunnel.service,user:orbiter-host-bridge.service,user:syncthing.service,user:t3code.service,user:orbiter-watch-node.timer,user:orbiter-documents-backup.timer,user:claude-settings-publish.timer,system:cloudflared.service,system:docker.service,system:tailscaled.service,system:ufw.service,system:classroomhub-admin.service
+EnvironmentFile=%h/.config/orbiter/bridge-host.env
+ExecStart=/usr/bin/python3 %h/.local/lib/orbiter-host-bridge/host_main.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

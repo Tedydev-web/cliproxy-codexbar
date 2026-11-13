@@ -161,7 +161,7 @@ cliproxy-codexbar/
 ├── token-keeper/                    # Multi-account proactive token keeper (4h cycle)
 ├── client-macos/
 │   ├── Sources/
-│   │   └── OrbiterMenuBar.swift     # Mã nguồn Swift thuần (Single-file AppKit & SwiftUI)
+│   │   └── OrbiterMenuBar.swift     # Mã nguồn Swift thuần (AppKit & SwiftUI; OpsConsole.swift + main.swift tách riêng)
 │   ├── Resources/                   # Biểu tượng PNG template
 │   ├── package-dmg.sh               # Đóng gói thành macOS App Bundle & .dmg
 │   ├── build.sh                     # Script biên dịch Swift
