@@ -426,13 +426,15 @@ private func opsLogLevel(_ prio: Int) -> (String, Color) {
 struct OpsPill: View {
     let text: String
     let color: Color
+    @Environment(\.colorScheme) private var scheme
     var body: some View {
         Text(text)
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(color)
+            .brightness(scheme == .light ? -0.25 : 0)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(Capsule().fill(color.opacity(0.16)))
+            .background(Capsule().fill(color.opacity(0.18)))
     }
 }
 

@@ -121,6 +121,7 @@ struct UbuntuServerQuickMenuView: View {
     @ObservedObject var state: QuotaState
     @ObservedObject var ops: OpsModel
     @State private var searchText: String = ""
+    @Environment(\.colorScheme) private var scheme
 
     var activeDevPorts: [PortInfo] {
         let primary = state.sysPorts.filter { !$0.isInternal && $0.port != 8317 && $0.port != 8318 }
@@ -206,6 +207,7 @@ struct UbuntuServerQuickMenuView: View {
                             Text(active ? "ĐANG DÙNG" : (up ? "sẵn sàng" : "DOWN"))
                                 .font(.system(size: 8.5, weight: .bold))
                                 .foregroundStyle(active ? opsGreen : (up ? Color.secondary : Color.red))
+                                .brightness(scheme == .light && (active || !up) ? -0.25 : 0)
                         }
                         .padding(.horizontal, 7)
                         .padding(.vertical, 5)
@@ -320,8 +322,8 @@ struct UbuntuServerQuickMenuView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4.5)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.035)))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor)))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.primary.opacity(0.12), lineWidth: 0.5))
 
             if activeDevPorts.isEmpty {
                 Text(searchText.isEmpty ? "Không có tiến trình dev nào đang chiếm cổng." : "Không tìm thấy port nào khớp với từ khóa.")
