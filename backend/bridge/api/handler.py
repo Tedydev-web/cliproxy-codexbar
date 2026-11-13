@@ -169,6 +169,18 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
             payload = self.ops_provider.get_status()
             payload["metrics"] = self.system_provider.get_system_metrics() if self.system_provider else None
             self.send_json(200, payload)
+        elif self.path.startswith("/v1/ops-events"):
+            if not self.ops_provider:
+                self.send_json(503, {"error": "Ops provider unavailable"})
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                after = int((query.get("after") or ["0"])[0])
+                limit = int((query.get("limit") or ["200"])[0])
+            except ValueError:
+                self.send_json(400, {"error": "'after' and 'limit' must be integers"})
+                return
+            self.send_json(200, self.ops_provider.get_events(after, limit))
         elif self.path.startswith("/v1/ops-logs"):
             if not self.ops_provider:
                 self.send_json(503, {"error": "Ops provider unavailable"})

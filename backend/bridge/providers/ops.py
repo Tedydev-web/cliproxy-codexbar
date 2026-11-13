@@ -52,6 +52,12 @@ class OpsProvider:
         self.syncthing_config = os.environ.get("ORBITER_OPS_SYNCTHING_CONFIG", "")
         self.use_sudo = os.environ.get("ORBITER_OPS_SUDO", "") == "1"
         self.allowed = set(self.units)
+        self.events = None
+
+    def get_events(self, after=0, limit=200):
+        if not self.events:
+            return {"events": [], "last": 0}
+        return self.events.get_events(after, limit)
 
     def _systemctl(self, scope, *args, timeout=10):
         cmd = ["systemctl"] + (["--user"] if scope == "user" else []) + list(args)
@@ -193,6 +199,7 @@ class OpsProvider:
             "failed": self.get_failed(),
             "egress": self.get_egress(),
             "sync": self.get_sync(),
+            "health": self.events.health if self.events else None,
         }
 
     def get_logs(self, unit, scope, lines=200, cursor="", priority="", query=""):
