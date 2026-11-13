@@ -331,7 +331,7 @@ final class OpsModel: ObservableObject {
         for f in st.failed {
             items.append(OpsAttention(color: .red, icon: "xmark.octagon.fill", title: "Unit failed: \(f.unit)", detail: "Phạm vi \(f.scope)", section: .services))
         }
-        for u in st.units where (u.restarts ?? 0) >= 3 {
+        for u in st.units where (u.restarts ?? 0) >= 3 && opsRecentlyStarted(u.since) {
             items.append(OpsAttention(color: .orange, icon: "arrow.clockwise.circle.fill", title: "\(u.unit) đã restart \(u.restarts ?? 0) lần", detail: "Có thể đang crash loop hoặc bị kill", section: .services))
         }
         if let eg = st.egress {
@@ -386,6 +386,24 @@ private let opsClockFormatter: DateFormatter = {
 
 private func opsBytes(_ n: Int64) -> String {
     ByteCountFormatter.string(fromByteCount: n, countStyle: .binary)
+}
+
+private let opsSinceFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "yyyy-MM-dd HH:mm:ss Z"
+    return f
+}()
+
+func opsRecentlyStarted(_ raw: String?, within seconds: TimeInterval = 3600) -> Bool {
+    guard let raw = raw else { return true }
+    let parts = raw.split(separator: " ")
+    guard parts.count >= 4 else { return true }
+    var zone = String(parts[3])
+    if zone == "UTC" { zone = "+0000" }
+    else if zone.count == 3, zone.first == "+" || zone.first == "-" { zone += "00" }
+    guard let date = opsSinceFormatter.date(from: "\(parts[1]) \(parts[2]) \(zone)") else { return true }
+    return Date().timeIntervalSince(date) < seconds
 }
 
 private func opsShortTime(_ raw: String?) -> String {
