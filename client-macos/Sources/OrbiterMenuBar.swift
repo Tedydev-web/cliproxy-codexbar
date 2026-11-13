@@ -2175,195 +2175,6 @@ struct GatewayDetailView: View {
     }
 }
 
-// MARK: - Dedicated Ubuntu Server Quick Menu View (Exact 1:1 CodexBar Pattern)
-struct UbuntuServerQuickMenuView: View {
-    @ObservedObject var state: QuotaState
-    @State private var searchText: String = ""
-    
-    var activeDevPorts: [PortInfo] {
-        // Priority to actual user dev servers (non-internal, dev ports)
-        let primary = state.sysPorts.filter { !$0.isInternal && $0.port != 8317 && $0.port != 8318 }
-        let base = !primary.isEmpty ? primary : state.sysPorts.filter { !$0.isInternal }
-        
-        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        if q.isEmpty {
-            return base
-        }
-        return base.filter { p in
-            String(p.port).contains(q) ||
-            p.process.lowercased().contains(q) ||
-            p.project.lowercased().contains(q) ||
-            p.cwd.lowercased().contains(q)
-        }
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            // 1. Header (Ubuntu Host Identity & Status)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Ubuntu Host")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Text("100.127.1.234")
-                        .font(.subheadline.monospaced())
-                        .foregroundStyle(.secondary)
-                }
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Uptime: \(self.state.sysMetrics.uptime)")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(Color(red: 52/255, green: 199/255, blue: 89/255))
-                            .frame(width: 6, height: 6)
-                        Text("Online")
-                            .font(.subheadline)
-                            .foregroundStyle(Color(red: 52/255, green: 199/255, blue: 89/255))
-                    }
-                }
-            }
-            
-            Divider()
-            
-            // 2. Hardware Resource Metrics (Exact CodexBar MetricRow pattern with progress bar)
-            VStack(alignment: .leading, spacing: 10) {
-                let cpuVal = self.state.sysMetrics.cpuPercent
-                let cpuStr = cpuVal < 10.0 ? String(format: "%.1f", cpuVal) : "\(Int(cpuVal))"
-                MetricRow(
-                    title: "CPU: \(cpuStr)% · \(self.state.sysMetrics.cpuCount) Cores",
-                    percent: self.state.sysMetrics.cpuPercent,
-                    resetText: "Load: \(self.state.sysMetrics.loadAvg.map { String(format: "%.2f", $0) }.joined(separator: " "))",
-                    tint: self.state.sysMetrics.cpuPercent > 80 ? Color.red : Color(red: 52/255, green: 199/255, blue: 89/255)
-                )
-                
-                MetricRow(
-                    title: "RAM: \(Int(self.state.sysMetrics.ramPercent))% đã dùng",
-                    percent: self.state.sysMetrics.ramPercent,
-                    resetText: "\(String(format: "%.1f", self.state.sysMetrics.ramUsedGb)) / \(String(format: "%.1f", self.state.sysMetrics.ramTotalGb)) GB",
-                    tint: self.state.sysMetrics.ramPercent > 85 ? Color.orange : Color(red: 0/255, green: 195/255, blue: 137/255)
-                )
-                
-                let dUsedPct = Int(self.state.sysMetrics.diskPercent)
-                let dFreePct = Int(self.state.sysMetrics.diskFreePercent)
-                let isUsedMode = self.state.quotaDisplayMode == "used"
-                let dTitle = isUsedMode ? "Ổ cứng (/): \(dUsedPct)% đã dùng" : "Ổ cứng (/): \(dFreePct)% còn trống"
-                let dSub = "Trống \(String(format: "%.0f", self.state.sysMetrics.diskFreeGb)) GiB · \(String(format: "%.0f", self.state.sysMetrics.diskUsedGb)) / \(String(format: "%.0f", self.state.sysMetrics.diskTotalGb)) GiB"
-                
-                MetricRow(
-                    title: dTitle,
-                    percent: isUsedMode ? self.state.sysMetrics.diskPercent : self.state.sysMetrics.diskFreePercent,
-                    resetText: dSub,
-                    tint: Color(red: 175/255, green: 82/255, blue: 222/255)
-                )
-            }
-            
-            Divider()
-            
-            // 3. Quick Dev Ports & Search (Minimalist Apple Design)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .center) {
-                    Text("Cổng Dev Đang Mở")
-                        .font(.footnote)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("\(self.activeDevPorts.count) cổng")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                
-                // Minimalist Apple-Design Search Bar
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary.opacity(0.8))
-                    TextField("Tìm port, tiến trình, dự án...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11))
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary.opacity(0.8))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4.5)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.primary.opacity(0.035))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                )
-                
-                if self.activeDevPorts.isEmpty {
-                    Text(searchText.isEmpty ? "Không có tiến trình dev nào đang chiếm cổng." : "Không tìm thấy port nào khớp với từ khóa.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 6)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(self.activeDevPorts.prefix(8).enumerated()), id: \.element.id) { idx, p in
-                            if idx > 0 {
-                                Divider()
-                                    .opacity(0.2)
-                                    .padding(.vertical, 2)
-                            }
-                            
-                            HStack(alignment: .center, spacing: 8) {
-                                Text(":\(p.displayPort)")
-                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(Color.accentColor)
-                                    .frame(width: 58, alignment: .leading)
-                                
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(p.process)
-                                        .font(.system(size: 11.5, weight: .medium))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    
-                                    Text(!p.project.isEmpty ? p.project : (!p.cwd.isEmpty ? p.cwd : "-"))
-                                        .font(.system(size: 9.5, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                                
-                                Spacer(minLength: 6)
-                                
-                                Button(action: {
-                                    self.state.killPort(port: p.port, pid: p.pid)
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 12.5))
-                                        .foregroundStyle(Color.red.opacity(0.8))
-                                }
-                                .buttonStyle(.plain)
-                                .help("Dừng tiến trình trên cổng :\(p.displayPort)")
-                            }
-                            .padding(.vertical, 3)
-                            .padding(.horizontal, 4)
-                            .contentShape(Rectangle())
-                        }
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 6)
-        .frame(width: 365, alignment: .topLeading)
-    }
-}
-
-
 class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     static var shared: AppDelegate?
     
@@ -2379,7 +2190,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var opsWindow: NSWindow?
     lazy var opsModel = OpsModel(state: state)
     
+    var opsPollTimer: Timer?
+    var quickOpenTimer: Timer?
+
     func menuWillOpen(_ menu: NSMenu) {
+        if menu === ubuntuItem.menu {
+            opsModel.refreshStatus()
+            quickOpenTimer?.invalidate()
+            quickOpenTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true, block: { [weak self] _ in self?.opsModel.refreshStatus() })
+            RunLoop.main.add(quickOpenTimer!, forMode: .common)
+        }
         state.updateAgoText()
         self.adjustMenuHostingHeights()
         // Always refresh host telemetry immediately on click for true real-time responsiveness
@@ -2409,9 +2229,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let uh = ubuntuHostingView {
             let h = uh.fittingSize.height
             if h > 50 {
-                uh.frame = NSRect(x: 0, y: 0, width: 365, height: h)
+                uh.frame = NSRect(x: 0, y: 0, width: quickMenuWidth, height: h)
             }
         }
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        if menu === ubuntuItem.menu {
+            quickOpenTimer?.invalidate()
+            quickOpenTimer = nil
+        }
+    }
+
+    func openOps(host: OpsHost, section: OpsSection) {
+        ubuntuItem.menu?.cancelTracking()
+        opsModel.switchHost(host)
+        opsModel.section = opsModel.available(section) ? section : .overview
+        openOpsWindow()
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -2522,11 +2356,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let ubuntuMenu = NSMenu()
         let ubuntuMenuItem = NSMenuItem()
-        let ubuntuHosting = MenuHostingView(rootView: UbuntuServerQuickMenuView(state: state))
+        let ubuntuHosting = MenuHostingView(rootView: UbuntuServerQuickMenuView(state: state, ops: opsModel))
         self.ubuntuHostingView = ubuntuHosting
         let ubuntuHeight = ubuntuHosting.fittingSize.height
-        let finalUbuntuH = (ubuntuHeight > 100 && ubuntuHeight < 900) ? ubuntuHeight : 490
-        ubuntuHosting.frame = NSRect(x: 0, y: 0, width: 365, height: finalUbuntuH)
+        let finalUbuntuH = (ubuntuHeight > 100 && ubuntuHeight < 1000) ? ubuntuHeight : 700
+        ubuntuHosting.frame = NSRect(x: 0, y: 0, width: quickMenuWidth, height: finalUbuntuH)
+        opsModel.refreshStatus()
+        opsPollTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.opsModel.refreshStatus() }
         ubuntuMenuItem.view = ubuntuHosting
         ubuntuMenu.addItem(ubuntuMenuItem)
         ubuntuMenu.addItem(NSMenuItem.separator())

@@ -394,13 +394,13 @@ private func opsShortTime(_ raw: String?) -> String {
     return parts.count > 2 ? parts.dropFirst().joined(separator: " ") : raw
 }
 
-private func opsGaugeColor(_ pct: Double) -> Color {
+func opsGaugeColor(_ pct: Double) -> Color {
     if pct >= 90 { return .red }
     if pct >= 75 { return .orange }
     return Color(red: 0.20, green: 0.78, blue: 0.35)
 }
 
-private let opsGreen = Color(red: 0.20, green: 0.78, blue: 0.35)
+let opsGreen = Color(red: 0.20, green: 0.78, blue: 0.35)
 private let opsTerminalBg = Color(red: 0.07, green: 0.08, blue: 0.09)
 
 private func opsUnitStatus(_ u: OpsUnit) -> (String, Color) {

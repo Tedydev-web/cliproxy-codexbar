@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC=("${SCRIPT_DIR}/Sources/main.swift" "${SCRIPT_DIR}/Sources/OrbiterMenuBar.swift" "${SCRIPT_DIR}/Sources/OpsConsole.swift")
+SRC=("${SCRIPT_DIR}/Sources/main.swift" "${SCRIPT_DIR}/Sources/OrbiterMenuBar.swift" "${SCRIPT_DIR}/Sources/OpsConsole.swift" "${SCRIPT_DIR}/Sources/OpsQuickMenu.swift")
 OUTPUT="${SCRIPT_DIR}/build/OrbiterMenuBar"
 
 echo "=== Biên dịch OrbiterMenuBar cho macOS ==="
