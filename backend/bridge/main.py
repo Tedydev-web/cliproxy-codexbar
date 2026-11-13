@@ -19,6 +19,7 @@ from providers.backup import BackupProvider
 from providers.usage_store import UsageCollector
 from providers.gateway import GatewayProvider
 from providers.system import SystemProvider
+from providers.ops import OpsProvider
 from api.handler import BridgeApiHandler
 
 def main():
@@ -39,6 +40,7 @@ def main():
     BridgeApiHandler.usage_collector = usage_collector
     BridgeApiHandler.gateway_provider = gateway_prov
     BridgeApiHandler.system_provider = system_prov
+    BridgeApiHandler.ops_provider = OpsProvider()
 
     ThreadingHTTPServer.daemon_threads = True
     server = ThreadingHTTPServer(("0.0.0.0", BRIDGE_PORT), BridgeApiHandler)

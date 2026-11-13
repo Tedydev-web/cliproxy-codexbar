@@ -21,6 +21,7 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
     usage_collector = None
     gateway_provider = None
     system_provider = None
+    ops_provider = None
 
     def is_authorized(self):
         auth = self.headers.get("Authorization", "")
@@ -161,6 +162,26 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
         elif self.path.startswith("/v1/system-ports"):
             ports = self.system_provider.get_listening_ports() if self.system_provider else []
             self.send_json(200, {"ports": ports})
+        elif self.path.startswith("/v1/ops-status"):
+            if not self.ops_provider:
+                self.send_json(503, {"error": "Ops provider unavailable"})
+                return
+            payload = self.ops_provider.get_status()
+            payload["metrics"] = self.system_provider.get_system_metrics() if self.system_provider else None
+            self.send_json(200, payload)
+        elif self.path.startswith("/v1/ops-logs"):
+            if not self.ops_provider:
+                self.send_json(503, {"error": "Ops provider unavailable"})
+                return
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            arg = lambda k, d="": (query.get(k) or [d])[0]
+            try:
+                lines = int(arg("lines", "200"))
+            except ValueError:
+                self.send_json(400, {"error": "'lines' must be an integer"})
+                return
+            status, result = self.ops_provider.get_logs(arg("unit"), arg("scope", "system"), lines, arg("cursor"), arg("priority"), arg("q"))
+            self.send_json(status, result)
         elif self.path.startswith("/v1/reauth-status"):
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             self.reauth_respond(reauth.status, (query.get("state") or [""])[0])
@@ -278,6 +299,13 @@ class BridgeApiHandler(BaseHTTPRequestHandler):
                 return
             res = self.system_provider.update_herdr()
             self.send_json(200, res)
+
+        elif self.path.startswith("/v1/ops-restart"):
+            if not self.ops_provider:
+                self.send_json(503, {"error": "Ops provider unavailable"})
+                return
+            status, result = self.ops_provider.restart(str(req_data.get("unit", "")), str(req_data.get("scope", "system")))
+            self.send_json(status, result)
 
         elif self.path.startswith("/v1/reauth-account"):
             self.reauth_respond(reauth.start, req_data.get("email"))
