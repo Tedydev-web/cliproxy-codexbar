@@ -11,6 +11,7 @@ enum OpsHost: String, CaseIterable, Identifiable {
 
 enum OpsSection: String, CaseIterable, Identifiable {
     case overview = "Tổng quan"
+    case events = "Sự kiện"
     case services = "Dịch vụ"
     case egress = "Egress"
     case sync = "Đồng bộ"
@@ -19,6 +20,7 @@ enum OpsSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .overview: return "square.grid.2x2"
+        case .events: return "clock.arrow.circlepath"
         case .services: return "gearshape.2"
         case .egress: return "arrow.triangle.branch"
         case .sync: return "arrow.triangle.2.circlepath"
@@ -108,6 +110,7 @@ struct OpsStatus: Decodable {
     let egress: OpsEgress?
     let sync: OpsSync?
     let metrics: OpsMetrics?
+    let health: OpsHealth?
 }
 
 struct OpsLogRaw: Decodable {
@@ -144,6 +147,9 @@ final class OpsModel: ObservableObject {
     @Published var statuses: [OpsHost: OpsStatus] = [:]
     @Published var errors: [OpsHost: String] = [:]
     @Published var updated: [OpsHost: Date] = [:]
+    @Published var events: [OpsHost: [OpsEvent]] = [:]
+    var eventCursor: [OpsHost: Int] = [:]
+    var eventBusy = Set<OpsHost>()
     @Published var logUnit: OpsUnit?
     @Published var logs: [OpsLogEntry] = []
     @Published var logError: String?
@@ -155,12 +161,12 @@ final class OpsModel: ObservableObject {
     private var logBusy = false
     private var statusTimer: Timer?
     private var logTimer: Timer?
-    private let decoder: JSONDecoder = {
+    let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.keyDecodingStrategy = .convertFromSnakeCase
         return d
     }()
-    private let session: URLSession = {
+    let session: URLSession = {
         let c = URLSessionConfiguration.ephemeral
         c.timeoutIntervalForRequest = 12
         return URLSession(configuration: c)
@@ -217,7 +223,10 @@ final class OpsModel: ObservableObject {
     }
 
     func refreshStatus() {
-        for h in OpsHost.allCases { fetchStatus(h) }
+        for h in OpsHost.allCases {
+            fetchStatus(h)
+            fetchEvents(h)
+        }
     }
 
     private func fetchStatus(_ h: OpsHost) {
@@ -366,6 +375,20 @@ final class OpsModel: ObservableObject {
             }
             if m.ramPercent >= 90 {
                 items.append(OpsAttention(color: .orange, icon: "memorychip.fill", title: "RAM đã dùng \(Int(m.ramPercent))%", detail: "", section: .overview))
+            }
+        }
+        if let hl = st.health {
+            for b in hl.backups where !b.ok {
+                items.append(OpsAttention(color: .red, icon: "externaldrive.badge.xmark", title: "Backup \(b.unit) chưa thành công", detail: "Kết quả: " + (b.result.isEmpty ? "chưa chạy" : b.result), section: .overview))
+            }
+            if hl.rebootRequired {
+                items.append(OpsAttention(color: .yellow, icon: "restart.circle.fill", title: "Máy cần khởi động lại", detail: "Có bản cập nhật hệ thống đang chờ reboot", section: .overview))
+            }
+            if let u = hl.updates, u.security > 0 {
+                items.append(OpsAttention(color: .blue, icon: "arrow.down.app.fill", title: "\(u.security) bản vá bảo mật chưa cài", detail: "\(u.total) gói đang chờ cập nhật", section: .overview))
+            }
+            if let s = hl.ssh, s.failed >= 20 {
+                items.append(OpsAttention(color: .orange, icon: "lock.trianglebadge.exclamationmark.fill", title: "\(s.failed) lần SSH thất bại trong 24 giờ", detail: "Từ \(s.sources) địa chỉ nguồn", section: .overview))
             }
         }
         return items
@@ -593,7 +616,7 @@ struct OpsConsoleView: View {
 
     private func navItem(_ s: OpsSection) -> some View {
         let selected = model.section == s
-        let badge = s == .services ? (model.status?.failed.count ?? 0) : 0
+        let badge = s == .services ? (model.status?.failed.count ?? 0) : (s == .events ? model.recentErrorCount(model.host) : 0)
         return Button { model.section = s } label: {
             HStack(spacing: 9) {
                 Image(systemName: s.icon).frame(width: 18)
@@ -646,6 +669,7 @@ struct OpsConsoleView: View {
     private var content: some View {
         switch model.section {
         case .overview: overviewView
+        case .events: OpsEventsPage(model: model)
         case .services: servicesView
         case .egress: egressView
         case .sync: syncView
@@ -692,6 +716,7 @@ struct OpsConsoleView: View {
                         }
                     }
                     summaryRow(st)
+                    OpsHealthCard(health: st.health)
                     attentionCard
                 }
                 .padding(16)

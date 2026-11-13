@@ -108,6 +108,15 @@ struct OpsQuickHostCard: View {
                 Text("Timer \(timers.filter { $0.state == "active" }.count)/\(timers.count) · restart \(restarts)")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
+                if let hl = st.health {
+                    let line = opsHealthLine(hl)
+                    if !line.isEmpty {
+                        Text(line)
+                            .font(.system(size: 10))
+                            .foregroundStyle(hl.rebootRequired || hl.backups.contains { !$0.ok } ? Color.orange : Color.secondary)
+                            .lineLimit(2)
+                    }
+                }
             }
         }
         .padding(10)
@@ -154,6 +163,7 @@ struct UbuntuServerQuickMenuView: View {
             egressSection
             syncSection
             attentionSection
+            eventsSection
             portsSection
         }
         .padding(.horizontal, 14)
@@ -264,7 +274,7 @@ struct UbuntuServerQuickMenuView: View {
                 }
                 .padding(.vertical, 3)
             } else {
-                ForEach(Array(rows.prefix(4).enumerated()), id: \.element.1.id) { _, row in
+                ForEach(Array(rows.prefix(3).enumerated()), id: \.element.1.id) { _, row in
                     Button {
                         AppDelegate.shared?.openOps(host: row.0, section: row.1.section)
                     } label: {
@@ -292,8 +302,8 @@ struct UbuntuServerQuickMenuView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                if rows.count > 4 {
-                    Text("và \(rows.count - 4) mục khác trong Ops Console")
+                if rows.count > 3 {
+                    Text("và \(rows.count - 3) mục khác trong Ops Console")
                         .font(.system(size: 9.5))
                         .foregroundStyle(.tertiary)
                 }
@@ -301,9 +311,46 @@ struct UbuntuServerQuickMenuView: View {
         }
     }
 
+    @ViewBuilder
+    private var eventsSection: some View {
+        let rows = ops.mergedEvents()
+        VStack(alignment: .leading, spacing: 4) {
+            sectionTitle("Sự kiện gần đây", rows.isEmpty ? nil : "\(rows.count) trong 24 giờ")
+            if rows.isEmpty {
+                Text("Chưa ghi nhận sự kiện nào.").font(.system(size: 10.5)).foregroundStyle(.secondary).padding(.vertical, 3)
+            } else {
+                ForEach(Array(rows.prefix(4))) { row in
+                    let style = opsEventStyle(row.event.level)
+                    Button {
+                        AppDelegate.shared?.openOps(host: row.host, section: .events)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: style.0)
+                                .font(.system(size: 11))
+                                .foregroundStyle(style.1)
+                                .frame(width: 16)
+                            Text(row.event.title).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text(opsEventAgo(row.date)).font(.system(size: 9.5)).foregroundStyle(.secondary)
+                            Text(row.host.rawValue)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.primary.opacity(0.08)))
+                        }
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     private var portsSection: some View {
         VStack(alignment: .leading, spacing: 5) {
-            sectionTitle("Cổng dev trên Homelab", "\(activeDevPorts.count) cổng")
+            sectionTitle("Cổng dev trên Homelab", "\(min(4, activeDevPorts.count))/\(activeDevPorts.count) cổng")
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
@@ -332,7 +379,7 @@ struct UbuntuServerQuickMenuView: View {
                     .padding(.vertical, 4)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(Array(activeDevPorts.prefix(5).enumerated()), id: \.element.id) { idx, p in
+                    ForEach(Array(activeDevPorts.prefix(4).enumerated()), id: \.element.id) { idx, p in
                         if idx > 0 { Divider().opacity(0.2) }
                         HStack(spacing: 8) {
                             Text(":\(p.displayPort)")
